@@ -1,0 +1,25 @@
+{
+  "name": "simple_ms_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.1",
+  "devDependencies": {
+    "@types/node": "^24.7.0",
+    "@types/socket.io": "^3.0.2",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "mediasoup": "^3.19.3",
+    "socket.io": "^4.8.1"
+  }
+}
