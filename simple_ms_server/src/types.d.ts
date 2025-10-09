@@ -1,24 +1,27 @@
-import { WorkerLogLevel, WorkerLogTag, WorkerSettings } from "mediasoup/types";
-import Participant from "./models/participant";
+import {
+  WorkerLogLevel,
+  WorkerLogTag,
+  WorkerSettings,
+  Producer,
+  Consumer,
+  RtpCapabilities,
+  WebRtcTransportOptions,
+  RouterOptions,
+  DtlsParameters,
+  RtpParameters,
+  MediaKind,
+  ProducerOptions,
+  ConsumerOptions,
+} from "mediasoup/types";
 import Conference from "./models/conference";
 import { EnhancedEventEmitter } from "mediasoup/extras";
-
-export interface TransportListenIp {
-  ip: string;
-  announcedIp: string;
-}
-
-export interface TransportConfig {
-  listenIps: TransportListenIp[];
-  enableUdp: boolean;
-  enableTcp: boolean;
-  preferUdp: boolean;
-  enableSctp: boolean;
-}
+import { Server, Socket } from "socket.io";
+import Participant from "./models/participant";
 
 export interface MediasoupConfig {
   workerConfig: WorkerSettings;
-  transport: TransportConfig;
+  transportConfig: WebRtcTransportOptions;
+  routerConfig: RouterOptions;
 }
 export type ConferenceMap = Map<string, Conference>;
 export type ParticipantsMap = Map<string, Participant>;
@@ -50,6 +53,61 @@ export type joinConferenceParams = {
   socketId: string;
 };
 
+export type SocketEventData = {
+  eventType:
+    | "joinConference"
+    | "createTransport"
+    | "connectTransport"
+    | "produce"
+    | "consume"
+    | "resumeConsumer"
+    | "leaveConference";
+  data: MeetingParams;
+  callback: (response: any) => void;
+  errorback: (error: any) => void;
+};
+export type MeetingParams = {
+  conferenceId: string;
+  participantId: string;
+  socket: Socket;
+  extraData?: Record<string, any>; // Optional field for extra data
+};
+
+export type CreateTransportParams = {
+  conferenceId: string;
+  participantId: string;
+  direction: "producer" | "consumer";
+  options?: WebRtcTransportOptions;
+};
+
+export type ConnectTransportParams = {
+  conferenceId: string;
+  participantId: string;
+  direction: "producer" | "consumer";
+  dtlsParameters: DtlsParameters; // Replace 'any' with the actual type if available
+};
+export type ProduceParams = {
+  conferenceId: string;
+  participantId: string;
+  transportId: string;
+  producerOptions: ProducerOptions;
+};
+
+export type ConsumeParams = {
+  conferenceId: string;
+  participantId: string;
+  consumeOptions: ConsumerOptions;
+};
+
+export type ConsumerResponse = {
+  id: string;
+  producerId: string;
+  kind: MediaKind;
+  rtpParameters: RtpParameters;
+  type: string;
+  producerUserId: string;
+};
+
 export interface AppState {
   conferences: ConferenceMap;
   getConferences(): ConferenceMap;
@@ -60,3 +118,14 @@ export interface AppState {
   userRemoveWithSocketId(socketId: string): void;
   isConferenceExists(conferenceId: string): boolean;
 }
+
+export type ParticipantsProducersToUsers = Map<string, ProducersObject>;
+
+export type ParticipantsConsumersToUsers = Map<string, ConsumersObject>;
+
+export type ProducersObject = {
+  [key: string]: Producer;
+};
+export type ConsumersObject = {
+  [key: string]: Consumer;
+};

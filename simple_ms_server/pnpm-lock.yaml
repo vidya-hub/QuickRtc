@@ -11,6 +11,7 @@ importers:
       mediasoup:
         specifier: ^3.19.3
         version: 3.19.3
+      os: {specifier: ^0.1.2, version: 0.1.2}
       socket.io:
         specifier: ^4.8.1
         version: 4.8.1
@@ -496,6 +497,9 @@ packages:
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
     engines: {node: '>=0.10.0'}
+
+  os@0.1.2:
+    resolution: {integrity: sha512-ZoXJkvAnljwvc56MbvhtKVWmSkzV712k42Is2mA0+0KTSRakq5XXuXpjZjgAt9ctzl51ojhQWakQQpmOvXWfjQ==}
 
   p-limit@2.3.0:
     resolution: {integrity: sha512-//88mFWSJx8lxCzwdAABTJL2MyWB12+eIY7MDL2SqLmAkeKU9qxRvWuSyTjm3FUmpBEMuFfckAIqEaVGUDxb6w==}
@@ -1181,6 +1185,8 @@ snapshots:
   node-releases@2.0.23: {}
 
   object-assign@4.1.1: {}
+
+  os@0.1.2: {}
 
   p-limit@2.3.0:
     dependencies:

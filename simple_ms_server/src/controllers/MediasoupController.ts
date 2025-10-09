@@ -1,11 +1,21 @@
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import Conference from "../models/conference";
-import { AppState, ConferenceMap, joinConferenceParams } from "../types";
+import {
+  AppState,
+  ConferenceMap,
+  ConnectTransportParams,
+  ConsumeParams,
+  ConsumerResponse,
+  CreateTransportParams,
+  joinConferenceParams,
+  ProduceParams,
+} from "../types";
 import Participant from "../models/participant";
 import * as mediasoup from "mediasoup";
 import WorkerService from "../workers/WorkerService";
+import { WebRtcTransport } from "mediasoup/types";
 
-class MediasoupState extends EnhancedEventEmitter implements AppState {
+class MediasoupController extends EnhancedEventEmitter implements AppState {
   conferences: ConferenceMap;
   workerService: WorkerService;
   constructor(workerService: WorkerService) {
@@ -45,7 +55,7 @@ class MediasoupState extends EnhancedEventEmitter implements AppState {
       name || "Default",
       new Map(),
       conferenceId,
-      worker
+      worker.worker
     );
     this.conferences.set(conferenceId, newConference);
     this.emit("conferenceCreated", newConference);
@@ -53,6 +63,59 @@ class MediasoupState extends EnhancedEventEmitter implements AppState {
   getConference(conferenceId: string): Conference | undefined {
     return this.conferences.get(conferenceId);
   }
+
+  async createTransport(
+    transportParams: CreateTransportParams
+  ): Promise<WebRtcTransport> {
+    const { conferenceId, participantId } = transportParams;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    try {
+      const transport = await conference.createTransport(transportParams);
+      return transport;
+    } catch (error) {
+      throw new Error(`Failed to create transport: ${error}`);
+    }
+  }
+  async connectTransport(connectParams: ConnectTransportParams) {
+    const { conferenceId } = connectParams;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    try {
+      await conference.connectTransport(connectParams);
+    } catch (error) {
+      throw new Error(`Failed to connect transport: ${error}`);
+    }
+  }
+  async produce(produceParams: ProduceParams): Promise<string> {
+    const { conferenceId } = produceParams;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    try {
+      return await conference.produce(produceParams);
+    } catch (error) {
+      throw new Error(`Failed to produce: ${error}`);
+    }
+  }
+  async consume(consumeParams: ConsumeParams): Promise<ConsumerResponse> {
+    const { conferenceId } = consumeParams;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    try {
+      return await conference.consume(consumeParams);
+    } catch (error) {
+      throw new Error(`Failed to consume: ${error}`);
+    }
+  }
+
   removeFromConference(conferenceId: string, participantId: string) {
     const conference = this.conferences.get(conferenceId);
     if (conference) {
@@ -75,4 +138,4 @@ class MediasoupState extends EnhancedEventEmitter implements AppState {
   }
 }
 
-export default MediasoupState;
+export default MediasoupController;

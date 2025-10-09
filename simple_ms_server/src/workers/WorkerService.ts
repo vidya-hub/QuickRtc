@@ -1,25 +1,33 @@
 import os from "os";
+import {
+  Worker as MediasoupWorker,
+  WorkerSettings,
+  RouterOptions,
+  AppData,
+  WebRtcTransportOptions,
+} from "mediasoup/types";
 import * as mediasoup from "mediasoup";
-import { WorkerSettings } from "mediasoup/types";
-import { EventEmitter } from "stream";
+import EventEmitter from "events";
+import { MediasoupConfig } from "../types";
 
 export class WorkerService extends EventEmitter {
-  private workers: mediasoup.types.Worker[] = [];
+  private workers: MediasoupWorker[] = [];
   private currentWorkerIndex = 0;
-  private workersConfig: WorkerSettings;
+  public mediasoupConfig: MediasoupConfig;
 
-  constructor(config: WorkerSettings) {
+  constructor(mediasoupConfig: MediasoupConfig) {
     super();
-    this.workersConfig = config;
+    this.mediasoupConfig = mediasoupConfig;
   }
 
-  async createWorkers(): Promise<mediasoup.types.Worker[]> {
+  async createWorkers(): Promise<MediasoupWorker[]> {
     const totalThreads = os.cpus().length;
     console.log(`Creating ${totalThreads} mediasoup workers...`);
 
     for (let i = 0; i < totalThreads; i++) {
-      const worker = await mediasoup.createWorker(this.workersConfig);
-
+      const worker: MediasoupWorker = await mediasoup.createWorker(
+        this.mediasoupConfig.workerConfig
+      );
       worker.on("died", () => {
         this.emit("workerDied", worker);
       });
@@ -33,7 +41,10 @@ export class WorkerService extends EventEmitter {
     return this.workers;
   }
 
-  async getWorker(): Promise<mediasoup.types.Worker> {
+  async getWorker(): Promise<{
+    worker: MediasoupWorker;
+    router: mediasoup.types.Router;
+  }> {
     const workersLoad = await Promise.all(
       this.workers.map(async (worker) => {
         const stats = await worker.getResourceUsage();
@@ -53,10 +64,14 @@ export class WorkerService extends EventEmitter {
     }
 
     this.currentWorkerIndex = leastLoadedWorkerIndex;
-    return this.workers[leastLoadedWorkerIndex];
+    const selectedWorker = this.workers[this.currentWorkerIndex];
+    const router = await selectedWorker.createRouter(
+      this.mediasoupConfig.routerConfig
+    );
+    return { worker: selectedWorker, router: router };
   }
 
-  getWorkers(): mediasoup.types.Worker[] {
+  getWorkers(): MediasoupWorker[] {
     return this.workers;
   }
 }
