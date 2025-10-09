@@ -6,6 +6,7 @@ import {
   ParticipantsMap,
   participantsMapToArray,
   ProduceParams as ProduceTransportParams,
+  ResumeConsumerParams,
 } from "../types";
 import Participant from "./participant";
 import * as mediasoup from "mediasoup";
@@ -134,6 +135,18 @@ class Conference {
       return consumer;
     } catch (error) {
       throw new Error(`Failed to consume: ${error}`);
+    }
+  }
+  async resumeConsumer(resumeParams: ResumeConsumerParams) {
+    const { participantId, consumerId } = resumeParams;
+    const participant = this.getParticipant(participantId);
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    try {
+      await participant.resumeConsumer(consumerId);
+    } catch (error) {
+      throw new Error(`Failed to resume consumer: ${error}`);
     }
   }
 }

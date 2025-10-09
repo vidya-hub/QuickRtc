@@ -107,6 +107,11 @@ export type ConsumerResponse = {
   type: string;
   producerUserId: string;
 };
+export type ResumeConsumerParams = {
+  conferenceId: string;
+  participantId: string;
+  consumerId: string;
+};
 
 export interface AppState {
   conferences: ConferenceMap;

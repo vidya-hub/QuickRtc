@@ -9,6 +9,7 @@ import {
   CreateTransportParams,
   joinConferenceParams,
   ProduceParams,
+  ResumeConsumerParams,
 } from "../types";
 import Participant from "../models/participant";
 import * as mediasoup from "mediasoup";
@@ -113,6 +114,18 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
       return await conference.consume(consumeParams);
     } catch (error) {
       throw new Error(`Failed to consume: ${error}`);
+    }
+  }
+  async resumeConsumer(resumeParams: ResumeConsumerParams): Promise<void> {
+    const { conferenceId } = resumeParams;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    try {
+      await conference.resumeConsumer(resumeParams);
+    } catch (error) {
+      throw new Error(`Failed to resume consumer: ${error}`);
     }
   }
 

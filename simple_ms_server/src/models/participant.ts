@@ -106,6 +106,15 @@ class Participant {
     this.addConsumer(consumer);
     return consumerParams;
   }
+  async resumeConsumer(consumerId: string) {
+    const userConsumers = this.consumers.get(this.id);
+    if (userConsumers && userConsumers[consumerId]) {
+      const consumer = userConsumers[consumerId];
+      await consumer.resume();
+    } else {
+      throw new Error("Consumer not found");
+    }
+  }
 }
 
 export default Participant;
