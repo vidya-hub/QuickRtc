@@ -2,7 +2,7 @@ import { EnhancedEventEmitter } from "mediasoup/extras";
 import { Server, Socket } from "socket.io";
 import { SocketEventData } from "../types";
 import MediasoupController from "./MediasoupController";
-import Conference from "../models/conference";
+import MediasoupConference from "../models/conference";
 import { ConsumerOptions } from "mediasoup/types";
 
 class SocketEventController extends EnhancedEventEmitter {
@@ -67,7 +67,7 @@ class SocketEventController extends EnhancedEventEmitter {
       const conferenceName = extraData?.conferenceName;
       const participantName = extraData?.participantName || "Guest";
       const socketId = socket.id;
-      const conference: Conference | undefined =
+      const conference: MediasoupConference | undefined =
         await this.mediasoupController?.joinConference({
           conferenceId: conferenceId,
           participantId: participantId,

@@ -1,25 +1,27 @@
 import { WebRtcTransport } from "mediasoup/types";
+import MediasoupParticipant from "./participant";
+import * as mediasoup from "mediasoup";
 import {
+  Conference,
   ConnectTransportParams,
   ConsumeParams,
   CreateTransportParams,
+  Participant,
   ParticipantsMap,
-  participantsMapToArray,
-  ProduceParams as ProduceTransportParams,
+  ProduceParams,
   ResumeConsumerParams,
-} from "../types";
-import Participant from "./participant";
-import * as mediasoup from "mediasoup";
+} from "@simple-mediasoup/types";
 
-class Conference {
-  private participants: ParticipantsMap;
-  private name: string;
-  private conferenceId: string;
-  private socketIds: string[] = [];
-  private router: mediasoup.types.Router | null = null;
-  private worker: mediasoup.types.Worker;
-
+class MediasoupConference implements Conference {
+  public participants: ParticipantsMap;
+  public name: string;
+  public conferenceId: string;
+  public socketIds: string[] = [];
+  public router: mediasoup.types.Router | null = null;
+  public worker: mediasoup.types.Worker;
+  public id: string;
   constructor(
+    id: string,
     name: string,
     participants: ParticipantsMap,
     conferenceId: string,
@@ -31,9 +33,10 @@ class Conference {
     this.conferenceId = conferenceId;
     this.worker = worker;
     this.router = router;
+    this.id = id;
   }
 
-  addParticipant(participant: Participant) {
+  addParticipant(participant: MediasoupParticipant) {
     this.participants.set(participant.id, participant);
     this.socketIds.push(participant.socketId);
   }
@@ -47,7 +50,7 @@ class Conference {
       }
     }
   }
-  getParticipants(): Participant[] {
+  getParticipants(): MediasoupParticipant[] {
     return participantsMapToArray(this.participants);
   }
   getParticipant(participantId: string): Participant | undefined {
@@ -76,8 +79,8 @@ class Conference {
     participantId: string,
     participantName: string,
     socketId: string
-  ): Participant {
-    return new Participant(participantId, participantName, socketId);
+  ): MediasoupParticipant {
+    return new MediasoupParticipant(participantId, participantName, socketId);
   }
   async createTransport(
     transportParams: CreateTransportParams
@@ -111,7 +114,7 @@ class Conference {
       throw new Error(`Failed to connect transport: ${error}`);
     }
   }
-  async produce(produceParams: ProduceTransportParams) {
+  async produce(produceParams: ProduceParams) {
     const { participantId } = produceParams;
     const participant = this.getParticipant(participantId);
     if (!participant) {
@@ -149,6 +152,18 @@ class Conference {
       throw new Error(`Failed to resume consumer: ${error}`);
     }
   }
+
+  participantsMapToArray(
+    participantsMap: ParticipantsMap
+  ): MediasoupParticipant[] {
+    return Array.from(participantsMap.values()) as MediasoupParticipant[];
+  }
 }
 
-export default Conference;
+function participantsMapToArray(
+  participantsMap: ParticipantsMap
+): MediasoupParticipant[] {
+  return Array.from(participantsMap.values()) as MediasoupParticipant[];
+}
+
+export default MediasoupConference;

@@ -3,7 +3,7 @@ import { MediasoupConfig } from "../types";
 import WorkerService from "../workers/WorkerService";
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import MediasoupController from "../controllers/MediasoupController";
-import Conference from "../models/conference";
+import MediasoupConference from "../models/conference";
 import SocketEventController from "../controllers/SocketController";
 
 class MediaSoupServer extends EnhancedEventEmitter {
@@ -41,7 +41,7 @@ class MediaSoupServer extends EnhancedEventEmitter {
   private setupMediasoupStateEvent() {
     this.mediasoupController?.on(
       "conferenceCreated",
-      (conference: Conference) => {
+      (conference: MediasoupConference) => {
         this.emit("conferenceCreated", conference);
       }
     );

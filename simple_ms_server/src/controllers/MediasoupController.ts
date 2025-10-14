@@ -1,33 +1,31 @@
+import MediasoupConference from "../models/conference";
+import * as mediasoup from "mediasoup";
+import WorkerService from "../workers/WorkerService";
 import { EnhancedEventEmitter } from "mediasoup/extras";
-import Conference from "../models/conference";
 import {
   AppState,
+  Conference,
   ConferenceMap,
   ConnectTransportParams,
   ConsumeParams,
   ConsumerResponse,
   CreateTransportParams,
-  joinConferenceParams,
+  JoinConferenceParams,
   ProduceParams,
   ResumeConsumerParams,
-} from "../types";
-import Participant from "../models/participant";
-import * as mediasoup from "mediasoup";
-import WorkerService from "../workers/WorkerService";
-import { WebRtcTransport } from "mediasoup/types";
-
+} from "@simple-mediasoup/types";
 class MediasoupController extends EnhancedEventEmitter implements AppState {
   conferences: ConferenceMap;
   workerService: WorkerService;
   constructor(workerService: WorkerService) {
     super();
-    this.conferences = new Map();
+    this.conferences = new Map<string, Conference>();
     this.workerService = workerService;
   }
   getConferences(): ConferenceMap {
     return this.conferences;
   }
-  async joinConference(params: joinConferenceParams) {
+  async joinConference(params: JoinConferenceParams) {
     const {
       conferenceId,
       conferenceName,
@@ -39,7 +37,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
     if (!conference) {
       await this.createConference(conferenceId, conferenceName);
     }
-    let participant = conference?.getParticipant(participantId);
+    let participant = conference!.getParticipant(participantId);
     if (!participant) {
       participant = conference?.createParticipant(
         participantId,
@@ -52,11 +50,13 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
   }
   async createConference(conferenceId: string, name: string) {
     const worker = await this.workerService.getWorker();
-    const newConference = new Conference(
+    const newConference = new MediasoupConference(
+      conferenceId,
       name || "Default",
       new Map(),
       conferenceId,
-      worker.worker
+      worker.worker,
+      worker.router
     );
     this.conferences.set(conferenceId, newConference);
     this.emit("conferenceCreated", newConference);
@@ -67,7 +67,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
 
   async createTransport(
     transportParams: CreateTransportParams
-  ): Promise<WebRtcTransport> {
+  ): Promise<mediasoup.types.WebRtcTransport> {
     const { conferenceId, participantId } = transportParams;
     const conference = this.conferences.get(conferenceId);
     if (!conference) {
@@ -140,7 +140,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
       if (
         conference
           .getParticipants()
-          .some((participant: Participant) => participant.socketId === socketId)
+          .some((participant) => participant.socketId === socketId)
       ) {
         conference.removeWithSocketId(socketId);
       }

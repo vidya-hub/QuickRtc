@@ -1,22 +1,23 @@
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import * as mediasoup from "mediasoup";
+import { AppData, DtlsParameters, Router, Transport } from "mediasoup/types";
 import {
   ConsumeParams,
   ConsumerResponse,
+  ConsumersToUsers,
   CreateTransportParams,
-  ParticipantsConsumersToUsers,
-  ParticipantsProducersToUsers,
   ProduceParams,
-} from "../types";
-import { AppData, DtlsParameters, Router, Transport } from "mediasoup/types";
-class Participant {
+  ProducersToUsers,
+  Participant,
+} from "@simple-mediasoup/types";
+class MediasoupParticipant implements Participant {
   id: string;
   socketId: string;
   name: string;
   producerTransport?: mediasoup.types.Transport;
   consumerTransport?: mediasoup.types.Transport;
-  producers: ParticipantsProducersToUsers;
-  consumers: ParticipantsConsumersToUsers;
+  producers: ProducersToUsers;
+  consumers: ConsumersToUsers;
 
   constructor(id: string, name: string, socketId: string) {
     this.id = id;
@@ -117,4 +118,4 @@ class Participant {
   }
 }
 
-export default Participant;
+export default MediasoupParticipant;

@@ -1,14 +1,8 @@
-import os from "os";
-import {
-  Worker as MediasoupWorker,
-  WorkerSettings,
-  RouterOptions,
-  AppData,
-  WebRtcTransportOptions,
-} from "mediasoup/types";
+import { Worker as MediasoupWorker } from "mediasoup/types";
 import * as mediasoup from "mediasoup";
 import EventEmitter from "events";
 import { MediasoupConfig } from "../types";
+import { cpus } from "os";
 
 export class WorkerService extends EventEmitter {
   private workers: MediasoupWorker[] = [];
@@ -21,7 +15,7 @@ export class WorkerService extends EventEmitter {
   }
 
   async createWorkers(): Promise<MediasoupWorker[]> {
-    const totalThreads = os.cpus().length;
+    const totalThreads = cpus().length;
     console.log(`Creating ${totalThreads} mediasoup workers...`);
 
     for (let i = 0; i < totalThreads; i++) {
