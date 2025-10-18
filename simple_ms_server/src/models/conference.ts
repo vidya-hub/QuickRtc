@@ -51,7 +51,7 @@ class MediasoupConference implements Conference {
     }
   }
   getParticipants(): MediasoupParticipant[] {
-    return participantsMapToArray(this.participants);
+    return this.participantsMapToArray(this.participants);
   }
   getParticipant(participantId: string): Participant | undefined {
     return this.participants.get(participantId);
@@ -158,12 +158,15 @@ class MediasoupConference implements Conference {
   ): MediasoupParticipant[] {
     return Array.from(participantsMap.values()) as MediasoupParticipant[];
   }
-}
-
-function participantsMapToArray(
-  participantsMap: ParticipantsMap
-): MediasoupParticipant[] {
-  return Array.from(participantsMap.values()) as MediasoupParticipant[];
+  pauseProducer(participantId: string, producerId: string): void {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    participant.pauseProducer(producerId);
+  }
 }
 
 export default MediasoupConference;

@@ -51,12 +51,35 @@ class SocketEventController extends EnhancedEventEmitter {
           case "leaveConference":
             await this.handleLeaveConference(socket, socketEventData);
             break;
-
+          case "pauseProducer":
+            break;
           default:
             console.warn("Unhandled event type:", socketEventData.eventType);
         }
       });
     });
+  }
+
+  private async pauseProducer(
+    socketEventData: SocketEventData,
+    socket: Socket,
+    producerId: string
+  ) {
+    const { callback, errorback } = socketEventData;
+    try {
+      const { conferenceId, participantId } = socketEventData.data;
+      await this.mediasoupController?.pauseProducer({
+        conferenceId,
+        participantId,
+        producerId,
+      });
+      callback({ status: "ok" });
+      socket.to(conferenceId).emit("producerPaused", { participantId });
+      this.emit("producerPaused", { participantId });
+    } catch (error) {
+      console.error("Error pausing producer:", error);
+      errorback({ status: "error", data: error });
+    }
   }
 
   private async handleJoinConference(

@@ -149,6 +149,18 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
   isConferenceExists(conferenceId: string): boolean {
     return this.conferences.has(conferenceId);
   }
+  async pauseProducer(params: {
+    conferenceId: string;
+    participantId: string;
+    producerId: string;
+  }) {
+    const { conferenceId, participantId, producerId } = params;
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    return conference.pauseProducer(participantId, producerId);
+  }
 }
 
 export default MediasoupController;

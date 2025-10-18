@@ -116,6 +116,16 @@ class MediasoupParticipant implements Participant {
       throw new Error("Consumer not found");
     }
   }
+  public pauseProducer(producerId: string): void {
+    const userProducers = this.producers.get(this.id);
+    if (userProducers && userProducers[producerId]) {
+      const producer = userProducers[producerId];
+      producer.pause();
+      this.removeProducer(producerId);
+    } else {
+      throw new Error("Producer not found");
+    }
+  }
 }
 
 export default MediasoupParticipant;

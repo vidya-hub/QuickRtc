@@ -2,20 +2,28 @@ import { ClientSocket } from "@simple-mediasoup/types";
 import { SocketClientController } from "../controller/SocketClientController";
 import { WebRtcTransportOptions } from "mediasoup/types";
 import { Device } from "mediasoup-client";
-import { Transport } from "mediasoup-client/types";
+import { AppData, Transport } from "mediasoup-client/types";
 class ClientParticipant {
   public participantId: string;
   public displayName: string;
+  public producers: Map<string, string> = new Map();
 
   constructor(participantId: string, displayName: string) {
     this.participantId = participantId;
     this.displayName = displayName;
+  }
+  onTrackProduced(producerId: string) {
+    console.log(
+      `Participant ${this.displayName} produced track with producerId: ${producerId}`
+    );
+    this.producers.set(producerId, producerId);
   }
 }
 
 class ConferenceClient {
   public conferenceId: string;
   public currentParticipant: ClientParticipant;
+  public mediaOptions!: MediaStreamConstraints;
   public participants: Map<string, ClientParticipant> = new Map();
   public conferenceName?: string;
   public webRtcTransportOptions?: WebRtcTransportOptions;
@@ -72,7 +80,28 @@ class ConferenceClient {
       iceCandidates: recvTransport.iceCandidates,
       dtlsParameters: recvTransport.dtlsParameters,
     });
+    this.socketClientController.addSendTransportListener({
+      sendTransport: this.sendTransport,
+      onProduce: async (params: {
+        kind: "audio" | "video";
+        rtpParameters: any;
+        appData: AppData;
+        producerId: string;
+      }) => {
+        console.log("Produced: ", params);
+        this.participants
+          .get(this.currentParticipant.participantId)
+          ?.onTrackProduced(params.producerId);
+        return params.producerId;
+      },
+    });
   }
+  async startLocalMedia(localTrack?: MediaStreamTrack) {
+    if (localTrack) {
+      this.sendTransport.produce({ track: localTrack });
+    }
+  }
+  // async pauseLocalMedia() {}
 }
 
 export default ConferenceClient;

@@ -15,16 +15,8 @@ export interface ClientToServerEvents {
     data: CreateTransportParams,
     callback: (response: any) => void
   ) => void;
-  produce: (
-    data: any,
-    callback: (response: any) => void,
-    errorback: (error: any) => void
-  ) => void;
-  consume: (
-    data: any,
-    callback: (response: any) => void,
-    errorback: (error: any) => void
-  ) => void;
+  produce: (data: any, callback: (response: any) => void) => void;
+  consume: (data: any, callback: (response: any) => void) => void;
   resumeConsumer: (
     data: any,
     callback: (response: any) => void,

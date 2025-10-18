@@ -11,6 +11,8 @@ export type SocketEventType =
   | "produce"
   | "consume"
   | "resumeConsumer"
+  | "pauseProducer"
+  | "resumeProducer"
   | "leaveConference";
 
 /**

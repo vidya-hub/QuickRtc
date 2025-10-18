@@ -1,7 +1,7 @@
 /**
  * Socket event types supported by the application
  */
-export type SocketEventType = "getRtpCapabilities" | "joinConference" | "createTransport" | "connectTransport" | "produce" | "consume" | "resumeConsumer" | "leaveConference";
+export type SocketEventType = "getRtpCapabilities" | "joinConference" | "createTransport" | "connectTransport" | "produce" | "consume" | "resumeConsumer" | "pauseProducer" | "resumeProducer" | "leaveConference";
 /**
  * Base meeting parameters used in socket events
  */

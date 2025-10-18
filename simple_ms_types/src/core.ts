@@ -79,6 +79,7 @@ export interface Conference {
   consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;
   resumeConsumer(resumeParams: ResumeConsumerParams): Promise<void>;
   participantsMapToArray(participantsMap: ParticipantsMap): Participant[];
+  pauseProducer(participantId: string, producerId: string): void;
 }
 
 export interface Participant {
