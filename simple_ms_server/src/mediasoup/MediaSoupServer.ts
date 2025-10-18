@@ -1,10 +1,10 @@
 import { Server } from "socket.io";
-import { MediasoupConfig } from "../types";
 import WorkerService from "../workers/WorkerService";
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import MediasoupController from "../controllers/MediasoupController";
 import MediasoupConference from "../models/conference";
 import SocketEventController from "../controllers/SocketController";
+import { MediasoupConfig } from "@simple-mediasoup/types";
 
 class MediaSoupServer extends EnhancedEventEmitter {
   private config: MediasoupConfig;

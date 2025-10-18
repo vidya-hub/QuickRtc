@@ -1,4 +1,4 @@
-import { WebRtcTransport } from "mediasoup/types";
+import { RtpCapabilities, WebRtcTransport } from "mediasoup/types";
 import MediasoupParticipant from "./participant";
 import * as mediasoup from "mediasoup";
 import {
@@ -63,7 +63,7 @@ class MediasoupConference implements Conference {
     return this.conferenceId;
   }
 
-  getRouterRtpsCapabilities() {
+  getRouterRtpsCapabilities(): RtpCapabilities | undefined {
     return this.router?.rtpCapabilities;
   }
 

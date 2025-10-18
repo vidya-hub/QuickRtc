@@ -29,11 +29,12 @@ __exportStar(require("./conference"), exports);
 // Transport and media types
 __exportStar(require("./transport"), exports);
 // Socket communication types
-__exportStar(require("./socket"), exports);
+__exportStar(require("./socket_server"), exports);
 // Client-specific types
 __exportStar(require("./client"), exports);
 // Utility types
 __exportStar(require("./utils"), exports);
+__exportStar(require("./socket_client"), exports);
 // Note: MediaSoup and Socket.IO types should be imported directly from their respective packages
 // This avoids module resolution issues and keeps the types library focused on application-specific types
 /**

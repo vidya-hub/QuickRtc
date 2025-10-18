@@ -1,9 +1,9 @@
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import { Server, Socket } from "socket.io";
-import { SocketEventData } from "../types";
 import MediasoupController from "./MediasoupController";
 import MediasoupConference from "../models/conference";
 import { ConsumerOptions } from "mediasoup/types";
+import { Conference, SocketEventData } from "@simple-mediasoup/types";
 
 class SocketEventController extends EnhancedEventEmitter {
   private mediasoupController?: MediasoupController;
@@ -31,7 +31,7 @@ class SocketEventController extends EnhancedEventEmitter {
       socket.on("event", async (socketEventData: SocketEventData) => {
         switch (socketEventData.eventType) {
           case "joinConference":
-            await this.handleJoinConference(socketEventData);
+            await this.handleJoinConference(socketEventData, socket);
             break;
           case "createTransport":
             await this.createTransport(socketEventData);
@@ -40,7 +40,7 @@ class SocketEventController extends EnhancedEventEmitter {
             await this.connectTransport(socketEventData);
             break;
           case "produce":
-            await this.produce(socketEventData);
+            await this.produce(socketEventData, socket);
             break;
           case "consume":
             await this.consume(socketEventData);
@@ -59,15 +59,17 @@ class SocketEventController extends EnhancedEventEmitter {
     });
   }
 
-  private async handleJoinConference(socketEventData: SocketEventData) {
+  private async handleJoinConference(
+    socketEventData: SocketEventData,
+    socket: Socket
+  ) {
     const { callback, errorback } = socketEventData;
     try {
-      const { conferenceId, participantId, extraData, socket } =
-        socketEventData.data;
+      const { conferenceId, participantId, extraData } = socketEventData.data;
       const conferenceName = extraData?.conferenceName;
       const participantName = extraData?.participantName || "Guest";
       const socketId = socket.id;
-      const conference: MediasoupConference | undefined =
+      const conference: Conference | undefined =
         await this.mediasoupController?.joinConference({
           conferenceId: conferenceId,
           participantId: participantId,
@@ -75,7 +77,7 @@ class SocketEventController extends EnhancedEventEmitter {
           participantName: participantName,
           socketId: socketId,
         });
-      socketEventData.data.socket.join(conferenceId);
+      socket.join(conferenceId);
       this.emit("conferenceJoined", socketEventData);
       if (conference) {
         callback({
@@ -135,9 +137,9 @@ class SocketEventController extends EnhancedEventEmitter {
       errorback({ status: "error", data: error });
     }
   }
-  private async produce(socketEventData: SocketEventData) {
+  private async produce(socketEventData: SocketEventData, socket: Socket) {
     const { callback, errorback, data } = socketEventData;
-    const { extraData, conferenceId, participantId, socket } = data;
+    const { extraData, conferenceId, participantId } = data;
     const { transportId, kind, rtpParameters } = extraData || {};
     const producerOptions = { kind, rtpParameters, appData: { participantId } };
     try {

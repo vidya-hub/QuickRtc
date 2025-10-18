@@ -11,6 +11,8 @@
   "license": "ISC",
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
+    "@simple-mediasoup/types": "file:../simple_ms_types",
+    "mediasoup": "^3.19.4",
     "mediasoup-client": "^3.16.7",
     "socket.io-client": "^4.8.1",
     "stream": "^0.0.3"

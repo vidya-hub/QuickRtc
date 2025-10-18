@@ -1,7 +1,10 @@
 import { Socket } from "socket.io-client";
+import { SocketClientController } from "../controller/SocketClientController";
 
 class MediasoupClient extends EventTarget {
-  constructor(socketClient: Socket, config: any) {
+  constructor(socketClient: SocketClientController, config: any) {
     super();
   }
 }
+
+export default MediasoupClient;

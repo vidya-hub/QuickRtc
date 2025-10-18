@@ -8,9 +8,10 @@
 export * from "./core";
 export * from "./conference";
 export * from "./transport";
-export * from "./socket";
+export * from "./socket_server";
 export * from "./client";
 export * from "./utils";
+export * from "./socket_client";
 /**
  * Version of the types library
  */

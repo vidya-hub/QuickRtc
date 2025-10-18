@@ -4,6 +4,7 @@ import type { Socket } from "socket.io";
  * Socket event types supported by the application
  */
 export type SocketEventType =
+  | "getRtpCapabilities"
   | "joinConference"
   | "createTransport"
   | "connectTransport"
@@ -18,7 +19,6 @@ export type SocketEventType =
 export type MeetingParams = {
   conferenceId: string;
   participantId: string;
-  socket: Socket;
   extraData?: Record<string, any>;
 };
 
@@ -28,7 +28,11 @@ export type MeetingParams = {
 export type SocketEventData = {
   eventType: SocketEventType;
   data: MeetingParams;
-  callback: (response: any) => void;
+  callback: (response: {
+    status: "ok" | "error";
+    data?: any;
+    error?: string;
+  }) => void;
   errorback: (error: any) => void;
 };
 

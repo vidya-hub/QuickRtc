@@ -16,13 +16,15 @@ export * from "./conference";
 export * from "./transport";
 
 // Socket communication types
-export * from "./socket";
+export * from "./socket_server";
 
 // Client-specific types
 export * from "./client";
 
 // Utility types
 export * from "./utils";
+
+export * from "./socket_client";
 
 // Note: MediaSoup and Socket.IO types should be imported directly from their respective packages
 // This avoids module resolution issues and keeps the types library focused on application-specific types
