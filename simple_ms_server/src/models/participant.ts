@@ -130,7 +130,7 @@ class MediasoupParticipant implements Participant {
   async createTransport(
     router: Router<AppData>,
     createTransportParams: CreateTransportParams
-  ) {
+  ): Promise<mediasoup.types.WebRtcTransport> {
     if (!createTransportParams.options) {
       throw new Error("Transport options are required");
     }

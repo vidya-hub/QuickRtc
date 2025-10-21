@@ -43,21 +43,8 @@ if (USE_HTTPS) {
   }
 }
 
-// Initialize Simple MediaSoup Server
-const mediaServer = new SimpleServer({
-  port: USE_HTTPS ? HTTPS_PORT : PORT,
-  cors: {
-    origin: "*",
-    credentials: true,
-  },
-  mediasoup: {
-    workerSettings: {
-      logLevel: "warn",
-      rtcMinPort: 10000,
-      rtcMaxPort: 10100,
-    },
-  },
-});
+// We'll initialize MediaSoup server later after creating the HTTP/HTTPS server
+let mediaServer;
 
 // Event logging for development
 mediaServer.on("serverStarted", (event) => {
@@ -147,13 +134,24 @@ app.use((err, req, res, next) => {
 async function startServer() {
   try {
     if (USE_HTTPS && httpsOptions) {
-      // Create HTTPS server
+      // For HTTPS, we need to create the server manually and integrate with MediaSoup
       const httpsServer = https.createServer(httpsOptions, app);
 
-      // Override the SimpleServer's HTTP server with our HTTPS server
-      mediaServer.httpServer = httpsServer;
+      // Create Socket.IO server manually with HTTPS
+      const { Server } = await import("socket.io");
+      const io = new Server(httpsServer, {
+        cors: {
+          origin: "*",
+          credentials: true,
+        },
+        transports: ["websocket", "polling"],
+      });
 
-      // Start the MediaSoup server with HTTPS
+      // Override MediaSoup server's HTTP server and Socket.IO instance
+      mediaServer.httpServer = httpsServer;
+      mediaServer.io = io;
+
+      // Start the MediaSoup server (will use our HTTPS server)
       await mediaServer.start();
 
       console.log(

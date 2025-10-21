@@ -415,8 +415,8 @@ class SocketEventController extends EnhancedEventEmitter {
     }
   }
   private onNewConnection(socket: any) {
-    console.log("New client connected:", socket.id);
-    this.emit("userSocketConnected", socket);
+    console.log("New client connected with socket id:", socket.id);
+    this.emit("connected", socket);
   }
   private async handleLeaveConference(
     socket: any,

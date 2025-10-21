@@ -70,7 +70,7 @@ export interface Conference {
     unmuteParticipantVideo(participantId: string): Promise<string[]>;
     getParticipantMediaStates(participantId: string): Array<{
         producerId: string;
-        kind: 'audio' | 'video';
+        kind: "audio" | "video";
         paused: boolean;
         closed: boolean;
     }> | null;

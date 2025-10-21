@@ -118,7 +118,7 @@ export class SimpleClient extends EventTarget {
       const { io } = await import("socket.io-client");
 
       // Connect to server
-      this.socket = io(this.config.serverUrl) as ClientSocket;
+      this.socket = io(this.config.serverUrl) as unknown as ClientSocket;
 
       // Wait for socket connection
       await new Promise<void>((resolve, reject) => {

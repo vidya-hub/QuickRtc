@@ -1,18 +1,29 @@
-# Simple MediaSoup Example
+# Simple MediaSoup Example - TypeScript with Dependency Injection
 
-This is a complete working example demonstrating how to use both the Simple MediaSoup server and client libraries together.
+This example demonstrates how to use the Simple MediaSoup library with **proper dependency injection** principles. The library no longer creates HTTP/HTTPS servers internally - instead, it accepts your externally created servers, giving you full control over server configuration and lifecycle.
 
-## Features
+## 🚀 Key Features
 
-✨ **Complete Video Conferencing Solution**
+- **Dependency Injection**: Inject your own HTTP/HTTPS servers and Socket.IO instances
+- **TypeScript Support**: Full type safety and IntelliSense support
+- **HTTPS Support**: Easy SSL certificate generation and HTTPS setup
+- **Production Ready**: Proper error handling and graceful shutdown
+- **Flexible Architecture**: Use with Express, Fastify, or any Node.js HTTP framework
 
-- 🎥 Multi-participant video calls
-- 🎤 Audio/video controls (mute/unmute)
-- 👥 Real-time participant list
-- 📱 Responsive web interface
-- 🖥️ Screen sharing support
-- 📊 Real-time statistics and monitoring
-- 🛡️ Admin controls (kick participants, close conferences)
+## 📁 Project Structure
+
+```
+simple_ms_example/
+├── src/
+│   ├── server.ts          # Main TypeScript server implementation
+│   └── types.d.ts         # Type declarations for library compatibility
+├── public/
+│   └── index.html         # Client web interface
+├── certs/                 # SSL certificates (generated)
+├── dist/                  # Compiled JavaScript (generated)
+├── package.json           # Dependencies and scripts
+└── tsconfig.json          # TypeScript configuration
+```
 
 ## Quick Start
 

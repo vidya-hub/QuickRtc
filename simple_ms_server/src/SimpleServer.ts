@@ -1,5 +1,6 @@
 import { Server } from "socket.io";
-import { createServer } from "http";
+import { createServer, Server as HttpServer } from "http";
+import { Server as HttpsServer } from "https";
 import MediasoupController from "./controllers/MediasoupController";
 import SocketEventController from "./controllers/SocketController";
 import { WorkerService } from "./workers/WorkerService";
@@ -8,12 +9,20 @@ import type { MediasoupConfig } from "@simple-mediasoup/types";
 
 // Simple, easy-to-use types
 export interface SimpleServerConfig {
+  // HTTP server injection - provide your own HTTP/HTTPS server
+  httpServer?: HttpServer | HttpsServer;
+
+  // Socket.IO server injection - provide your own Socket.IO server
+  socketServer?: Server;
+
+  // Legacy options for backward compatibility (only used if httpServer not provided)
   port?: number;
   host?: string;
   cors?: {
     origin: string | string[];
     credentials?: boolean;
   };
+
   mediasoup?: {
     workerSettings?: WorkerSettings;
     routerOptions?: any;
@@ -91,7 +100,7 @@ export interface SimpleServerEvents {
  */
 export class SimpleServer extends EventTarget {
   private config: SimpleServerConfig;
-  private httpServer?: any;
+  private httpServer?: HttpServer | HttpsServer;
   private io?: Server;
   private workerService?: WorkerService;
   private mediasoupController?: MediasoupController;
@@ -99,6 +108,7 @@ export class SimpleServer extends EventTarget {
   private conferences: Map<string, ConferenceInfo> = new Map();
   private participants: Map<string, ParticipantInfo> = new Map();
   private isStarted = false;
+  private isExternalServer = false;
 
   constructor(config: SimpleServerConfig = {}) {
     super();
@@ -114,22 +124,36 @@ export class SimpleServer extends EventTarget {
   }
 
   /**
-   * Start the server
+   * Start the server with external HTTP server injection
+   * @param externalHttpServer - Optional external HTTP/HTTPS server to use
+   * @param externalSocketServer - Optional external Socket.IO server to use
    */
-  async start(): Promise<void> {
+  async start(
+    externalHttpServer?: HttpServer | HttpsServer,
+    externalSocketServer?: Server
+  ): Promise<void> {
     try {
       if (this.isStarted) {
         throw new Error("Server is already started");
       }
 
-      // Create HTTP server
-      this.httpServer = createServer();
+      // Use provided servers or config servers or create new ones
+      this.httpServer =
+        externalHttpServer || this.config.httpServer || createServer();
 
-      // Setup Socket.IO
-      this.io = new Server(this.httpServer, {
-        cors: this.config.cors,
-        transports: ["websocket", "polling"],
-      });
+      this.io =
+        externalSocketServer ||
+        this.config.socketServer ||
+        new Server(this.httpServer, {
+          cors: this.config.cors || {
+            origin: "*",
+            credentials: true,
+          },
+          transports: ["websocket", "polling"],
+        });
+
+      // Track if we're using external servers
+      this.isExternalServer = !!(externalHttpServer || this.config.httpServer);
 
       // Initialize MediaSoup components
       await this.initializeMediaSoup();
@@ -137,24 +161,36 @@ export class SimpleServer extends EventTarget {
       // Setup event handling
       this.setupEventHandlers();
 
-      // Start HTTP server
-      await new Promise<void>((resolve, reject) => {
-        this.httpServer!.listen(this.config.port, this.config.host, () => {
-          console.log(
-            `🚀 Simple MediaSoup Server started on ${this.config.host}:${this.config.port}`
-          );
-          this.isStarted = true;
-          this.emit("serverStarted", {
-            port: this.config.port!,
-            host: this.config.host!,
+      // Only start the HTTP server if it's our own (not externally managed)
+      if (!this.isExternalServer) {
+        await new Promise<void>((resolve, reject) => {
+          this.httpServer!.listen(this.config.port, this.config.host, () => {
+            console.log(
+              `🚀 Simple MediaSoup Server started on ${this.config.host}:${this.config.port}`
+            );
+            this.isStarted = true;
+            this.emit("serverStarted", {
+              port: this.config.port!,
+              host: this.config.host!,
+            });
+            resolve();
           });
-          resolve();
-        });
 
-        this.httpServer!.on("error", (error: Error) => {
-          reject(error);
+          this.httpServer!.on("error", (error: Error) => {
+            reject(error);
+          });
         });
-      });
+      } else {
+        // For external servers, just mark as started
+        this.isStarted = true;
+        console.log(
+          "🚀 Simple MediaSoup Server initialized with external HTTP server"
+        );
+        this.emit("serverStarted", {
+          port: 0, // Port managed externally
+          host: "external",
+        });
+      }
     } catch (error) {
       console.error("Failed to start server:", error);
       this.emit("serverError", {
@@ -167,6 +203,7 @@ export class SimpleServer extends EventTarget {
 
   /**
    * Stop the server
+   * Note: If using external HTTP server, you need to manage its lifecycle separately
    */
   async stop(): Promise<void> {
     try {
@@ -174,13 +211,13 @@ export class SimpleServer extends EventTarget {
         return;
       }
 
-      // Close all socket connections
-      if (this.io) {
+      // Close Socket.IO connections (only if we created it)
+      if (this.io && !this.config.socketServer) {
         this.io.close();
       }
 
-      // Close HTTP server
-      if (this.httpServer) {
+      // Close HTTP server only if we created it (not externally managed)
+      if (this.httpServer && !this.isExternalServer) {
         await new Promise<void>((resolve) => {
           this.httpServer!.close(() => {
             resolve();
@@ -199,6 +236,7 @@ export class SimpleServer extends EventTarget {
       this.conferences.clear();
       this.participants.clear();
       this.isStarted = false;
+      this.isExternalServer = false;
 
       console.log("🛑 Simple MediaSoup Server stopped");
     } catch (error) {
@@ -315,6 +353,20 @@ export class SimpleServer extends EventTarget {
         socket.emit(event, data);
       }
     }
+  }
+
+  /**
+   * Get the Socket.IO server instance
+   */
+  getSocketServer(): Server | undefined {
+    return this.io;
+  }
+
+  /**
+   * Get the HTTP server instance
+   */
+  getHttpServer(): HttpServer | HttpsServer | undefined {
+    return this.httpServer;
   }
 
   /**
