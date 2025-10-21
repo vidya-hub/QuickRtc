@@ -40,15 +40,48 @@ class MediasoupConference implements Conference {
     this.participants.set(participant.id, participant);
     this.socketIds.push(participant.socketId);
   }
-  removeParticipant(participantId: string) {
+  async removeParticipant(participantId: string): Promise<{
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }> {
+    const participant = this.participants.get(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      return { closedProducerIds: [], closedConsumerIds: [] };
+    }
+
+    // Clean up participant's resources
+    const cleanup = await participant.cleanup();
+
+    // Remove from participants map
     this.participants.delete(participantId);
+
+    // Remove socket ID from the list
+    this.socketIds = this.socketIds.filter((id) => id !== participant.socketId);
+
+    return cleanup;
   }
-  removeWithSocketId(socketId: string) {
+
+  async removeWithSocketId(socketId: string): Promise<{
+    participantId: string | null;
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }> {
     for (const [participantId, participant] of this.participants) {
       if (participant.socketId === socketId) {
-        this.participants.delete(participantId);
+        const cleanup = await this.removeParticipant(participantId);
+        return {
+          participantId,
+          ...cleanup,
+        };
       }
     }
+    return {
+      participantId: null,
+      closedProducerIds: [],
+      closedConsumerIds: [],
+    };
   }
   getParticipants(): MediasoupParticipant[] {
     return this.participantsMapToArray(this.participants);
@@ -166,6 +199,153 @@ class MediasoupConference implements Conference {
       throw new Error("Participant does not exist in the conference");
     }
     participant.pauseProducer(producerId);
+  }
+  getExistingProducerIds(currentParticipantId: string): Array<{
+    participantId: string;
+    producerIds: string[];
+  }> {
+    const producerData: Array<{
+      participantId: string;
+      producerIds: string[];
+    }> = [];
+    for (const [participantId, participant] of this.participants.entries()) {
+      if (participantId === currentParticipantId) {
+        continue;
+      }
+      const mediasoupParticipant = participant as MediasoupParticipant;
+      const participantProducerIds = mediasoupParticipant.getProducerIds();
+      producerData.push({
+        participantId,
+        producerIds: participantProducerIds,
+      });
+    }
+    return producerData;
+  }
+  async resumeProducer(
+    participantId: string,
+    producerId: string
+  ): Promise<void> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    participant.resumeProducer(producerId);
+  }
+
+  async pauseConsumer(
+    participantId: string,
+    consumerId: string
+  ): Promise<void> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    participant.pauseConsumer(consumerId);
+  }
+
+  async closeProducer(
+    participantId: string,
+    producerId: string
+  ): Promise<void> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    participant.removeProducer(producerId);
+  }
+
+  async closeConsumer(
+    participantId: string,
+    consumerId: string
+  ): Promise<void> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    participant.removeConsumer(consumerId);
+  }
+
+  isEmpty(): boolean {
+    return this.participants.size === 0;
+  }
+
+  getParticipantCount(): number {
+    return this.participants.size;
+  }
+
+  async muteParticipantAudio(participantId: string): Promise<string[]> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    return participant.muteAudio();
+  }
+
+  async unmuteParticipantAudio(participantId: string): Promise<string[]> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    return participant.unmuteAudio();
+  }
+
+  async muteParticipantVideo(participantId: string): Promise<string[]> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    return participant.muteVideo();
+  }
+
+  async unmuteParticipantVideo(participantId: string): Promise<string[]> {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      throw new Error("Participant does not exist in the conference");
+    }
+    return participant.unmuteVideo();
+  }
+
+  getParticipantMediaStates(participantId: string): Array<{
+    producerId: string;
+    kind: "audio" | "video";
+    paused: boolean;
+    closed: boolean;
+  }> | null {
+    const participant = this.getParticipant(
+      participantId
+    ) as MediasoupParticipant;
+    if (!participant) {
+      return null;
+    }
+    return participant.getMediaStates();
+  }
+
+  async cleanup(): Promise<void> {
+    // Close all participants
+    for (const [participantId] of this.participants) {
+      await this.removeParticipant(participantId);
+    }
+
+    // Close router if it exists
+    if (this.router && !this.router.closed) {
+      this.router.close();
+    }
   }
 }
 

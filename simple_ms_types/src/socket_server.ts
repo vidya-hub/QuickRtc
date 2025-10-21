@@ -13,7 +13,16 @@ export type SocketEventType =
   | "resumeConsumer"
   | "pauseProducer"
   | "resumeProducer"
-  | "leaveConference";
+  | "pauseConsumer"
+  | "closeProducer"
+  | "closeConsumer"
+  | "muteAudio"
+  | "unmuteAudio"
+  | "muteVideo"
+  | "unmuteVideo"
+  | "getMediaStates"
+  | "leaveConference"
+  | "getProducers";
 
 /**
  * Base meeting parameters used in socket events

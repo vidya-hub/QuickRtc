@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple MediaSoup Client Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+
+      .container {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+      }
+
+      .join-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .join-form input {
+        padding: 10px;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        font-size: 16px;
+        min-width: 200px;
+      }
+
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      .btn-primary {
+        background-color: #007bff;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: #0056b3;
+      }
+
+      .btn-success {
+        background-color: #28a745;
+        color: white;
+      }
+
+      .btn-success:hover {
+        background-color: #1e7e34;
+      }
+
+      .btn-danger {
+        background-color: #dc3545;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background-color: #c82333;
+      }
+
+      .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background-color: #545b62;
+      }
+
+      .controls {
+        display: none;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+
+      .video-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      .video-wrapper {
+        position: relative;
+        background: #000;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .video-wrapper video {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+      }
+
+      .video-label {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+
+      .local-video {
+        background: #000;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .local-video video {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+      }
+
+      .screen-share {
+        width: 100%;
+        max-height: 400px;
+        background: #000;
+        border-radius: 10px;
+        display: none;
+      }
+
+      .participants-list {
+        list-style: none;
+        padding: 0;
+      }
+
+      .participants-list li {
+        padding: 8px;
+        background: #f8f9fa;
+        margin: 5px 0;
+        border-radius: 5px;
+        border-left: 4px solid #007bff;
+      }
+
+      .messages {
+        height: 150px;
+        overflow-y: auto;
+        border: 2px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        background: #f8f9fa;
+      }
+
+      .message {
+        margin: 5px 0;
+        padding: 5px;
+        border-radius: 3px;
+      }
+
+      .message.error {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .status {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+
+      .status.connected {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .feature-info {
+        background: #e7f3ff;
+        border: 1px solid #b3d9ff;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 20px;
+      }
+
+      .feature-info h3 {
+        margin-top: 0;
+        color: #0056b3;
+      }
+
+      .feature-list {
+        columns: 2;
+        column-gap: 20px;
+      }
+
+      .feature-list li {
+        margin: 5px 0;
+        break-inside: avoid;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 Simple MediaSoup Client Demo</h1>
+
+      <div class="feature-info">
+        <h3>✨ Features Included</h3>
+        <ul class="feature-list">
+          <li>📞 Easy conference joining</li>
+          <li>🎥 Video calling</li>
+          <li>🎤 Audio communication</li>
+          <li>🔇 Mute/unmute controls</li>
+          <li>📹 Video on/off</li>
+          <li>🖥️ Screen sharing</li>
+          <li>👥 Participant management</li>
+          <li>🔔 Real-time events</li>
+          <li>🌐 WebRTC with MediaSoup</li>
+          <li>⚙️ Automatic stream handling</li>
+        </ul>
+      </div>
+
+      <div class="join-form">
+        <input
+          type="text"
+          id="conferenceId"
+          placeholder="Conference ID (e.g., room-123)"
+          value="demo-room"
+        />
+        <input
+          type="text"
+          id="participantName"
+          placeholder="Your Name"
+          value="User-1"
+        />
+        <button id="joinBtn" class="btn btn-primary" onclick="joinConference()">
+          🚀 Join Conference
+        </button>
+        <button
+          id="leaveBtn"
+          class="btn btn-danger"
+          onclick="leaveConference()"
+          style="display: none"
+        >
+          ❌ Leave Conference
+        </button>
+        <span id="connectionStatus" class="status disconnected"
+          >Disconnected</span
+        >
+      </div>
+
+      <div id="controls" class="controls">
+        <button
+          id="audioToggle"
+          class="btn btn-success"
+          onclick="toggleAudio()"
+        >
+          🔊 Mute Audio
+        </button>
+        <button
+          id="videoToggle"
+          class="btn btn-success"
+          onclick="toggleVideo()"
+        >
+          📹 Stop Video
+        </button>
+        <button class="btn btn-secondary" onclick="startScreenShare()">
+          🖥️ Share Screen
+        </button>
+      </div>
+    </div>
+
+    <div class="container">
+      <h2>📹 Video Streams</h2>
+
+      <div class="video-container">
+        <div class="local-video">
+          <video id="localVideo" autoplay muted playsinline></video>
+          <div class="video-label">You (Local)</div>
+        </div>
+        <div id="remoteVideos">
+          <!-- Remote videos will be added here dynamically -->
+        </div>
+      </div>
+
+      <video id="screenShare" class="screen-share" autoplay playsinline></video>
+    </div>
+
+    <div class="container">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
+        <div>
+          <h3>👥 Participants</h3>
+          <ul id="participantsList" class="participants-list">
+            <!-- Participants will be listed here -->
+          </ul>
+        </div>
+        <div>
+          <h3>📋 Messages & Events</h3>
+          <div id="messages" class="messages">
+            <!-- Messages will appear here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      // Import the SimpleClient (this would be from your built bundle in a real app)
+      import { SimpleClient } from "../src/client.js";
+
+      // Configuration
+      const config = {
+        serverUrl: "http://localhost:3000", // Change this to your server URL
+        enableAudio: true,
+        enableVideo: true,
+        autoConsume: true,
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      };
+
+      // Create client instance
+      const client = new SimpleClient(config);
+
+      // Setup event handlers
+      function setupEventHandlers() {
+        // Connection events
+        client.on("connected", (event) => {
+          console.log("✅ Connected:", event.detail.connection);
+          updateConnectionStatus("connected");
+          displayMessage("🎉 Successfully connected to conference!");
+          updateUI("connected");
+        });
+
+        client.on("disconnected", (event) => {
+          console.log("❌ Disconnected:", event.detail);
+          updateConnectionStatus("disconnected");
+          displayMessage("👋 Disconnected from conference");
+          updateUI("disconnected");
+        });
+
+        client.on("error", (event) => {
+          console.error("🚨 Error:", event.detail.error);
+          displayError(`❌ ${event.detail.error.message}`);
+        });
+
+        // Participant events
+        client.on("participantJoined", (event) => {
+          console.log("👋 Participant joined:", event.detail.participant);
+          displayMessage(`👋 ${event.detail.participant.name} joined`);
+          updateParticipantsList();
+        });
+
+        client.on("participantLeft", (event) => {
+          console.log("👋 Participant left:", event.detail.participant);
+          displayMessage(`👋 ${event.detail.participant.name} left`);
+          updateParticipantsList();
+        });
+
+        // Media events
+        client.on("localStreamReady", (event) => {
+          console.log("📹 Local stream ready");
+          displayLocalVideo(event.detail.stream);
+          displayMessage("📹 Your camera and microphone are active");
+        });
+
+        client.on("remoteStreamAdded", (event) => {
+          console.log("📹 Remote stream added:", event.detail.stream);
+          displayRemoteVideo(event.detail.stream);
+          displayMessage(
+            `📹 Receiving ${event.detail.stream.type} from participant`
+          );
+        });
+
+        client.on("remoteStreamRemoved", (event) => {
+          console.log("📹 Remote stream removed:", event.detail);
+          removeRemoteVideo(event.detail.streamId);
+          displayMessage("📹 Remote stream ended");
+        });
+
+        // Mute events
+        client.on("audioMuted", (event) => {
+          const name = event.detail.isLocal
+            ? "You"
+            : `Participant ${event.detail.participantId}`;
+          displayMessage(`🔇 ${name} muted audio`);
+          if (event.detail.isLocal) updateMuteButton("audio", true);
+        });
+
+        client.on("audioUnmuted", (event) => {
+          const name = event.detail.isLocal
+            ? "You"
+            : `Participant ${event.detail.participantId}`;
+          displayMessage(`🔊 ${name} unmuted audio`);
+          if (event.detail.isLocal) updateMuteButton("audio", false);
+        });
+
+        client.on("videoMuted", (event) => {
+          const name = event.detail.isLocal
+            ? "You"
+            : `Participant ${event.detail.participantId}`;
+          displayMessage(`📵 ${name} turned off video`);
+          if (event.detail.isLocal) updateMuteButton("video", true);
+        });
+
+        client.on("videoUnmuted", (event) => {
+          const name = event.detail.isLocal
+            ? "You"
+            : `Participant ${event.detail.participantId}`;
+          displayMessage(`📹 ${name} turned on video`);
+          if (event.detail.isLocal) updateMuteButton("video", false);
+        });
+
+        // Screen sharing events
+        client.on("screenShareStarted", (event) => {
+          displayMessage(`🖥️ Screen sharing started`);
+          if (event.detail.stream) {
+            displayScreenShare(event.detail.stream);
+          }
+        });
+
+        client.on("screenShareStopped", (event) => {
+          displayMessage(`🖥️ Screen sharing stopped`);
+          hideScreenShare();
+        });
+      }
+
+      // Functions for HTML onclick handlers
+      window.joinConference = async function () {
+        const conferenceId = document.getElementById("conferenceId").value;
+        const participantName =
+          document.getElementById("participantName").value;
+
+        if (!conferenceId || !participantName) {
+          alert("Please enter both Conference ID and Your Name");
+          return;
+        }
+
+        try {
+          displayMessage("🔄 Connecting to conference...");
+          setupEventHandlers();
+          await client.connect(conferenceId, participantName);
+        } catch (error) {
+          console.error("Failed to join:", error);
+          displayError(
+            "❌ Failed to join conference. Please check the server URL and try again."
+          );
+        }
+      };
+
+      window.toggleAudio = async function () {
+        try {
+          const isMuted = await client.toggleAudio();
+          // UI will be updated via event handlers
+        } catch (error) {
+          displayError("❌ Failed to toggle audio");
+        }
+      };
+
+      window.toggleVideo = async function () {
+        try {
+          const isMuted = await client.toggleVideo();
+          // UI will be updated via event handlers
+        } catch (error) {
+          displayError("❌ Failed to toggle video");
+        }
+      };
+
+      window.startScreenShare = async function () {
+        try {
+          await client.startScreenShare();
+        } catch (error) {
+          displayError("❌ Screen sharing failed. Please check permissions.");
+        }
+      };
+
+      window.leaveConference = async function () {
+        try {
+          await client.disconnect();
+          clearAllVideos();
+        } catch (error) {
+          displayError("❌ Failed to leave conference");
+        }
+      };
+
+      // UI Helper Functions
+      function displayLocalVideo(stream) {
+        const video = document.getElementById("localVideo");
+        video.srcObject = stream;
+        video.play();
+      }
+
+      function displayRemoteVideo(streamInfo) {
+        const container = document.getElementById("remoteVideos");
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "video-wrapper";
+        wrapper.id = `wrapper-${streamInfo.streamId}`;
+
+        const video = document.createElement("video");
+        video.id = `remote-${streamInfo.streamId}`;
+        video.srcObject = streamInfo.stream;
+        video.autoplay = true;
+        video.playsInline = true;
+
+        const label = document.createElement("div");
+        label.className = "video-label";
+        label.textContent = `Participant (${streamInfo.type})`;
+
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        container.appendChild(wrapper);
+      }
+
+      function removeRemoteVideo(streamId) {
+        const wrapper = document.getElementById(`wrapper-${streamId}`);
+        if (wrapper) {
+          wrapper.remove();
+        }
+      }
+
+      function displayScreenShare(stream) {
+        const video = document.getElementById("screenShare");
+        video.srcObject = stream;
+        video.style.display = "block";
+      }
+
+      function hideScreenShare() {
+        const video = document.getElementById("screenShare");
+        video.style.display = "none";
+        video.srcObject = null;
+      }
+
+      function updateParticipantsList() {
+        const participants = client.getParticipants();
+        const list = document.getElementById("participantsList");
+        list.innerHTML = participants
+          .map((p) => `<li>${p.name} ${p.isLocal ? "(You)" : ""}</li>`)
+          .join("");
+      }
+
+      function updateMuteButton(type, isMuted) {
+        const button = document.getElementById(`${type}Toggle`);
+        if (type === "audio") {
+          button.textContent = isMuted ? "🔇 Unmute Audio" : "🔊 Mute Audio";
+        } else {
+          button.textContent = isMuted ? "📵 Start Video" : "📹 Stop Video";
+        }
+        button.className = `btn ${isMuted ? "btn-danger" : "btn-success"}`;
+      }
+
+      function updateConnectionStatus(status) {
+        const statusEl = document.getElementById("connectionStatus");
+        statusEl.textContent =
+          status === "connected" ? "Connected" : "Disconnected";
+        statusEl.className = `status ${status}`;
+      }
+
+      function updateUI(state) {
+        const joinBtn = document.getElementById("joinBtn");
+        const leaveBtn = document.getElementById("leaveBtn");
+        const controls = document.getElementById("controls");
+
+        if (state === "connected") {
+          joinBtn.style.display = "none";
+          leaveBtn.style.display = "inline-block";
+          controls.style.display = "flex";
+        } else {
+          joinBtn.style.display = "inline-block";
+          leaveBtn.style.display = "none";
+          controls.style.display = "none";
+        }
+      }
+
+      function displayMessage(message) {
+        const messages = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.className = "message";
+        div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      function displayError(error) {
+        const messages = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.className = "message error";
+        div.textContent = `${new Date().toLocaleTimeString()}: ${error}`;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      function clearAllVideos() {
+        const localVideo = document.getElementById("localVideo");
+        localVideo.srcObject = null;
+
+        const remoteContainer = document.getElementById("remoteVideos");
+        remoteContainer.innerHTML = "";
+
+        hideScreenShare();
+      }
+
+      // Initialize
+      displayMessage(
+        "🚀 Simple MediaSoup Client loaded! Enter conference details and click Join."
+      );
+    </script>
+  </body>
+</html>

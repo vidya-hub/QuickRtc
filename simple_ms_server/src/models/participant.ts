@@ -18,6 +18,14 @@ class MediasoupParticipant implements Participant {
   consumerTransport?: mediasoup.types.Transport;
   producers: ProducersToUsers;
   consumers: ConsumersToUsers;
+  private mediaStates: Map<
+    string,
+    {
+      kind: "audio" | "video";
+      paused: boolean;
+      closed: boolean;
+    }
+  > = new Map();
 
   constructor(id: string, name: string, socketId: string) {
     this.id = id;
@@ -45,9 +53,79 @@ class MediasoupParticipant implements Participant {
   removeProducer(producerId: string) {
     const userProducers = this.producers.get(this.id);
     if (userProducers && userProducers[producerId]) {
+      const producer = userProducers[producerId];
+      producer.close();
       delete userProducers[producerId];
       this.producers.set(this.id, userProducers);
+      this.updateMediaState(producerId, { closed: true });
     }
+  }
+
+  removeConsumer(consumerId: string) {
+    const userConsumers = this.consumers.get(this.id);
+    if (userConsumers && userConsumers[consumerId]) {
+      const consumer = userConsumers[consumerId];
+      consumer.close();
+      delete userConsumers[consumerId];
+      this.consumers.set(this.id, userConsumers);
+    }
+  }
+
+  async closeAllProducers(): Promise<string[]> {
+    const userProducers = this.producers.get(this.id);
+    const closedProducerIds: string[] = [];
+    if (userProducers) {
+      for (const [producerId, producer] of Object.entries(userProducers)) {
+        try {
+          producer.close();
+          closedProducerIds.push(producerId);
+        } catch (error) {
+          console.error(`Error closing producer ${producerId}:`, error);
+        }
+      }
+      this.producers.set(this.id, {});
+    }
+    return closedProducerIds;
+  }
+
+  async closeAllConsumers(): Promise<string[]> {
+    const userConsumers = this.consumers.get(this.id);
+    const closedConsumerIds: string[] = [];
+    if (userConsumers) {
+      for (const [consumerId, consumer] of Object.entries(userConsumers)) {
+        try {
+          consumer.close();
+          closedConsumerIds.push(consumerId);
+        } catch (error) {
+          console.error(`Error closing consumer ${consumerId}:`, error);
+        }
+      }
+      this.consumers.set(this.id, {});
+    }
+    return closedConsumerIds;
+  }
+
+  async closeTransports(): Promise<void> {
+    try {
+      if (this.producerTransport && !this.producerTransport.closed) {
+        this.producerTransport.close();
+      }
+      if (this.consumerTransport && !this.consumerTransport.closed) {
+        this.consumerTransport.close();
+      }
+    } catch (error) {
+      console.error("Error closing transports:", error);
+    }
+  }
+
+  async cleanup(): Promise<{
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }> {
+    const closedProducerIds = await this.closeAllProducers();
+    const closedConsumerIds = await this.closeAllConsumers();
+    await this.closeTransports();
+    return { closedProducerIds, closedConsumerIds };
   }
   async createTransport(
     router: Router<AppData>,
@@ -81,8 +159,16 @@ class MediasoupParticipant implements Participant {
     }
     const { producerOptions } = produceParams;
     const producer = await this.producerTransport.produce(producerOptions);
-    this.consumerTransport?.consume;
     this.addProducer(producer);
+
+    // Track media state
+    this.setMediaState(
+      producer.id,
+      producer.kind as "audio" | "video",
+      false,
+      false
+    );
+
     return producer.id;
   }
   async consume(consumeParams: ConsumeParams) {
@@ -121,10 +207,186 @@ class MediasoupParticipant implements Participant {
     if (userProducers && userProducers[producerId]) {
       const producer = userProducers[producerId];
       producer.pause();
-      this.removeProducer(producerId);
+      this.updateMediaState(producerId, { paused: true });
     } else {
       throw new Error("Producer not found");
     }
+  }
+
+  public resumeProducer(producerId: string): void {
+    const userProducers = this.producers.get(this.id);
+    if (userProducers && userProducers[producerId]) {
+      const producer = userProducers[producerId];
+      producer.resume();
+      this.updateMediaState(producerId, { paused: false });
+    } else {
+      throw new Error("Producer not found");
+    }
+  }
+
+  public pauseConsumer(consumerId: string): void {
+    const userConsumers = this.consumers.get(this.id);
+    if (userConsumers && userConsumers[consumerId]) {
+      const consumer = userConsumers[consumerId];
+      consumer.pause();
+    } else {
+      throw new Error("Consumer not found");
+    }
+  }
+
+  public getProducerById(producerId: string): mediasoup.types.Producer | null {
+    const userProducers = this.producers.get(this.id);
+    return userProducers?.[producerId] || null;
+  }
+
+  public getConsumerById(consumerId: string): mediasoup.types.Consumer | null {
+    const userConsumers = this.consumers.get(this.id);
+    return userConsumers?.[consumerId] || null;
+  }
+
+  public getAllProducers(): mediasoup.types.Producer[] {
+    const userProducers = this.producers.get(this.id);
+    return userProducers ? Object.values(userProducers) : [];
+  }
+
+  public getAllConsumers(): mediasoup.types.Consumer[] {
+    const userConsumers = this.consumers.get(this.id);
+    return userConsumers ? Object.values(userConsumers) : [];
+  }
+
+  public getMediaState(producerId: string): {
+    kind: "audio" | "video";
+    paused: boolean;
+    closed: boolean;
+  } | null {
+    return this.mediaStates.get(producerId) || null;
+  }
+
+  public setMediaState(
+    producerId: string,
+    kind: "audio" | "video",
+    paused: boolean = false,
+    closed: boolean = false
+  ): void {
+    this.mediaStates.set(producerId, { kind, paused, closed });
+  }
+
+  public updateMediaState(
+    producerId: string,
+    updates: { paused?: boolean; closed?: boolean }
+  ): void {
+    const currentState = this.mediaStates.get(producerId);
+    if (currentState) {
+      this.mediaStates.set(producerId, {
+        ...currentState,
+        ...updates,
+      });
+    }
+  }
+
+  public getMediaStates(): Array<{
+    producerId: string;
+    kind: "audio" | "video";
+    paused: boolean;
+    closed: boolean;
+  }> {
+    return Array.from(this.mediaStates.entries()).map(
+      ([producerId, state]) => ({
+        producerId,
+        ...state,
+      })
+    );
+  }
+
+  public isAudioMuted(): boolean {
+    const audioStates = Array.from(this.mediaStates.values()).filter(
+      (state) => state.kind === "audio"
+    );
+    return (
+      audioStates.length > 0 &&
+      audioStates.every((state) => state.paused || state.closed)
+    );
+  }
+
+  public isVideoMuted(): boolean {
+    const videoStates = Array.from(this.mediaStates.values()).filter(
+      (state) => state.kind === "video"
+    );
+    return (
+      videoStates.length > 0 &&
+      videoStates.every((state) => state.paused || state.closed)
+    );
+  }
+
+  public muteAudio(): string[] {
+    const mutedProducerIds: string[] = [];
+    const userProducers = this.producers.get(this.id);
+    if (userProducers) {
+      for (const [producerId, producer] of Object.entries(userProducers)) {
+        const state = this.mediaStates.get(producerId);
+        if (state?.kind === "audio" && !state.paused && !state.closed) {
+          producer.pause();
+          this.updateMediaState(producerId, { paused: true });
+          mutedProducerIds.push(producerId);
+        }
+      }
+    }
+    return mutedProducerIds;
+  }
+
+  public unmuteAudio(): string[] {
+    const unmutedProducerIds: string[] = [];
+    const userProducers = this.producers.get(this.id);
+    if (userProducers) {
+      for (const [producerId, producer] of Object.entries(userProducers)) {
+        const state = this.mediaStates.get(producerId);
+        if (state?.kind === "audio" && state.paused && !state.closed) {
+          producer.resume();
+          this.updateMediaState(producerId, { paused: false });
+          unmutedProducerIds.push(producerId);
+        }
+      }
+    }
+    return unmutedProducerIds;
+  }
+
+  public muteVideo(): string[] {
+    const mutedProducerIds: string[] = [];
+    const userProducers = this.producers.get(this.id);
+    if (userProducers) {
+      for (const [producerId, producer] of Object.entries(userProducers)) {
+        const state = this.mediaStates.get(producerId);
+        if (state?.kind === "video" && !state.paused && !state.closed) {
+          producer.pause();
+          this.updateMediaState(producerId, { paused: true });
+          mutedProducerIds.push(producerId);
+        }
+      }
+    }
+    return mutedProducerIds;
+  }
+
+  public unmuteVideo(): string[] {
+    const unmutedProducerIds: string[] = [];
+    const userProducers = this.producers.get(this.id);
+    if (userProducers) {
+      for (const [producerId, producer] of Object.entries(userProducers)) {
+        const state = this.mediaStates.get(producerId);
+        if (state?.kind === "video" && state.paused && !state.closed) {
+          producer.resume();
+          this.updateMediaState(producerId, { paused: false });
+          unmutedProducerIds.push(producerId);
+        }
+      }
+    }
+    return unmutedProducerIds;
+  }
+  public getProducerIds(): string[] {
+    const userProducers = this.producers.get(this.id);
+    if (userProducers) {
+      return Object.keys(userProducers);
+    }
+    return [];
   }
 }
 
