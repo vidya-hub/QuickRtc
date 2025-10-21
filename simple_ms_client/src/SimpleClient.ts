@@ -120,6 +120,8 @@ export class SimpleClient extends EventTarget {
       // Connect to server
       this.socket = io(this.config.serverUrl) as unknown as ClientSocket;
 
+      console.log("Connecting to server:", this.config.serverUrl);
+
       // Wait for socket connection
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -174,6 +176,7 @@ export class SimpleClient extends EventTarget {
       this.isInitialized = true;
 
       this.emit("connected", { connection: this.connectionInfo });
+      console.log("event is emitted ", this.connectionInfo);
 
       // Auto-enable media if configured
       if (this.config.enableAudio || this.config.enableVideo) {

@@ -14,6 +14,8 @@
     "generate-certs": "mkdir -p certs && openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes -subj '/C=US/ST=CA/L=San Francisco/O=Simple MediaSoup/OU=Development/CN=localhost'",
     "test-https": "./test-https-setup.sh",
     "setup": "npm install && npm run build && npm run generate-certs",
+    "refresh-deps": "./refresh-dependencies.sh",
+    "refresh-deps:node": "node refresh-dependencies.js",
     "build": "npm run build:client && npm run build:server && npm run build:types && npm run build:example",
     "build:example": "tsc",
     "build:types": "cd ../simple_ms_types && npm run build",
