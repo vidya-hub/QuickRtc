@@ -30,6 +30,26 @@ await server.start();
 // Conference management, participant tracking, everything is automatic.
 ```
 
+## 🎬 Live Demo
+
+**Try it now in 30 seconds with HTTPS:**
+
+```bash
+# Clone and run the example
+git clone https://github.com/vidya-hub/simple_mediasoup.git
+cd simple_mediasoup/simple_ms_example
+
+# One-command setup and start
+npm run setup && npm run start:https
+
+# Open https://localhost:3443 in your browser
+# Accept the self-signed certificate warning
+```
+
+**That's it!** You now have a fully functional video conferencing app with HTTPS support.
+
+> **⚠️ Important:** HTTPS is required for WebRTC features like camera, microphone, and screen sharing to work in modern browsers. The example above uses self-signed certificates which are perfect for development.
+
 ## 🎯 Features
 
 ### 🖥️ Client Features
@@ -62,7 +82,6 @@ simple_mediasoup/
 │   │   ├── client.ts          # 📤 Package exports
 │   │   ├── controller/        # 🎮 Socket & MediaSoup controllers
 │   │   └── mediasoup/         # 🔧 Advanced MediaSoup clients
-│   ├── example/               # 📋 Usage examples & HTML demo
 │   └── README.md              # 📖 Client documentation
 ├── simple_ms_server/          # 🏠 Server-side package
 │   ├── src/
@@ -72,15 +91,72 @@ simple_mediasoup/
 │   │   ├── mediasoup/         # 🔧 Advanced MediaSoup server
 │   │   ├── models/            # 📊 Data models
 │   │   └── workers/           # ⚙️ MediaSoup worker management
-│   ├── example/               # 📋 Usage examples
 │   └── README.md              # 📖 Server documentation
-└── simple_ms_types/           # 📘 Shared TypeScript types
-    └── src/                   # 🔗 Common interfaces
+├── simple_ms_types/           # 📘 Shared TypeScript types
+│   └── src/                   # 🔗 Common interfaces
+└── simple_ms_example/         # 🎬 Complete working example
+    ├── server.js              # Express + MediaSoup server
+    ├── public/
+    │   └── index.html         # Web client interface
+    └── README.md              # Example usage guide
 ```
 
 ## 🚀 Quick Start
 
-### 1. Client Setup (3 lines of code!)
+### Option 1: Run the Complete Example (Recommended)
+
+**One-Command Setup:**
+
+```bash
+# Clone the repository
+git clone https://github.com/vidya-hub/simple_mediasoup.git
+cd simple_mediasoup/simple_ms_example
+
+# Setup everything and start HTTPS server
+npm run setup && npm run start:https
+
+# Open https://localhost:3443 in your browser
+# Accept the self-signed certificate warning
+```
+
+**Step-by-Step Setup:**
+
+```bash
+# Clone the repository
+git clone https://github.com/vidya-hub/simple_mediasoup.git
+cd simple_mediasoup/simple_ms_example
+
+# Install dependencies and build
+npm install && npm run build
+
+# Generate SSL certificates for HTTPS (required for WebRTC)
+npm run generate-certs
+
+# Test HTTPS setup (optional)
+npm run test-https
+
+# Start the HTTPS server
+npm run start:https
+
+# Open https://localhost:3443 in your browser
+# Accept the self-signed certificate warning
+```
+
+🎉 **That's it!** You now have a fully functional video conferencing application running locally with HTTPS.
+
+### Option 2: Build Your Own Implementation
+
+#### Server Setup (2 lines of code!)
+
+```typescript
+import { SimpleServer } from "simple_ms_server";
+
+const server = new SimpleServer({ port: 3000 });
+await server.start();
+// Done! Your WebRTC server is running with automatic conference management.
+```
+
+#### Client Setup (3 lines of code!)
 
 ```typescript
 import { SimpleClient } from "simple_ms_client";
@@ -93,91 +169,28 @@ await client.connect("demo-room", "Your Name");
 // Done! You're now in a video call with automatic media handling.
 ```
 
-### 2. Server Setup (2 lines of code!)
+## 📱 Complete Working Example
 
-```typescript
-import { SimpleServer } from "simple_ms_server";
+The `simple_ms_example` folder contains a complete Express.js application demonstrating both server and client usage:
 
-const server = new SimpleServer({ port: 3000 });
-await server.start();
-// Done! Your WebRTC server is running with automatic conference management.
-```
+**Features:**
 
-### 3. Complete Working Example
+- 🎥 Multi-participant video conferencing
+- 🎤 Audio/video controls (mute/unmute)
+- 🖥️ Screen sharing support
+- 👥 Real-time participant tracking
+- 📊 Statistics and monitoring APIs
+- 🛡️ Admin controls (kick, close conferences)
+- 📱 Responsive web interface
 
-**Server (server.js):**
-
-```typescript
-import { SimpleServer } from "simple_ms_server";
-
-const server = new SimpleServer({
-  port: 3000,
-  cors: { origin: "*" },
-});
-
-// Optional: Add event logging
-server.on("participantJoined", (event) => {
-  console.log(`👋 ${event.detail.participant.name} joined!`);
-});
-
-await server.start();
-console.log("🚀 Server running on http://localhost:3000");
-```
-
-**Client (client.js):**
-
-```typescript
-import { SimpleClient } from "simple_ms_client";
-
-const client = new SimpleClient({
-  serverUrl: "http://localhost:3000",
-  enableAudio: true,
-  enableVideo: true,
-});
-
-// Setup UI event handlers
-client.on("localStreamReady", (event) => {
-  document.getElementById("localVideo").srcObject = event.detail.stream;
-});
-
-client.on("remoteStreamAdded", (event) => {
-  const video = document.createElement("video");
-  video.srcObject = event.detail.stream.stream;
-  video.autoplay = true;
-  document.getElementById("remoteVideos").appendChild(video);
-});
-
-// Join conference
-await client.connect("my-room", "John Doe");
-
-// Simple controls
-document.getElementById("muteBtn").onclick = () => client.toggleAudio();
-document.getElementById("videoBtn").onclick = () => client.toggleVideo();
-document.getElementById("shareBtn").onclick = () => client.startScreenShare();
-```
-
-That's it! You now have a fully functional WebRTC video conferencing application.
-
-## 🎬 Live Demo
-
-Run the included example:
+**Quick Demo:**
 
 ```bash
-# Terminal 1: Start the server
-cd simple_ms_server
+cd simple_ms_example
 npm install && npm run build && npm start
-
-# Terminal 2: Start the client demo
-cd simple_ms_client
-npm install && npm run build
-# Open example/index.html in your browser
+# Open multiple browser tabs to http://localhost:3000
+# Join the same room name to test multi-participant features
 ```
-
-## 📚 Detailed Documentation
-
-- **[📖 Client Documentation](./simple_ms_client/README.md)** - Complete client API reference
-- **[📖 Server Documentation](./simple_ms_server/README.md)** - Complete server API reference
-- **[🔧 Advanced Usage](./docs/)** - Custom implementations and advanced features
 
 ## 🎯 Use Cases
 
@@ -279,12 +292,126 @@ Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🔧 Advanced Usage
 
-- 📖 **Documentation**: Check the README files in each package
-- 🐛 **Issues**: Create an issue on GitHub
-- 💬 **Discussions**: Join our GitHub Discussions
-- 📧 **Email**: Contact us for enterprise support
+For developers who need more control, all underlying MediaSoup components are available:
+
+```typescript
+// Advanced server usage
+import {
+  SimpleServer, // ⭐ Recommended for most use cases
+  MediasoupController, // 🔧 Custom MediaSoup logic
+  SocketController, // � Custom socket handling
+  WorkerService, // ⚙️ Custom worker management
+} from "simple_ms_server";
+
+// Advanced client usage
+import {
+  SimpleClient, // ⭐ Recommended for most use cases
+  MediasoupClient, // � Custom media handling
+  SocketClientController, // 🎮 Custom socket logic
+  ConferenceClient, // 🏠 Custom conference logic
+} from "simple_ms_client";
+```
+
+### Custom Server Implementation
+
+```typescript
+import { WorkerService, MediasoupController } from "simple_ms_server";
+
+const workerService = new WorkerService(customConfig);
+const controller = new MediasoupController(workerService);
+
+// Implement custom conference logic
+controller.on("newProducer", (producer) => {
+  // Custom producer handling
+  relayToCDN(producer);
+  startRecording(producer);
+});
+```
+
+### Custom Client Implementation
+
+```typescript
+import { MediasoupClient, SocketClientController } from "simple_ms_client";
+
+const socketController = new SocketClientController(socket, config);
+const mediasoupClient = new MediasoupClient(socketController, options);
+
+// Custom event handling
+mediasoupClient.on("newConsumer", (consumer) => {
+  // Custom consumer logic
+  applyVideoFilter(consumer.track);
+  updateUI(consumer);
+});
+```
+
+## 🚀 Production Deployment
+
+### Environment Variables
+
+```bash
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+MEDIASOUP_MIN_PORT=10000
+MEDIASOUP_MAX_PORT=10100
+MEDIASOUP_LISTEN_IP=0.0.0.0
+MEDIASOUP_ANNOUNCED_IP=your-public-ip
+
+# SSL Configuration (required for HTTPS)
+SSL_CERT_PATH=/path/to/cert.pem
+SSL_KEY_PATH=/path/to/key.pem
+```
+
+### Docker Deployment
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY simple_ms_example/ .
+RUN npm install && npm run build
+EXPOSE 3000 10000-10100/udp
+CMD ["npm", "start"]
+```
+
+### HTTPS Setup (Required for Production)
+
+```typescript
+import https from "https";
+import fs from "fs";
+
+const server = new SimpleServer({
+  port: 443,
+  https: {
+    cert: fs.readFileSync("cert.pem"),
+    key: fs.readFileSync("key.pem"),
+  },
+});
+```
+
+### Scaling for High Load
+
+```typescript
+const server = new SimpleServer({
+  mediasoup: {
+    workerSettings: {
+      rtcMinPort: 10000,
+      rtcMaxPort: 20000, // Increase port range
+    },
+    // Use multiple workers for CPU distribution
+    numWorkers: 4,
+  },
+});
+```
+
+## 🆘 Support & Contributing
+
+- 📖 **Documentation**: Package README files and this guide
+- 🐛 **Issues**: [GitHub Issues](https://github.com/vidya-hub/simple_mediasoup/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/vidya-hub/simple_mediasoup/discussions)
+- 🤝 **Contributing**: We welcome PRs! See [CONTRIBUTING.md](CONTRIBUTING.md)
+- 📧 **Enterprise**: Contact us for commercial support
 
 ---
 
@@ -322,181 +449,183 @@ _Stop wrestling with MediaSoup complexity. Start building amazing real-time appl
 - **Memory leak prevention**
 - **Event-driven architecture**
 
-## Architecture
+## 🏗️ Architecture
+
+Simple MediaSoup uses a modular architecture that makes WebRTC development straightforward:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client App    │    │   Server App    │    │   MediaSoup     │
-│                 │    │                 │    │   Workers       │
+│   Web Client    │    │   Express +     │    │   MediaSoup     │
+│   (Browser)     │    │   Simple Server │    │   Workers       │
 ├─────────────────┤    ├─────────────────┤    ├─────────────────┤
-│ MediasoupClient │◄──►│ SocketController│◄──►│ WorkerService   │
-│ SocketClient    │    │ MediasoupCtrl   │    │ Router/Transport│
+│ SimpleClient    │◄──►│ SocketController│◄──►│ WorkerService   │
+│ MediasoupClient │    │ MediasoupCtrl   │    │ Router/Transport│
+│ SocketClient    │    │ Conference Mgmt │    │ Producer/Consumer│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## Packages
+## 📦 Packages
 
-- **`simple_ms_server`** - MediaSoup server implementation
-- **`simple_ms_client`** - Client-side MediaSoup wrapper
-- **`simple_ms_types`** - Shared TypeScript definitions
+- **`simple_ms_server`** - High-level MediaSoup server with automatic conference management
+- **`simple_ms_client`** - Browser-ready MediaSoup client with simple APIs
+- **`simple_ms_types`** - Shared TypeScript definitions across all packages
+- **`simple_ms_example`** - Complete working example with Express.js integration
 
-## Quick Start
+## 📚 API Documentation
 
-### Installation
+### 🏠 SimpleServer API
 
-```bash
-# Install all packages
-pnpm install
-
-# Build packages
-pnpm run build:types
-pnpm run build:server
-pnpm run build:client
-```
-
-### Server Setup
+The server provides a high-level abstraction for MediaSoup server operations:
 
 ```typescript
-import { Server } from "socket.io";
-import { createServer } from "http";
-import {
-  WorkerService,
-  MediasoupController,
-  SocketEventController,
-} from "simple_ms_server";
-import type { MediasoupConfig } from "@simple-mediasoup/types";
+import { SimpleServer } from "simple_ms_server";
 
-// Configure MediaSoup
-const mediasoupConfig: MediasoupConfig = {
-  workerConfig: {
-    logLevel: "warn",
-    rtcMinPort: 10000,
-    rtcMaxPort: 10100,
+const server = new SimpleServer({
+  port: 3000,
+  cors: { origin: "*" },
+  mediasoup: {
+    workerSettings: {
+      rtcMinPort: 10000,
+      rtcMaxPort: 10100,
+    },
   },
-  routerConfig: {
-    mediaCodecs: [
-      {
-        kind: "audio",
-        mimeType: "audio/opus",
-        clockRate: 48000,
-        channels: 2,
-      },
-      {
-        kind: "video",
-        mimeType: "video/VP8",
-        clockRate: 90000,
-      },
-    ],
-  },
-  transportConfig: {
-    listenIps: [{ ip: "127.0.0.1", announcedIp: null }],
-    enableUdp: true,
-    enableTcp: true,
-    preferUdp: true,
-  },
-};
-
-// Create HTTP server
-const httpServer = createServer();
-const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// Initialize MediaSoup services
-const workerService = new WorkerService(mediasoupConfig);
-const mediasoupController = new MediasoupController(workerService);
-const socketController = new SocketEventController(mediasoupController, io);
-
-// Start workers
-await workerService.createWorkers();
+// Event handling
+server.on("participantJoined", (event) => {
+  console.log(`${event.detail.participant.name} joined!`);
+});
 
 // Start server
-httpServer.listen(3000, () => {
-  console.log("MediaSoup server listening on port 3000");
-});
+await server.start();
 ```
 
-### Client Setup
+**Key Methods:**
+
+- `start()` - Start the MediaSoup server
+- `stop()` - Stop and cleanup
+- `getConferences()` - List active conferences
+- `getParticipants()` - List all participants
+- `kickParticipant(id, reason)` - Remove a participant
+- `closeConference(id, reason)` - Close entire conference
+- `getStats()` - Server statistics
+
+**Events:**
+
+- `participantJoined/Left` - Participant lifecycle
+- `conferenceCreated/Destroyed` - Conference lifecycle
+- `producerCreated/Closed` - Media stream events
+- `audioMuted/Unmuted` - Audio state changes
+- `videoMuted/Unmuted` - Video state changes
+
+### 🖥️ SimpleClient API
+
+The client provides easy-to-use WebRTC functionality:
 
 ```typescript
-import { io } from "socket.io-client";
-import { SocketClientController, MediasoupClient } from "simple_ms_client";
-import type { MediasoupClientConfig } from "simple_ms_client";
+import { SimpleClient } from "simple_ms_client";
 
-// Connect to server
-const socket = io("http://localhost:3000");
-
-// Configure client
-const config: MediasoupClientConfig = {
+const client = new SimpleClient({
+  serverUrl: "http://localhost:3000",
   enableAudio: true,
   enableVideo: true,
-  videoConstraints: {
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-    frameRate: { ideal: 30 },
-  },
-  audioConstraints: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    autoGainControl: true,
-  },
-};
-
-// Initialize client
-const socketClient = new SocketClientController(socket, {
-  conferenceId: "my-conference",
-  participantId: "user-123",
-  participantName: "John Doe",
-  socketId: socket.id,
+  autoConsume: true,
 });
 
-const mediasoupClient = new MediasoupClient(socketClient, config);
+// Connect to room
+await client.connect("room-name", "Your Name");
 
-// Join conference
-await mediasoupClient.joinConference();
-await mediasoupClient.enableMedia(true, true); // audio, video
-
-// Handle events
-mediasoupClient.addEventListener("localStreamReady", (event) => {
-  const { stream } = event.detail;
-  // Attach local stream to video element
-  document.getElementById("localVideo").srcObject = stream;
-});
-
-mediasoupClient.addEventListener("remoteStreamAdded", (event) => {
-  const { stream, participantId } = event.detail;
-  // Create video element for remote stream
-  const video = document.createElement("video");
-  video.srcObject = stream;
-  video.autoplay = true;
-  document.body.appendChild(video);
-});
+// Media controls
+await client.toggleAudio(); // Mute/unmute audio
+await client.toggleVideo(); // Mute/unmute video
+await client.startScreenShare(); // Share screen
 ```
 
-## Documentation
+**Key Methods:**
 
-- [**Server Documentation**](./docs/server.md) - Complete server setup and API reference
-- [**Client Documentation**](./docs/client.md) - Client implementation guide
-- [**API Reference**](./docs/api.md) - Detailed API documentation
-- [**Examples**](./examples/) - Working examples and demos
+- `connect(roomId, name)` - Join conference
+- `disconnect()` - Leave conference
+- `enableMedia(audio, video)` - Enable local media
+- `toggleAudio(mute?)` - Control audio
+- `toggleVideo(mute?)` - Control video
+- `startScreenShare()` - Share screen
+- `getParticipants()` - List participants
+- `getRemoteStreams()` - Get remote streams
 
-## Examples
+**Events:**
 
-### Basic Conference App
+- `connected/disconnected` - Connection state
+- `participantJoined/Left` - Other participants
+- `localStreamReady` - Your media ready
+- `remoteStreamAdded/Removed` - Other streams
+- `audioMuted/Unmuted` - Audio state changes
+- `videoMuted/Unmuted` - Video state changes
+- `screenShareStarted/Stopped` - Screen sharing
+
+### 🔗 REST API Endpoints
+
+The example server exposes monitoring and admin APIs:
 
 ```bash
-cd examples/basic-conference
-pnpm install
-pnpm run dev
+# Monitoring
+GET /api/conferences              # List conferences
+GET /api/participants            # List participants
+GET /api/stats                   # Server statistics
+GET /api/conferences/:id/participants  # Conference participants
+
+# Administration
+POST /api/participants/:id/kick  # Kick participant
+POST /api/conferences/:id/close  # Close conference
 ```
 
-### Advanced Features Demo
+## 🔧 Troubleshooting
+
+### MediaSoup Worker Binary Issues
+
+**Error:** `mediasoup-worker ENOENT` - Binary not found
+
+**Solution:** MediaSoup requires native binary compilation. Use npm instead of pnpm:
 
 ```bash
-cd examples/advanced-features
-pnpm install
-pnpm run dev
+# In the example directory
+cd simple_ms_example
+rm -rf node_modules pnpm-lock.yaml
+npm install
+npm run start:https
 ```
+
+**Alternative:** Rebuild MediaSoup manually:
+
+```bash
+cd node_modules/mediasoup
+npm run worker:build
+```
+
+### HTTPS Certificate Issues
+
+**Error:** Certificate warnings in browser
+
+**Solution:** For development, accept the self-signed certificate warning. For production, use trusted certificates:
+
+```bash
+# Development certificates
+npm run generate-certs
+
+# Production with Let's Encrypt
+sudo certbot certonly --standalone -d yourdomain.com
+export SSL_CERT=/etc/letsencrypt/live/yourdomain.com/fullchain.pem
+export SSL_KEY=/etc/letsencrypt/live/yourdomain.com/privkey.pem
+```
+
+### WebRTC Media Access Issues
+
+**Error:** Camera/microphone not working
+
+**Solution:**
+
+- Ensure HTTPS is enabled (required for WebRTC)
+- Grant browser permissions for camera/microphone
+- Check browser compatibility (Chrome 74+, Firefox 66+, Safari 12.1+)
 
 ## Contributing
 
@@ -516,6 +645,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Discussions**: [GitHub Discussions](https://github.com/vidya-hub/simple_mediasoup/discussions)
 - **Documentation**: [Full Documentation](./docs/)
 
-## Changelog
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## ⭐ Star History
+
+If this project helped you, please give it a star! ⭐
+
+## 📋 Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.

@@ -29,13 +29,13 @@ class ErrorHandler extends events_1.EventEmitter {
             timestamp: Date.now(),
             participantId,
             conferenceId,
-            stack: originalError?.stack
+            stack: originalError?.stack,
         };
         // Store error for debugging
         this.errors.set(error.id, error);
         this.pruneOldErrors();
         // Emit error event for handling
-        this.emit('error', error);
+        this.emit("error", error);
         // Log error
         this.logError(error);
         return error;
@@ -43,13 +43,13 @@ class ErrorHandler extends events_1.EventEmitter {
     getErrors(type, participantId, conferenceId) {
         let errors = Array.from(this.errors.values());
         if (type) {
-            errors = errors.filter(error => error.type === type);
+            errors = errors.filter((error) => error.type === type);
         }
         if (participantId) {
-            errors = errors.filter(error => error.participantId === participantId);
+            errors = errors.filter((error) => error.participantId === participantId);
         }
         if (conferenceId) {
-            errors = errors.filter(error => error.conferenceId === conferenceId);
+            errors = errors.filter((error) => error.conferenceId === conferenceId);
         }
         return errors.sort((a, b) => b.timestamp - a.timestamp);
     }
@@ -68,7 +68,7 @@ class ErrorHandler extends events_1.EventEmitter {
     }
     getErrorStats() {
         const errors = Array.from(this.errors.values());
-        const hourAgo = Date.now() - (60 * 60 * 1000);
+        const hourAgo = Date.now() - 60 * 60 * 1000;
         const byType = {};
         let recent = 0;
         for (const error of errors) {
@@ -80,7 +80,7 @@ class ErrorHandler extends events_1.EventEmitter {
         return {
             total: errors.length,
             byType,
-            recent
+            recent,
         };
     }
     generateErrorId() {
@@ -88,8 +88,7 @@ class ErrorHandler extends events_1.EventEmitter {
     }
     pruneOldErrors() {
         if (this.errors.size > this.MAX_ERRORS) {
-            const sortedErrors = Array.from(this.errors.entries())
-                .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+            const sortedErrors = Array.from(this.errors.entries()).sort(([, a], [, b]) => a.timestamp - b.timestamp);
             // Remove oldest 10%
             const toRemove = Math.floor(this.MAX_ERRORS * 0.1);
             for (let i = 0; i < toRemove; i++) {
@@ -104,14 +103,14 @@ class ErrorHandler extends events_1.EventEmitter {
             message: error.message,
             participantId: error.participantId,
             conferenceId: error.conferenceId,
-            timestamp: new Date(error.timestamp).toISOString()
+            timestamp: new Date(error.timestamp).toISOString(),
         };
-        console.error('MediaSoup Error:', JSON.stringify(logData, null, 2));
+        console.error("MediaSoup Error:", JSON.stringify(logData, null, 2));
         if (error.stack) {
-            console.error('Stack trace:', error.stack);
+            console.error("Stack trace:", error.stack);
         }
         if (error.details) {
-            console.error('Error details:', error.details);
+            console.error("Error details:", error.details);
         }
     }
 }

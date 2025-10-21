@@ -81,11 +81,11 @@ class WorkerService extends events_1.default {
                 this.workerStats.set(worker, {
                     routerCount,
                     lastUsed: this.workerStats.get(worker)?.lastUsed || Date.now(),
-                    cpuUsage
+                    cpuUsage,
                 });
             }
             catch (error) {
-                console.error('Error updating worker stats:', error);
+                console.error("Error updating worker stats:", error);
             }
         });
         await Promise.all(updatePromises);
@@ -102,7 +102,7 @@ class WorkerService extends events_1.default {
             const cpuWeight = 0.4;
             const normalizedRouterCount = stats.routerCount / this.maxRoutersPerWorker;
             const normalizedCpuUsage = Math.min(stats.cpuUsage / 100, 1); // Normalize to 0-1
-            const score = (normalizedRouterCount * routerWeight) + (normalizedCpuUsage * cpuWeight);
+            const score = normalizedRouterCount * routerWeight + normalizedCpuUsage * cpuWeight;
             if (score < bestScore) {
                 bestScore = score;
                 bestWorker = worker;
@@ -128,7 +128,7 @@ class WorkerService extends events_1.default {
         // Create a new router
         const router = await worker.createRouter(this.mediasoupConfig.routerConfig);
         // Add event listeners for cleanup
-        router.on('@close', () => {
+        router.on("@close", () => {
             this.removeRouterFromWorker(worker, router);
         });
         // Track the router
@@ -148,19 +148,19 @@ class WorkerService extends events_1.default {
         }
     }
     getWorkerStats() {
-        return this.workers.map(worker => {
+        return this.workers.map((worker) => {
             const stats = this.workerStats.get(worker);
             return {
-                workerId: worker.pid?.toString() || 'unknown',
+                workerId: worker.pid?.toString() || "unknown",
                 routerCount: stats?.routerCount || 0,
                 cpuUsage: stats?.cpuUsage || 0,
-                lastUsed: stats?.lastUsed || 0
+                lastUsed: stats?.lastUsed || 0,
             };
         });
     }
     async cleanupClosedRouters() {
         for (const [worker, routers] of this.routersPerWorker.entries()) {
-            const activeRouters = routers.filter(router => !router.closed);
+            const activeRouters = routers.filter((router) => !router.closed);
             this.routersPerWorker.set(worker, activeRouters);
         }
     }

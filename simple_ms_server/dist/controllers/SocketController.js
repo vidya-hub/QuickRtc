@@ -95,7 +95,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok" });
             socket.to(conferenceId).emit("producerPaused", {
                 participantId,
-                producerId
+                producerId,
             });
             this.emit("producerPaused", { participantId, producerId });
         }
@@ -121,7 +121,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok" });
             socket.to(conferenceId).emit("consumerPaused", {
                 participantId,
-                consumerId
+                consumerId,
             });
             this.emit("consumerPaused", { participantId, consumerId });
         }
@@ -147,7 +147,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok" });
             socket.to(conferenceId).emit("producerClosed", {
                 participantId,
-                producerId
+                producerId,
             });
             this.emit("producerClosed", { participantId, producerId });
         }
@@ -173,7 +173,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok" });
             socket.to(conferenceId).emit("consumerClosed", {
                 participantId,
-                consumerId
+                consumerId,
             });
             this.emit("consumerClosed", { participantId, consumerId });
         }
@@ -347,25 +347,25 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
                 socket.to(cleanup.conferenceId).emit("participantLeft", {
                     participantId: cleanup.participantId,
                     closedProducerIds: cleanup.closedProducerIds,
-                    closedConsumerIds: cleanup.closedConsumerIds
+                    closedConsumerIds: cleanup.closedConsumerIds,
                 });
                 // Emit cleanup events for each closed producer and consumer
-                cleanup.closedProducerIds.forEach(producerId => {
+                cleanup.closedProducerIds.forEach((producerId) => {
                     socket.to(cleanup.conferenceId).emit("producerClosed", {
                         participantId: cleanup.participantId,
-                        producerId
+                        producerId,
                     });
                 });
-                cleanup.closedConsumerIds.forEach(consumerId => {
+                cleanup.closedConsumerIds.forEach((consumerId) => {
                     socket.to(cleanup.conferenceId).emit("consumerClosed", {
                         participantId: cleanup.participantId,
-                        consumerId
+                        consumerId,
                     });
                 });
             }
             this.emit("userQuit", {
                 socketId: socket.id,
-                ...cleanup
+                ...cleanup,
             });
         }
         catch (error) {
@@ -387,19 +387,19 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
                 socket.to(conferenceId).emit("participantLeft", {
                     participantId,
                     closedProducerIds: cleanup.closedProducerIds,
-                    closedConsumerIds: cleanup.closedConsumerIds
+                    closedConsumerIds: cleanup.closedConsumerIds,
                 });
                 // Emit cleanup events for each closed producer and consumer
-                cleanup.closedProducerIds.forEach(producerId => {
+                cleanup.closedProducerIds.forEach((producerId) => {
                     socket.to(conferenceId).emit("producerClosed", {
                         participantId,
-                        producerId
+                        producerId,
                     });
                 });
-                cleanup.closedConsumerIds.forEach(consumerId => {
+                cleanup.closedConsumerIds.forEach((consumerId) => {
                     socket.to(conferenceId).emit("consumerClosed", {
                         participantId,
-                        consumerId
+                        consumerId,
                     });
                 });
             }
@@ -410,7 +410,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             this.emit("participantLeft", {
                 participantId,
                 conferenceId,
-                ...cleanup
+                ...cleanup,
             });
         }
         catch (error) {
@@ -465,7 +465,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok", data: { mutedProducerIds } });
             socket.to(conferenceId).emit("audioMuted", {
                 participantId,
-                mutedProducerIds
+                mutedProducerIds,
             });
             this.emit("audioMuted", { participantId, mutedProducerIds });
         }
@@ -485,7 +485,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok", data: { unmutedProducerIds } });
             socket.to(conferenceId).emit("audioUnmuted", {
                 participantId,
-                unmutedProducerIds
+                unmutedProducerIds,
             });
             this.emit("audioUnmuted", { participantId, unmutedProducerIds });
         }
@@ -505,7 +505,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok", data: { mutedProducerIds } });
             socket.to(conferenceId).emit("videoMuted", {
                 participantId,
-                mutedProducerIds
+                mutedProducerIds,
             });
             this.emit("videoMuted", { participantId, mutedProducerIds });
         }
@@ -525,7 +525,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             callback({ status: "ok", data: { unmutedProducerIds } });
             socket.to(conferenceId).emit("videoUnmuted", {
                 participantId,
-                unmutedProducerIds
+                unmutedProducerIds,
             });
             this.emit("videoUnmuted", { participantId, unmutedProducerIds });
         }

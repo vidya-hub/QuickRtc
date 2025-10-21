@@ -26,7 +26,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
             const { conferenceId, conferenceName, participantId, participantName, socketId, } = params;
             // Validate parameters
             if (!conferenceId || !participantId || !socketId) {
-                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.VALIDATION, 'Missing required parameters for joining conference', { conferenceId, participantId, socketId }, participantId, conferenceId);
+                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.VALIDATION, "Missing required parameters for joining conference", { conferenceId, participantId, socketId }, participantId, conferenceId);
             }
             let conference = this.conferences.get(conferenceId);
             if (!conference) {
@@ -34,7 +34,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
                 conference = this.conferences.get(conferenceId);
             }
             if (!conference) {
-                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, 'Failed to create or retrieve conference', { conferenceId }, participantId, conferenceId);
+                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, "Failed to create or retrieve conference", { conferenceId }, participantId, conferenceId);
             }
             let participant = conference.getParticipant(participantId);
             if (!participant) {
@@ -45,7 +45,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         }
         catch (error) {
             if (error instanceof Error) {
-                this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, 'Failed to join conference', error.message, params.participantId, params.conferenceId, error);
+                this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, "Failed to join conference", error.message, params.participantId, params.conferenceId, error);
             }
             throw error;
         }
@@ -63,18 +63,18 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         try {
             const { conferenceId, participantId } = transportParams;
             if (!conferenceId || !participantId) {
-                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.VALIDATION, 'Missing required parameters for transport creation', transportParams, participantId, conferenceId);
+                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.VALIDATION, "Missing required parameters for transport creation", transportParams, participantId, conferenceId);
             }
             const conference = this.conferences.get(conferenceId);
             if (!conference) {
-                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, 'Conference does not exist', { conferenceId }, participantId, conferenceId);
+                throw this.errorHandler.handleError(ErrorHandler_1.ErrorType.CONFERENCE, "Conference does not exist", { conferenceId }, participantId, conferenceId);
             }
             const transport = await conference.createTransport(transportParams);
             return transport;
         }
         catch (error) {
             if (error instanceof Error) {
-                this.errorHandler.handleError(ErrorHandler_1.ErrorType.TRANSPORT, 'Failed to create transport', error.message, transportParams.participantId, transportParams.conferenceId, error);
+                this.errorHandler.handleError(ErrorHandler_1.ErrorType.TRANSPORT, "Failed to create transport", error.message, transportParams.participantId, transportParams.conferenceId, error);
             }
             throw error;
         }
@@ -256,7 +256,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         this.emit("audioMuted", {
             conferenceId,
             participantId,
-            mutedProducerIds
+            mutedProducerIds,
         });
         return mutedProducerIds;
     }
@@ -270,7 +270,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         this.emit("audioUnmuted", {
             conferenceId,
             participantId,
-            unmutedProducerIds
+            unmutedProducerIds,
         });
         return unmutedProducerIds;
     }
@@ -284,7 +284,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         this.emit("videoMuted", {
             conferenceId,
             participantId,
-            mutedProducerIds
+            mutedProducerIds,
         });
         return mutedProducerIds;
     }
@@ -298,7 +298,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         this.emit("videoUnmuted", {
             conferenceId,
             participantId,
-            unmutedProducerIds
+            unmutedProducerIds,
         });
         return unmutedProducerIds;
     }
@@ -330,41 +330,39 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
             }
             // Clean up closed routers in WorkerService
             await this.workerService.cleanupClosedRouters();
-            this.emit('cleanup', {
+            this.emit("cleanup", {
                 cleanedConferences: emptyConferences.length,
-                totalConferences: this.conferences.size
+                totalConferences: this.conferences.size,
             });
         }
         catch (error) {
-            console.error('Error during periodic cleanup:', error);
+            console.error("Error during periodic cleanup:", error);
         }
     }
     collectAndEmitStats() {
         try {
             const stats = {
                 conferences: this.conferences.size,
-                totalParticipants: Array.from(this.conferences.values())
-                    .reduce((total, conf) => total + conf.getParticipantCount(), 0),
+                totalParticipants: Array.from(this.conferences.values()).reduce((total, conf) => total + conf.getParticipantCount(), 0),
                 workerStats: this.workerService.getWorkerStats(),
-                timestamp: Date.now()
+                timestamp: Date.now(),
             };
-            this.emit('stats', stats);
+            this.emit("stats", stats);
         }
         catch (error) {
-            console.error('Error collecting stats:', error);
+            console.error("Error collecting stats:", error);
         }
     }
     getStats() {
         return {
             conferences: this.conferences.size,
-            totalParticipants: Array.from(this.conferences.values())
-                .reduce((total, conf) => total + conf.getParticipantCount(), 0),
-            workerStats: this.workerService.getWorkerStats()
+            totalParticipants: Array.from(this.conferences.values()).reduce((total, conf) => total + conf.getParticipantCount(), 0),
+            workerStats: this.workerService.getWorkerStats(),
         };
     }
     setupErrorHandling() {
-        this.errorHandler.on('error', (error) => {
-            this.emit('error', error);
+        this.errorHandler.on("error", (error) => {
+            this.emit("error", error);
             // Handle critical errors
             if (error.type === ErrorHandler_1.ErrorType.WORKER) {
                 this.handleWorkerError(error);
@@ -372,7 +370,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         });
     }
     async handleWorkerError(error) {
-        console.error('Critical worker error detected:', error);
+        console.error("Critical worker error detected:", error);
         // Implement worker recovery logic if needed
     }
     async shutdown() {
@@ -387,7 +385,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
         for (const conferenceId of conferenceIds) {
             await this.cleanupConference(conferenceId);
         }
-        this.emit('shutdown');
+        this.emit("shutdown");
     }
 }
 exports.default = MediasoupController;

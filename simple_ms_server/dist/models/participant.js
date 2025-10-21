@@ -222,23 +222,25 @@ class MediasoupParticipant {
         if (currentState) {
             this.mediaStates.set(producerId, {
                 ...currentState,
-                ...updates
+                ...updates,
             });
         }
     }
     getMediaStates() {
         return Array.from(this.mediaStates.entries()).map(([producerId, state]) => ({
             producerId,
-            ...state
+            ...state,
         }));
     }
     isAudioMuted() {
-        const audioStates = Array.from(this.mediaStates.values()).filter(state => state.kind === 'audio');
-        return audioStates.length > 0 && audioStates.every(state => state.paused || state.closed);
+        const audioStates = Array.from(this.mediaStates.values()).filter((state) => state.kind === "audio");
+        return (audioStates.length > 0 &&
+            audioStates.every((state) => state.paused || state.closed));
     }
     isVideoMuted() {
-        const videoStates = Array.from(this.mediaStates.values()).filter(state => state.kind === 'video');
-        return videoStates.length > 0 && videoStates.every(state => state.paused || state.closed);
+        const videoStates = Array.from(this.mediaStates.values()).filter((state) => state.kind === "video");
+        return (videoStates.length > 0 &&
+            videoStates.every((state) => state.paused || state.closed));
     }
     muteAudio() {
         const mutedProducerIds = [];
@@ -246,7 +248,7 @@ class MediasoupParticipant {
         if (userProducers) {
             for (const [producerId, producer] of Object.entries(userProducers)) {
                 const state = this.mediaStates.get(producerId);
-                if (state?.kind === 'audio' && !state.paused && !state.closed) {
+                if (state?.kind === "audio" && !state.paused && !state.closed) {
                     producer.pause();
                     this.updateMediaState(producerId, { paused: true });
                     mutedProducerIds.push(producerId);
@@ -261,7 +263,7 @@ class MediasoupParticipant {
         if (userProducers) {
             for (const [producerId, producer] of Object.entries(userProducers)) {
                 const state = this.mediaStates.get(producerId);
-                if (state?.kind === 'audio' && state.paused && !state.closed) {
+                if (state?.kind === "audio" && state.paused && !state.closed) {
                     producer.resume();
                     this.updateMediaState(producerId, { paused: false });
                     unmutedProducerIds.push(producerId);
@@ -276,7 +278,7 @@ class MediasoupParticipant {
         if (userProducers) {
             for (const [producerId, producer] of Object.entries(userProducers)) {
                 const state = this.mediaStates.get(producerId);
-                if (state?.kind === 'video' && !state.paused && !state.closed) {
+                if (state?.kind === "video" && !state.paused && !state.closed) {
                     producer.pause();
                     this.updateMediaState(producerId, { paused: true });
                     mutedProducerIds.push(producerId);
@@ -291,7 +293,7 @@ class MediasoupParticipant {
         if (userProducers) {
             for (const [producerId, producer] of Object.entries(userProducers)) {
                 const state = this.mediaStates.get(producerId);
-                if (state?.kind === 'video' && state.paused && !state.closed) {
+                if (state?.kind === "video" && state.paused && !state.closed) {
                     producer.resume();
                     this.updateMediaState(producerId, { paused: false });
                     unmutedProducerIds.push(producerId);

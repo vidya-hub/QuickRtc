@@ -1,0 +1,39 @@
+{
+  "name": "simple-mediasoup-example",
+  "version": "1.0.0",
+  "description": "Complete example using Simple MediaSoup client and server libraries",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "start:https": "USE_HTTPS=true node server.js",
+    "dev": "nodemon server.js",
+    "dev:https": "USE_HTTPS=true nodemon server.js",
+    "generate-certs": "mkdir -p certs && openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes -subj '/C=US/ST=CA/L=San Francisco/O=Simple MediaSoup/OU=Development/CN=localhost'",
+    "test-https": "./test-https-setup.sh",
+    "setup": "npm install && npm run build && npm run generate-certs",
+    "build": "npm run build:client && npm run build:server && npm run build:types",
+    "build:types": "cd ../simple_ms_types && npm run build",
+    "build:server": "cd ../simple_ms_server && npm run build",
+    "build:client": "cd ../simple_ms_client && npm run build"
+  },
+  "keywords": [
+    "mediasoup",
+    "webrtc",
+    "video-conference",
+    "real-time",
+    "streaming"
+  ],
+  "author": "Simple MediaSoup",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5",
+    "simple_ms_server": "file:../simple_ms_server",
+    "cors": "^2.8.5",
+    "mediasoup": "^3.19.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
