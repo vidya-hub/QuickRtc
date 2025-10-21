@@ -88,9 +88,15 @@ class MediasoupClient extends EventTarget {
   }
 
   public async joinConference(): Promise<void> {
+    console.log("join conference triggered");
+
     try {
+      console.log("triggering the join conf");
+
       // Join conference and get router capabilities
       const routerCapabilities = await this.socketClient.joinConference();
+
+      console.log("Router capabilities:", routerCapabilities);
       if (!routerCapabilities) {
         throw new Error("Failed to get router capabilities");
       }

@@ -5,7 +5,7 @@ import MediasoupController from "./controllers/MediasoupController";
 import SocketEventController from "./controllers/SocketController";
 import { WorkerService } from "./workers/WorkerService";
 import type { WorkerSettings } from "mediasoup/types";
-import type { MediasoupConfig } from "@simple-mediasoup/types";
+import type { MediasoupConfig, SocketEventData } from "@simple-mediasoup/types";
 
 // Simple, easy-to-use types
 export interface SimpleServerConfig {
@@ -460,15 +460,17 @@ export class SimpleServer extends EventTarget {
 
     // Conference events
     this.socketController.on("conferenceJoined", (data: any) => {
-      const { conferenceId, participantId, extraData } = data.data;
-      const participantName = extraData?.participantName || "Unknown";
+      console.log("conference event came here ", data);
+
+      const { conferenceId, participantId, conferenceName, participantName } =
+        data.data;
       const socketId = data.socketId || "unknown";
 
       // Create or update conference
       if (!this.conferences.has(conferenceId)) {
         const conference: ConferenceInfo = {
           id: conferenceId,
-          name: extraData?.conferenceName,
+          name: conferenceName,
           participantCount: 0,
           createdAt: new Date(),
         };

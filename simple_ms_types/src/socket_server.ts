@@ -30,6 +30,7 @@ export type SocketEventType =
 export type MeetingParams = {
   conferenceId: string;
   participantId: string;
+  socketId?: string;
   extraData?: Record<string, any>;
 };
 
@@ -39,12 +40,6 @@ export type MeetingParams = {
 export type SocketEventData = {
   eventType: SocketEventType;
   data: MeetingParams;
-  callback: (response: {
-    status: "ok" | "error";
-    data?: any;
-    error?: string;
-  }) => void;
-  errorback: (error: any) => void;
 };
 
 /**

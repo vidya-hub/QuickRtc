@@ -21,7 +21,7 @@ declare class SocketEventController extends EnhancedEventEmitter {
     private onNewConnection;
     private handleLeaveConference;
     private getProducers;
-    resumeProducer(socketEventData: SocketEventData, socket: any): Promise<void>;
+    resumeProducer(socketEventData: SocketEventData, callback: Function): Promise<void>;
     private muteAudio;
     private unmuteAudio;
     private muteVideo;

@@ -10,6 +10,15 @@ export {
   type ConnectionInfo,
 } from "./SimpleClient";
 
+// Event orchestrator for advanced usage
+export { default as EventOrchestrator } from "./EventOrchestrator";
+export type {
+  EventOrchestratorConfig,
+  EventLog,
+  EventSource,
+  OrchestratedEvent,
+} from "./EventOrchestrator";
+
 // Advanced controllers (for custom implementations)
 export { SocketClientController } from "./controller/SocketClientController";
 export type {

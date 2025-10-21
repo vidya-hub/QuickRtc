@@ -1,9 +1,11 @@
+import { EventOrchestratorConfig } from "./EventOrchestrator";
 export interface SimpleClientConfig {
     serverUrl: string;
     iceServers?: RTCIceServer[];
     enableAudio?: boolean;
     enableVideo?: boolean;
     autoConsume?: boolean;
+    eventOrchestrator?: EventOrchestratorConfig;
 }
 export interface ParticipantInfo {
     id: string;
@@ -93,6 +95,7 @@ export declare class SimpleClient extends EventTarget {
     private socket?;
     private socketController?;
     private mediasoupClient?;
+    private eventOrchestrator;
     private connectionInfo?;
     private participants;
     private remoteStreams;
@@ -163,6 +166,23 @@ export declare class SimpleClient extends EventTarget {
      * Remove event listener
      */
     off<K extends keyof SimpleClientEvents>(type: K, listener: (event: CustomEvent<SimpleClientEvents[K]>) => void): void;
+    /**
+     * Get event orchestrator stats for debugging
+     */
+    getEventStats(): {
+        activeListeners: number;
+        eventHistorySize: number;
+        eventsSinceStart: number;
+        debugLogging: boolean;
+    };
+    /**
+     * Get event history for debugging
+     */
+    getEventHistory(): import("./EventOrchestrator").EventLog[];
+    /**
+     * Enable/disable event debugging
+     */
+    setEventDebugMode(enabled: boolean, includeDetails?: boolean): void;
     private setupEventListeners;
     private consumeExistingStreams;
     private generateParticipantId;

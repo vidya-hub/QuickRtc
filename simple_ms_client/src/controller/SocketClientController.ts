@@ -29,14 +29,18 @@ export class SocketClientController extends EventTarget {
     this.joinParams = joinParams;
   }
   public async joinConference() {
+    console.log("in socket client controller");
+
     const response = await this.socket.emitWithAck("joinConference", {
-      ...this.joinParams,
+      data: this.joinParams,
     });
+    console.log("join conference response received ", response);
+
     if (response.status == "error") {
       this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
       return undefined;
     }
-    return response.routerCapabilities;
+    return response.data.routerCapabilities;
   }
   public async createTransports(): Promise<
     { sendTransport: any; recvTransport: any } | undefined

@@ -3,6 +3,9 @@ import { SocketClientController } from "./controller/SocketClientController";
 import MediasoupClient, {
   MediasoupClientConfig,
 } from "./mediasoup/MediasoupClient";
+import EventOrchestrator, {
+  EventOrchestratorConfig,
+} from "./EventOrchestrator";
 
 // Simple, easy-to-use types
 export interface SimpleClientConfig {
@@ -11,6 +14,7 @@ export interface SimpleClientConfig {
   enableAudio?: boolean;
   enableVideo?: boolean;
   autoConsume?: boolean; // Automatically consume remote streams
+  eventOrchestrator?: EventOrchestratorConfig; // Event orchestrator configuration
 }
 
 export interface ParticipantInfo {
@@ -82,6 +86,7 @@ export class SimpleClient extends EventTarget {
   private socket?: ClientSocket;
   private socketController?: SocketClientController;
   private mediasoupClient?: MediasoupClient;
+  private eventOrchestrator: EventOrchestrator;
   private connectionInfo?: ConnectionInfo;
   private participants: Map<string, ParticipantInfo> = new Map();
   private remoteStreams: Map<string, StreamInfo> = new Map();
@@ -96,6 +101,26 @@ export class SimpleClient extends EventTarget {
       autoConsume: true,
       ...config,
     };
+
+    // Initialize event orchestrator
+    this.eventOrchestrator = new EventOrchestrator({
+      enableDebugLogging: true, // Enable for debugging
+      logEventDetails: true,
+      maxEventHistory: 50,
+      ...config.eventOrchestrator,
+    });
+
+    // Setup orchestrator error handling
+    this.eventOrchestrator.addEventListener(
+      "orchestratorError",
+      (event: any) => {
+        console.error("Event orchestrator error:", event.detail);
+        this.emit("error", {
+          error: event.detail.error,
+          code: "EVENT_ORCHESTRATOR_ERROR",
+        });
+      }
+    );
   }
 
   /**
@@ -104,8 +129,11 @@ export class SimpleClient extends EventTarget {
   async connect(
     conferenceId: string,
     participantName: string,
-    participantId?: string
+    participantId?: string,
+    conferenceName?: string
   ): Promise<void> {
+    console.log("trying to connect ", conferenceId, participantName);
+
     try {
       if (this.isInitialized) {
         throw new Error("Client is already connected");
@@ -128,12 +156,21 @@ export class SimpleClient extends EventTarget {
           reject(new Error("Connection timeout"));
         }, 10000);
 
-        this.socket!.on("connect", () => {
+        // Cast to any to access socket.io client methods
+        const socketAny = this.socket as any;
+        this.connectionInfo = {
+          conferenceId,
+          participantId: finalParticipantId,
+          participantName,
+          isConnected: true,
+        };
+
+        socketAny.on("connect", () => {
           clearTimeout(timeout);
           resolve();
         });
 
-        this.socket!.on("connect_error", (error) => {
+        socketAny.on("connect_error", (error: any) => {
           clearTimeout(timeout);
           reject(error);
         });
@@ -144,6 +181,7 @@ export class SimpleClient extends EventTarget {
         conferenceId,
         participantId: finalParticipantId,
         participantName,
+        conferenceName: conferenceId,
         socketId: this.socket.id || "",
       });
 
@@ -153,43 +191,42 @@ export class SimpleClient extends EventTarget {
         enableVideo: this.config.enableVideo,
       });
 
-      // Setup event listeners
+      // // Setup event listeners
       this.setupEventListeners();
+      try {
+        // Join conference
+        const joinResponse = await this.mediasoupClient.joinConference();
 
-      // Join conference
-      await this.mediasoupClient.joinConference();
-
-      this.connectionInfo = {
-        conferenceId,
-        participantId: finalParticipantId,
-        participantName,
-        isConnected: true,
-      };
-
-      // Add local participant
-      this.participants.set(finalParticipantId, {
-        id: finalParticipantId,
-        name: participantName,
-        isLocal: true,
-      });
-
-      this.isInitialized = true;
-
-      this.emit("connected", { connection: this.connectionInfo });
-      console.log("event is emitted ", this.connectionInfo);
-
-      // Auto-enable media if configured
-      if (this.config.enableAudio || this.config.enableVideo) {
-        await this.enableMedia(
-          this.config.enableAudio,
-          this.config.enableVideo
-        );
+        console.log("this is the response ", joinResponse);
+      } catch (error) {
+        console.error("Failed to join conference:", error);
       }
 
-      // Auto-consume existing participants if configured
-      if (this.config.autoConsume) {
-        await this.consumeExistingStreams();
-      }
+      // console.log("join response ", joinResponse);
+
+      // // Add local participant
+      // this.participants.set(finalParticipantId, {
+      //   id: finalParticipantId,
+      //   name: participantName,
+      //   isLocal: true,
+      // });
+
+      // this.isInitialized = true;
+
+      // console.log("event is emitted ", this.connectionInfo);
+
+      // // Auto-enable media if configured
+      // if (this.config.enableAudio || this.config.enableVideo) {
+      //   await this.enableMedia(
+      //     this.config.enableAudio,
+      //     this.config.enableVideo
+      //   );
+      // }
+
+      // // Auto-consume existing participants if configured
+      // if (this.config.autoConsume) {
+      //   await this.consumeExistingStreams();
+      // }
     } catch (error) {
       console.error("Connection failed:", error);
       this.emit("error", {
@@ -408,14 +445,19 @@ export class SimpleClient extends EventTarget {
       }
 
       if (this.socket) {
-        this.socket.disconnect();
+        (this.socket as any).disconnect();
       }
+
+      // Clean up event orchestrator
+      this.eventOrchestrator.cleanup();
 
       // Clean up
       this.participants.clear();
       this.remoteStreams.clear();
       this.localStream = undefined;
       this.connectionInfo = undefined;
+      this.socketController = undefined;
+      this.mediasoupClient = undefined;
       this.isInitialized = false;
 
       this.emit("disconnected", {});
@@ -435,6 +477,7 @@ export class SimpleClient extends EventTarget {
     type: K,
     detail: SimpleClientEvents[K]
   ): void {
+    console.log(`[SimpleClient] Emitting event: ${type}`, detail);
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
@@ -445,6 +488,7 @@ export class SimpleClient extends EventTarget {
     type: K,
     listener: (event: CustomEvent<SimpleClientEvents[K]>) => void
   ): void {
+    console.log(`[SimpleClient] Adding listener for: ${type}`);
     this.addEventListener(type, listener as EventListener);
   }
 
@@ -458,86 +502,133 @@ export class SimpleClient extends EventTarget {
     this.removeEventListener(type, listener as EventListener);
   }
 
+  /**
+   * Get event orchestrator stats for debugging
+   */
+  getEventStats() {
+    return this.eventOrchestrator.getStats();
+  }
+
+  /**
+   * Get event history for debugging
+   */
+  getEventHistory() {
+    return this.eventOrchestrator.getEventHistory();
+  }
+
+  /**
+   * Enable/disable event debugging
+   */
+  setEventDebugMode(enabled: boolean, includeDetails = false): void {
+    this.eventOrchestrator.setDebugLogging(enabled, includeDetails);
+  }
+
   private setupEventListeners(): void {
-    if (!this.mediasoupClient) return;
+    if (!this.mediasoupClient || !this.socketController) return;
 
-    // MediaSoup client events
-    this.mediasoupClient.addEventListener("connected", () => {
-      // Already handled in connect method
-    });
+    console.log("Setting up event listeners with orchestrator");
 
-    this.mediasoupClient.addEventListener("localStreamReady", (event: any) => {
-      this.localStream = event.detail.stream;
-      this.emit("localStreamReady", { stream: event.detail.stream });
-    });
-
-    this.mediasoupClient.addEventListener("remoteStreamAdded", (event: any) => {
-      const { consumerId, stream, producerId, kind } = event.detail;
-
-      const streamInfo: StreamInfo = {
-        participantId: producerId, // Using producerId as participant identifier
-        streamId: consumerId,
-        stream,
-        type: kind === "audio" ? "audio" : "video",
-      };
-
-      this.remoteStreams.set(consumerId, streamInfo);
-      this.emit("remoteStreamAdded", { stream: streamInfo });
-    });
-
-    this.mediasoupClient.addEventListener(
-      "remoteStreamRemoved",
-      (event: any) => {
-        const { consumerId } = event.detail;
-        const streamInfo = this.remoteStreams.get(consumerId);
-
-        if (streamInfo) {
-          this.remoteStreams.delete(consumerId);
-          this.emit("remoteStreamRemoved", {
-            streamId: consumerId,
-            participantId: streamInfo.participantId,
-          });
-        }
+    // Register socket events with orchestrator
+    this.eventOrchestrator.registerEventSource(
+      "socket",
+      this.socketController,
+      {
+        participantLeft: "participantLeft",
+        producerClosed: "producerClosed",
+        consumerClosed: "consumerClosed",
+        audioMuted: "audioMuted",
+        audioUnmuted: "audioUnmuted",
+        videoMuted: "videoMuted",
+        videoUnmuted: "videoUnmuted",
+        newProducer: "newProducer",
       }
     );
 
-    this.mediasoupClient.addEventListener("participantLeft", (event: any) => {
-      const { participantId } = event.detail;
-      const participant = this.participants.get(participantId);
+    // Register mediasoup events with orchestrator
+    this.eventOrchestrator.registerEventSource(
+      "mediasoup",
+      this.mediasoupClient,
+      {
+        localStreamReady: "localStreamReady",
+        remoteStreamAdded: "remoteStreamAdded",
+        remoteStreamRemoved: "remoteStreamRemoved",
+        connected: "mediasoupConnected",
+        disconnected: "mediasoupDisconnected",
+        error: "mediasoupError",
+      }
+    );
 
+    // Setup socket event listeners (this was missing!)
+    this.socketController.setupEventListeners();
+
+    // Listen to orchestrated events and handle them
+    this.eventOrchestrator.addEventListener(
+      "localStreamReady",
+      (event: any) => {
+        this.localStream = event.detail.stream;
+        this.emit("localStreamReady", { stream: event.detail.stream });
+      }
+    );
+
+    this.eventOrchestrator.addEventListener(
+      "remoteStreamAdded",
+      (event: any) => {
+        const streamInfo = event.detail.stream;
+        this.remoteStreams.set(streamInfo.streamId, streamInfo);
+        this.emit("remoteStreamAdded", { stream: streamInfo });
+      }
+    );
+
+    this.eventOrchestrator.addEventListener(
+      "remoteStreamRemoved",
+      (event: any) => {
+        const { streamId, participantId } = event.detail;
+        this.remoteStreams.delete(streamId);
+        this.emit("remoteStreamRemoved", { streamId, participantId });
+      }
+    );
+
+    this.eventOrchestrator.addEventListener("participantLeft", (event: any) => {
+      const { participant } = event.detail;
       if (participant) {
-        this.participants.delete(participantId);
+        this.participants.delete(participant.id);
         this.emit("participantLeft", { participant });
       }
     });
 
-    this.mediasoupClient.addEventListener("remoteAudioMuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.emit("audioMuted", { participantId, isLocal: false });
+    this.eventOrchestrator.addEventListener("newProducer", (event: any) => {
+      const { producerId, participantId, kind } = event.detail;
+      console.log("New producer detected:", {
+        producerId,
+        participantId,
+        kind,
+      });
+
+      // Auto-consume if enabled
+      if (this.config.autoConsume && this.mediasoupClient) {
+        this.mediasoupClient.consumeMedia(producerId).catch((error) => {
+          console.error("Failed to auto-consume media:", error);
+        });
+      }
     });
 
-    this.mediasoupClient.addEventListener(
-      "remoteAudioUnmuted",
-      (event: any) => {
-        const { participantId } = event.detail;
-        this.emit("audioUnmuted", { participantId, isLocal: false });
-      }
-    );
-
-    this.mediasoupClient.addEventListener("remoteVideoMuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.emit("videoMuted", { participantId, isLocal: false });
+    this.eventOrchestrator.addEventListener("audioMuted", (event: any) => {
+      this.emit("audioMuted", event.detail);
     });
 
-    this.mediasoupClient.addEventListener(
-      "remoteVideoUnmuted",
-      (event: any) => {
-        const { participantId } = event.detail;
-        this.emit("videoUnmuted", { participantId, isLocal: false });
-      }
-    );
+    this.eventOrchestrator.addEventListener("audioUnmuted", (event: any) => {
+      this.emit("audioUnmuted", event.detail);
+    });
 
-    this.mediasoupClient.addEventListener("error", (event: any) => {
+    this.eventOrchestrator.addEventListener("videoMuted", (event: any) => {
+      this.emit("videoMuted", event.detail);
+    });
+
+    this.eventOrchestrator.addEventListener("videoUnmuted", (event: any) => {
+      this.emit("videoUnmuted", event.detail);
+    });
+
+    this.eventOrchestrator.addEventListener("mediasoupError", (event: any) => {
       this.emit("error", {
         error:
           event.detail instanceof Error
@@ -546,6 +637,11 @@ export class SimpleClient extends EventTarget {
         code: "MEDIASOUP_ERROR",
       });
     });
+
+    console.log(
+      "Event listeners setup complete. Active listeners:",
+      this.eventOrchestrator.getActiveListenerCount()
+    );
   }
 
   private async consumeExistingStreams(): Promise<void> {

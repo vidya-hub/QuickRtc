@@ -1,4 +1,6 @@
 export { SimpleClient, type SimpleClientConfig, type SimpleClientEvents, type ParticipantInfo, type StreamInfo, type ConnectionInfo, } from "./SimpleClient";
+export { default as EventOrchestrator } from "./EventOrchestrator";
+export type { EventOrchestratorConfig, EventLog, EventSource, OrchestratedEvent, } from "./EventOrchestrator";
 export { SocketClientController } from "./controller/SocketClientController";
 export type { JoinParams, JoinResponse, } from "./controller/SocketClientController";
 export { default as ConferenceClient } from "./mediasoup/ConferenceClient";

@@ -89,9 +89,13 @@ function updateParticipantsList() {
 function setupEventListeners() {
   if (!client) return;
 
+  console.log("Setting up event listeners for client");
+
   // Connection events
-  client.on("connected", (event) => {
+  client.addEventListener("connected", (event) => {
     const { connection } = event.detail;
+    console.log("connection details ", connection);
+
     log(`Connected to conference: ${connection.conferenceId}`, "success");
     updateStatus("connected", `Connected to ${connection.conferenceId}`);
     isConnected = true;
@@ -99,7 +103,7 @@ function setupEventListeners() {
     updateParticipantsList();
   });
 
-  client.on("disconnected", (event) => {
+  client.addEventListener("disconnected", (event) => {
     log("Disconnected from conference", "warning");
     updateStatus("disconnected", "Disconnected");
     isConnected = false;
@@ -109,32 +113,32 @@ function setupEventListeners() {
     elements.localVideo.srcObject = null;
   });
 
-  client.on("error", (event) => {
+  client.addEventListener("error", (event) => {
     const { error, code } = event.detail;
     log(`Error (${code}): ${error.message}`, "error");
   });
 
   // Participant events
-  client.on("participantJoined", (event) => {
+  client.addEventListener("participantJoined", (event) => {
     const { participant } = event.detail;
     log(`${participant.name} joined the conference`, "success");
     updateParticipantsList();
   });
 
-  client.on("participantLeft", (event) => {
+  client.addEventListener("participantLeft", (event) => {
     const { participant } = event.detail;
     log(`${participant.name} left the conference`, "warning");
     updateParticipantsList();
   });
 
   // Media events
-  client.on("localStreamReady", (event) => {
+  client.addEventListener("localStreamReady", (event) => {
     const { stream } = event.detail;
     elements.localVideo.srcObject = stream;
     log("Local video stream ready", "success");
   });
 
-  client.on("remoteStreamAdded", (event) => {
+  client.addEventListener("remoteStreamAdded", (event) => {
     const { stream } = event.detail;
     log(
       `Remote stream added from participant ${stream.participantId}`,
@@ -151,7 +155,7 @@ function setupEventListeners() {
     elements.remoteVideos.appendChild(video);
   });
 
-  client.on("remoteStreamRemoved", (event) => {
+  client.addEventListener("remoteStreamRemoved", (event) => {
     const { streamId, participantId } = event.detail;
     log(`Remote stream removed from participant ${participantId}`, "warning");
 
@@ -162,7 +166,7 @@ function setupEventListeners() {
   });
 
   // Audio/Video state events
-  client.on("audioMuted", (event) => {
+  client.addEventListener("audioMuted", (event) => {
     const { participantId, isLocal } = event.detail;
     if (isLocal) {
       elements.toggleAudioBtn.textContent = "Unmute Audio";
@@ -171,7 +175,7 @@ function setupEventListeners() {
     log(`Audio muted ${isLocal ? "(You)" : `by ${participantId}`}`, "info");
   });
 
-  client.on("audioUnmuted", (event) => {
+  client.addEventListener("audioUnmuted", (event) => {
     const { participantId, isLocal } = event.detail;
     if (isLocal) {
       elements.toggleAudioBtn.textContent = "Mute Audio";
@@ -180,7 +184,7 @@ function setupEventListeners() {
     log(`Audio unmuted ${isLocal ? "(You)" : `by ${participantId}`}`, "info");
   });
 
-  client.on("videoMuted", (event) => {
+  client.addEventListener("videoMuted", (event) => {
     const { participantId, isLocal } = event.detail;
     if (isLocal) {
       elements.toggleVideoBtn.textContent = "Unmute Video";
@@ -189,7 +193,7 @@ function setupEventListeners() {
     log(`Video muted ${isLocal ? "(You)" : `by ${participantId}`}`, "info");
   });
 
-  client.on("videoUnmuted", (event) => {
+  client.addEventListener("videoUnmuted", (event) => {
     const { participantId, isLocal } = event.detail;
     if (isLocal) {
       elements.toggleVideoBtn.textContent = "Mute Video";
@@ -199,12 +203,12 @@ function setupEventListeners() {
   });
 
   // Screen sharing events
-  client.on("screenShareStarted", (event) => {
+  client.addEventListener("screenShareStarted", (event) => {
     const { participantId } = event.detail;
     log(`Screen sharing started by ${participantId}`, "info");
   });
 
-  client.on("screenShareStopped", (event) => {
+  client.addEventListener("screenShareStopped", (event) => {
     const { participantId } = event.detail;
     log(`Screen sharing stopped by ${participantId}`, "info");
   });
@@ -232,11 +236,18 @@ async function connect() {
       autoConsume: true,
     });
 
-    // Setup event listeners
-    setupEventListeners();
+    console.log("client created successfully");
 
+    // Setup event listeners BEFORE connecting
+    setupEventListeners();
     // Connect to conference
-    await client.connect(conferenceId, participantName);
+    try {
+      await client.connect(conferenceId, participantName);
+      console.log("Successfully connected to conference");
+    } catch (error) {
+      console.error("Connection failed:", error);
+      throw error; // Re-throw to be caught by outer try-catch
+    }
 
     log("Successfully connected to conference", "success");
   } catch (error) {
