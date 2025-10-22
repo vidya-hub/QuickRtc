@@ -1,8 +1,9 @@
 {
   "name": "simple_ms_server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Simple MediaSoup Server - High-level WebRTC server abstraction",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"

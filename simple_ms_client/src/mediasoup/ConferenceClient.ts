@@ -96,12 +96,42 @@ class ConferenceClient {
       },
     });
   }
+
+  public async consumeExistingPeers() {
+    const existingProducerIds: string[] | undefined =
+      await this.socketClientController.getProducers();
+    console.log("Existing producers: ", existingProducerIds);
+    for (const producerId of existingProducerIds || []) {
+      const consumeMediaResponse =
+        await this.socketClientController.consumeMedia(
+          producerId,
+          this.device.rtpCapabilities
+        );
+      if (!consumeMediaResponse) {
+        continue;
+      }
+      const { id, kind, rtpParameters, appData } = consumeMediaResponse;
+      const consumer = await this.recvTransport.consume({
+        id,
+        producerId,
+        kind,
+        rtpParameters,
+        appData,
+      });
+      const track = consumer.track;
+      dispatchEvent(
+        new CustomEvent("trackReceived", { detail: { track, kind, appData } })
+      );
+    }
+  }
   async startLocalMedia(localTrack?: MediaStreamTrack) {
     if (localTrack) {
       this.sendTransport.produce({ track: localTrack });
     }
   }
-  // async pauseLocalMedia() {}
+  async unpauseConsumer(consumerId: string) {
+    await this.socketClientController.resumeConsumer(consumerId);
+  }
 }
 
 export default ConferenceClient;

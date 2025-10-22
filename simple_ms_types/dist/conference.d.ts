@@ -17,8 +17,21 @@ export interface AppState {
     joinConference(params: JoinConferenceParams): Promise<any> | any;
     createConference(conferenceId: string, name: string): Promise<void> | void;
     getConference(conferenceId: string): any | undefined;
-    removeFromConference(conferenceId: string, participantId: string): void;
-    userRemoveWithSocketId(socketId: string): void;
+    removeFromConference(conferenceId: string, participantId: string): Promise<{
+        closedProducerIds: string[];
+        closedConsumerIds: string[];
+    }>;
+    userRemoveWithSocketId(socketId: string): Promise<{
+        conferenceId: string | null;
+        participantId: string | null;
+        closedProducerIds: string[];
+        closedConsumerIds: string[];
+    }>;
     isConferenceExists(conferenceId: string): boolean;
+    resumeProducer(params: {
+        conferenceId: string;
+        participantId: string;
+        producerId: string;
+    }): Promise<void> | void;
 }
 //# sourceMappingURL=conference.d.ts.map

@@ -1,5 +1,10 @@
 import { ClientSocket, ConsumeParams } from "@simple-mediasoup/types";
-import { AppData, Transport, DtlsParameters } from "mediasoup-client/types";
+import {
+  AppData,
+  Transport,
+  DtlsParameters,
+  RtpCapabilities,
+} from "mediasoup-client/types";
 import { WebRtcTransportOptions } from "mediasoup/types";
 
 export type JoinParams = {
@@ -24,14 +29,18 @@ export class SocketClientController extends EventTarget {
     this.joinParams = joinParams;
   }
   public async joinConference() {
+    console.log("in socket client controller");
+
     const response = await this.socket.emitWithAck("joinConference", {
-      ...this.joinParams,
+      data: this.joinParams,
     });
+    console.log("join conference response received ", response);
+
     if (response.status == "error") {
       this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
       return undefined;
     }
-    return response.routerCapabilities;
+    return response.data.routerCapabilities;
   }
   public async createTransports(): Promise<
     { sendTransport: any; recvTransport: any } | undefined
@@ -205,11 +214,211 @@ export class SocketClientController extends EventTarget {
       }
     );
   }
+  async consumeMedia(producerId: string, rtpCapabilities: RtpCapabilities) {
+    const response = await this.socket.emitWithAck("consume", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      consumeOptions: { producerId, rtpCapabilities },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return undefined;
+    }
+    return response.data;
+  }
+  async getProducers(): Promise<string[] | undefined> {
+    const response = await this.socket.emitWithAck("getProducers", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return undefined;
+    }
+    return response.data.producerIds as string[];
+  }
+  async resumeProducer(producerId: string) {
+    const response = await this.socket.emitWithAck("resumeProducer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      producerId: producerId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
 
-  // pauseLocalMedia() {
-  //   this.socket.emit("pauseLocalMedia", {
-  //     conferenceId: this.joinParams.conferenceId,
-  //     participantId: this.joinParams.participantId,
-  //   });
-  // }
+  async pauseProducer(producerId: string) {
+    const response = await this.socket.emitWithAck("pauseProducer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: { producerId },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  async pauseConsumer(consumerId: string) {
+    const response = await this.socket.emitWithAck("pauseConsumer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: { consumerId },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  async resumeConsumer(consumerId: string) {
+    const response = await this.socket.emitWithAck("resumeConsumer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: { consumerId },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  async closeProducer(producerId: string) {
+    const response = await this.socket.emitWithAck("closeProducer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: { producerId },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  async closeConsumer(consumerId: string) {
+    const response = await this.socket.emitWithAck("closeConsumer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: { consumerId },
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  async muteAudio() {
+    const response = await this.socket.emitWithAck("muteAudio", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return response.data;
+  }
+
+  async unmuteAudio() {
+    const response = await this.socket.emitWithAck("unmuteAudio", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return response.data;
+  }
+
+  async muteVideo() {
+    const response = await this.socket.emitWithAck("muteVideo", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return response.data;
+  }
+
+  async unmuteVideo() {
+    const response = await this.socket.emitWithAck("unmuteVideo", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return response.data;
+  }
+
+  async getMediaStates() {
+    const response = await this.socket.emitWithAck("getMediaStates", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return response.data;
+  }
+
+  async leaveConference() {
+    const response = await this.socket.emitWithAck("leaveConference", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    return;
+  }
+
+  // Setup socket event listeners for real-time events
+  setupEventListeners() {
+    this.socket.on("participantLeft", (data) => {
+      this.dispatchEvent(new CustomEvent("participantLeft", { detail: data }));
+    });
+
+    this.socket.on("producerClosed", (data) => {
+      this.dispatchEvent(new CustomEvent("producerClosed", { detail: data }));
+    });
+
+    this.socket.on("consumerClosed", (data) => {
+      this.dispatchEvent(new CustomEvent("consumerClosed", { detail: data }));
+    });
+
+    this.socket.on("audioMuted", (data) => {
+      this.dispatchEvent(new CustomEvent("audioMuted", { detail: data }));
+    });
+
+    this.socket.on("audioUnmuted", (data) => {
+      this.dispatchEvent(new CustomEvent("audioUnmuted", { detail: data }));
+    });
+
+    this.socket.on("videoMuted", (data) => {
+      this.dispatchEvent(new CustomEvent("videoMuted", { detail: data }));
+    });
+
+    this.socket.on("videoUnmuted", (data) => {
+      this.dispatchEvent(new CustomEvent("videoUnmuted", { detail: data }));
+    });
+
+    this.socket.on("newProducer", (data) => {
+      this.dispatchEvent(new CustomEvent("newProducer", { detail: data }));
+    });
+  }
 }

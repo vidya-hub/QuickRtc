@@ -13,7 +13,16 @@ export type SocketEventType =
   | "resumeConsumer"
   | "pauseProducer"
   | "resumeProducer"
-  | "leaveConference";
+  | "pauseConsumer"
+  | "closeProducer"
+  | "closeConsumer"
+  | "muteAudio"
+  | "unmuteAudio"
+  | "muteVideo"
+  | "unmuteVideo"
+  | "getMediaStates"
+  | "leaveConference"
+  | "getProducers";
 
 /**
  * Base meeting parameters used in socket events
@@ -21,6 +30,7 @@ export type SocketEventType =
 export type MeetingParams = {
   conferenceId: string;
   participantId: string;
+  socketId?: string;
   extraData?: Record<string, any>;
 };
 
@@ -29,13 +39,7 @@ export type MeetingParams = {
  */
 export type SocketEventData = {
   eventType: SocketEventType;
-  data: MeetingParams;
-  callback: (response: {
-    status: "ok" | "error";
-    data?: any;
-    error?: string;
-  }) => void;
-  errorback: (error: any) => void;
+  data: MeetingParams | any;
 };
 
 /**

@@ -57,8 +57,15 @@ export interface Conference {
   socketIds: string[];
 
   addParticipant(participant: Participant): void;
-  removeParticipant(participantId: string): void;
-  removeWithSocketId(socketId: string): void;
+  removeParticipant(participantId: string): Promise<{
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }>;
+  removeWithSocketId(socketId: string): Promise<{
+    participantId: string | null;
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }>;
   getParticipants(): Participant[];
   getParticipant(participantId: string): Participant | undefined;
   getName(): string;
@@ -80,6 +87,27 @@ export interface Conference {
   resumeConsumer(resumeParams: ResumeConsumerParams): Promise<void>;
   participantsMapToArray(participantsMap: ParticipantsMap): Participant[];
   pauseProducer(participantId: string, producerId: string): void;
+  resumeProducer(participantId: string, producerId: string): Promise<void>;
+  pauseConsumer(participantId: string, consumerId: string): Promise<void>;
+  closeProducer(participantId: string, producerId: string): Promise<void>;
+  closeConsumer(participantId: string, consumerId: string): Promise<void>;
+  isEmpty(): boolean;
+  getParticipantCount(): number;
+  cleanup(): Promise<void>;
+  muteParticipantAudio(participantId: string): Promise<string[]>;
+  unmuteParticipantAudio(participantId: string): Promise<string[]>;
+  muteParticipantVideo(participantId: string): Promise<string[]>;
+  unmuteParticipantVideo(participantId: string): Promise<string[]>;
+  getParticipantMediaStates(participantId: string): Array<{
+    producerId: string;
+    kind: "audio" | "video";
+    paused: boolean;
+    closed: boolean;
+  }> | null;
+  getExistingProducerIds(currentParticipantId: string): Array<{
+    participantId: string;
+    producerIds: string[];
+  }>;
 }
 
 export interface Participant {
@@ -96,6 +124,7 @@ export interface Participant {
   addProducer(producer: Producer): void;
   addConsumer(consumer: Consumer): void;
   removeProducer(producerId: string): void;
+  removeConsumer(consumerId: string): void;
   createTransport(
     router: Router<AppData>,
     createTransportParams: CreateTransportParams
@@ -107,6 +136,21 @@ export interface Participant {
   produce(produceParams: ProduceParams): Promise<string>;
   consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;
   resumeConsumer(consumerId: string): Promise<void>;
+  pauseProducer(producerId: string): void;
+  resumeProducer(producerId: string): void;
+  pauseConsumer(consumerId: string): void;
+  closeAllProducers(): Promise<string[]>;
+  closeAllConsumers(): Promise<string[]>;
+  closeTransports(): Promise<void>;
+  cleanup(): Promise<{
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }>;
+  getProducerById(producerId: string): Producer | null;
+  getConsumerById(consumerId: string): Consumer | null;
+  getAllProducers(): Producer[];
+  getAllConsumers(): Consumer[];
+  getProducerIds(): string[];
 }
 
 /**
