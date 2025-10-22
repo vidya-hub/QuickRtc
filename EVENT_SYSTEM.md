@@ -14,8 +14,8 @@ The Simple MediaSoup client now features a comprehensive event system with:
 ## Event Flow Architecture
 
 ```
-Socket.IO Events → Event Orchestrator → SimpleClient Events → Application
-MediaSoup Events → Event Orchestrator → SimpleClient Events → Application
+Socket.IO Events → Event Orchestrator → ConferenceClient Events → Application
+MediaSoup Events → Event Orchestrator → ConferenceClient Events → Application
 ```
 
 ### 1. Event Sources
@@ -31,8 +31,8 @@ The system handles events from multiple sources:
 The `EventOrchestrator` class manages the flow and transformation of events:
 
 ```typescript
-// Automatic initialization in SimpleClient
-const client = new SimpleClient({
+// Automatic initialization in ConferenceClient
+const client = new ConferenceClient({
   serverUrl: "https://your-server.com",
   eventOrchestrator: {
     enableDebugLogging: true, // Enable console logging
@@ -44,10 +44,10 @@ const client = new SimpleClient({
 
 ### 3. Event Types
 
-All events are type-safe with the `SimpleClientEvents` interface:
+All events are type-safe with the `ConferenceClientEvents` interface:
 
 ```typescript
-export interface SimpleClientEvents {
+export interface ConferenceClientEvents {
   // Connection events
   connected: { connection: ConnectionInfo };
   disconnected: { reason?: string };
@@ -79,18 +79,22 @@ export interface SimpleClientEvents {
 ### Basic Event Listening
 
 ```javascript
-// Create client instance
-const client = new SimpleClient({
-  serverUrl: "https://your-server.com",
+// Connect to server and create client instance
+const socket = io("https://your-server.com");
+const client = new ConferenceClient({
+  conferenceId: "demo-room",
+  participantId: "participant-123",
+  participantName: "Your Name",
+  socket,
+  conferenceName: "Demo Conference",
   enableAudio: true,
   enableVideo: true,
-  autoConsume: true,
 });
 
-// Setup event listeners BEFORE connecting
-client.addEventListener("connected", (event) => {
-  const { connection } = event.detail;
-  console.log(`Connected to ${connection.conferenceId}`);
+// Setup event listeners BEFORE joining
+client.addEventListener("joined", (event) => {
+  const { conferenceId } = event.detail;
+  console.log(`Joined conference: ${conferenceId}`);
 });
 
 client.addEventListener("participantJoined", (event) => {
@@ -163,7 +167,7 @@ The orchestrator automatically transforms events from different sources into a c
 // Socket event (raw)
 { participantId: "abc123", participantName: "John" }
 
-// Transformed to SimpleClient event
+// Transformed to ConferenceClient event
 { participant: { id: "abc123", name: "John", isLocal: false } }
 ```
 
@@ -196,7 +200,7 @@ client.setEventDebugMode(true, true);
 // Console output:
 // [EventOrchestrator] 2024-01-01T12:00:00.000Z INFO: Registering event source: socket
 // [EventOrchestrator] 2024-01-01T12:00:00.000Z SUCCESS: Successfully processed event: socket:participantJoined -> participantJoined
-// [SimpleClient] Emitting event: participantJoined { participant: { ... } }
+// [ConferenceClient] Emitting event: participantJoined { participant: { ... } }
 ```
 
 ## Migration from Old Event System
@@ -275,12 +279,16 @@ The system automatically calls `socketController.setupEventListeners()` during c
 The event orchestrator keeps a history of events for debugging. By default, it stores the last 100 events. For production, consider reducing this:
 
 ```javascript
-const client = new SimpleClient({
-  serverUrl: "https://your-server.com",
-  eventOrchestrator: {
-    enableDebugLogging: false, // Disable in production
-    maxEventHistory: 20, // Reduce memory usage
-  },
+const socket = io("https://your-server.com");
+const client = new ConferenceClient({
+  conferenceId: "room-id",
+  participantId: "participant-123",
+  participantName: "Your Name",
+  socket,
+  conferenceName: "Conference",
+  enableAudio: true,
+  enableVideo: true,
+  // Event orchestrator is built-in with production-optimized defaults
 });
 ```
 

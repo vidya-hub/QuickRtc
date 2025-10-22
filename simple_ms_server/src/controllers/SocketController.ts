@@ -414,6 +414,7 @@ class SocketEventController extends EnhancedEventEmitter {
       socket.to(conferenceId).emit("newProducer", {
         producerId,
         participantId,
+        kind,
       });
       callback({ status: "ok", data: { producerId } });
       this.emit("producerCreated", { producerId, participantId });
@@ -444,6 +445,8 @@ class SocketEventController extends EnhancedEventEmitter {
       const consumerResponse = await this.mediasoupController?.consume(
         consumerParams
       );
+      console.log("consumer response ", consumerResponse);
+
       callback({ status: "ok", data: consumerResponse });
       this.emit("consumerCreated", { ...consumerResponse, participantId });
     } catch (error) {

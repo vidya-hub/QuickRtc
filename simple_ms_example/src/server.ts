@@ -320,14 +320,26 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "serverStarted",
       (event: CustomEvent<SimpleServerEvents["serverStarted"]>) => {
-        console.log(`🚀 MediaSoup server initialized`);
+        const timestamp = new Date().toISOString();
+        console.log(
+          `[${timestamp}] 🚀 MediaSoup server initialized successfully`
+        );
+        console.log(`[${timestamp}] 📊 Server ready to handle conferences`);
       }
     );
 
     mediaServer.on(
       "serverError",
       (event: CustomEvent<SimpleServerEvents["serverError"]>) => {
-        console.error("❌ MediaSoup server error:", event.detail.error);
+        const timestamp = new Date().toISOString();
+        console.error(
+          `[${timestamp}] ❌ MediaSoup server error:`,
+          event.detail.error
+        );
+        console.error(
+          `[${timestamp}] 🔍 Error details:`,
+          event.detail.error.message
+        );
       }
     );
 
@@ -335,14 +347,30 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "clientConnected",
       (event: CustomEvent<SimpleServerEvents["clientConnected"]>) => {
-        console.log(`🔌 Client connected: ${event.detail.socketId}`);
+        const timestamp = new Date().toISOString();
+        console.log(
+          `[${timestamp}] 🔌 Client connected: ${event.detail.socketId}`
+        );
+        console.log(
+          `[${timestamp}] 📈 Total active clients: ${
+            this.socketServer?.engine.clientsCount || "Unknown"
+          }`
+        );
       }
     );
 
     mediaServer.on(
       "clientDisconnected",
       (event: CustomEvent<SimpleServerEvents["clientDisconnected"]>) => {
-        console.log(`🔌 Client disconnected: ${event.detail.socketId}`);
+        const timestamp = new Date().toISOString();
+        console.log(
+          `[${timestamp}] 🔌 Client disconnected: ${event.detail.socketId}`
+        );
+        console.log(
+          `[${timestamp}] 📉 Total active clients: ${
+            this.socketServer?.engine.clientsCount || "Unknown"
+          }`
+        );
       }
     );
 
@@ -350,8 +378,23 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "participantJoined",
       (event: CustomEvent<SimpleServerEvents["participantJoined"]>) => {
+        const timestamp = new Date().toISOString();
+        const { participant } = event.detail;
         console.log(
-          `👋 ${event.detail.participant.name} joined conference ${event.detail.participant.conferenceId}`
+          `[${timestamp}] 👋 Participant joined: ${participant.name} (ID: ${participant.id})`
+        );
+        console.log(
+          `[${timestamp}] 🏠 Conference: ${participant.conferenceId}`
+        );
+        console.log(`[${timestamp}] 🔗 Socket: ${participant.socketId}`);
+
+        // Log conference participant count
+        const conferenceParticipants =
+          this.mediaServer?.getConferenceParticipants(
+            participant.conferenceId
+          ) || [];
+        console.log(
+          `[${timestamp}] 👥 Conference ${participant.conferenceId} now has ${conferenceParticipants.length} participants`
         );
       }
     );
@@ -359,8 +402,22 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "participantLeft",
       (event: CustomEvent<SimpleServerEvents["participantLeft"]>) => {
+        const timestamp = new Date().toISOString();
+        const { participant } = event.detail;
         console.log(
-          `👋 ${event.detail.participant.name} left conference ${event.detail.participant.conferenceId}`
+          `[${timestamp}] 👋 Participant left: ${participant.name} (ID: ${participant.id})`
+        );
+        console.log(
+          `[${timestamp}] 🏠 Conference: ${participant.conferenceId}`
+        );
+
+        // Log remaining participant count
+        const conferenceParticipants =
+          this.mediaServer?.getConferenceParticipants(
+            participant.conferenceId
+          ) || [];
+        console.log(
+          `[${timestamp}] 👥 Conference ${participant.conferenceId} now has ${conferenceParticipants.length} participants`
         );
       }
     );
@@ -368,14 +425,34 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "conferenceCreated",
       (event: CustomEvent<SimpleServerEvents["conferenceCreated"]>) => {
-        console.log(`🏠 Conference created: ${event.detail.conference.id}`);
+        const timestamp = new Date().toISOString();
+        const { conference } = event.detail;
+        console.log(`[${timestamp}] 🏠 Conference created: ${conference.id}`);
+        console.log(
+          `[${timestamp}] 📋 Conference name: ${conference.name || "Unnamed"}`
+        );
+
+        // Log total active conferences
+        const totalConferences = this.mediaServer?.getConferences().length || 0;
+        console.log(
+          `[${timestamp}] 📊 Total active conferences: ${totalConferences}`
+        );
       }
     );
 
     mediaServer.on(
       "conferenceDestroyed",
       (event: CustomEvent<SimpleServerEvents["conferenceDestroyed"]>) => {
-        console.log(`🏠 Conference destroyed: ${event.detail.conferenceId}`);
+        const timestamp = new Date().toISOString();
+        console.log(
+          `[${timestamp}] 🏠 Conference destroyed: ${event.detail.conferenceId}`
+        );
+
+        // Log total remaining conferences
+        const totalConferences = this.mediaServer?.getConferences().length || 0;
+        console.log(
+          `[${timestamp}] 📊 Total active conferences: ${totalConferences}`
+        );
       }
     );
 
@@ -383,36 +460,42 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "producerCreated",
       (event: CustomEvent<SimpleServerEvents["producerCreated"]>) => {
-        console.log(
-          `📹 Producer created: ${event.detail.producerId} for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { producerId, participantId, kind } = event.detail;
+        console.log(`[${timestamp}] 📹 Producer created: ${producerId}`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
+        console.log(`[${timestamp}] 🎭 Media kind: ${kind}`);
       }
     );
 
     mediaServer.on(
       "producerClosed",
       (event: CustomEvent<SimpleServerEvents["producerClosed"]>) => {
-        console.log(
-          `📹 Producer closed: ${event.detail.producerId} for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { producerId, participantId } = event.detail;
+        console.log(`[${timestamp}] 📹 Producer closed: ${producerId}`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
       }
     );
 
     mediaServer.on(
       "consumerCreated",
       (event: CustomEvent<SimpleServerEvents["consumerCreated"]>) => {
-        console.log(
-          `📺 Consumer created: ${event.detail.consumerId} for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { consumerId, participantId, producerId } = event.detail;
+        console.log(`[${timestamp}] 📺 Consumer created: ${consumerId}`);
+        console.log(`[${timestamp}] 👤 For participant: ${participantId}`);
+        console.log(`[${timestamp}] 🎬 Producer: ${producerId}`);
       }
     );
 
     mediaServer.on(
       "consumerClosed",
       (event: CustomEvent<SimpleServerEvents["consumerClosed"]>) => {
-        console.log(
-          `📺 Consumer closed: ${event.detail.consumerId} for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { consumerId, participantId } = event.detail;
+        console.log(`[${timestamp}] 📺 Consumer closed: ${consumerId}`);
+        console.log(`[${timestamp}] 👤 For participant: ${participantId}`);
       }
     );
 
@@ -420,36 +503,44 @@ class MediaSoupExpressServer {
     mediaServer.on(
       "audioMuted",
       (event: CustomEvent<SimpleServerEvents["audioMuted"]>) => {
-        console.log(
-          `🔇 Audio muted for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { participantId, conferenceId } = event.detail;
+        console.log(`[${timestamp}] 🔇 Audio muted`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
+        console.log(`[${timestamp}] � Conference: ${conferenceId}`);
       }
     );
 
     mediaServer.on(
       "audioUnmuted",
       (event: CustomEvent<SimpleServerEvents["audioUnmuted"]>) => {
-        console.log(
-          `🔊 Audio unmuted for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { participantId, conferenceId } = event.detail;
+        console.log(`[${timestamp}] 🔊 Audio unmuted`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
+        console.log(`[${timestamp}] � Conference: ${conferenceId}`);
       }
     );
 
     mediaServer.on(
       "videoMuted",
       (event: CustomEvent<SimpleServerEvents["videoMuted"]>) => {
-        console.log(
-          `📵 Video muted for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { participantId, conferenceId } = event.detail;
+        console.log(`[${timestamp}] 📵 Video muted`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
+        console.log(`[${timestamp}] � Conference: ${conferenceId}`);
       }
     );
 
     mediaServer.on(
       "videoUnmuted",
       (event: CustomEvent<SimpleServerEvents["videoUnmuted"]>) => {
-        console.log(
-          `📹 Video unmuted for participant ${event.detail.participantId}`
-        );
+        const timestamp = new Date().toISOString();
+        const { participantId, conferenceId } = event.detail;
+        console.log(`[${timestamp}] 📹 Video unmuted`);
+        console.log(`[${timestamp}] 👤 Participant: ${participantId}`);
+        console.log(`[${timestamp}] � Conference: ${conferenceId}`);
       }
     );
   }
@@ -479,25 +570,39 @@ class MediaSoupExpressServer {
 
       await new Promise<void>((resolve, reject) => {
         this.httpServer!.listen(port, this.config.host, () => {
+          const timestamp = new Date().toISOString();
           console.log(
-            `\n🚀 ${protocol.toUpperCase()} Server started successfully!`
+            `\n[${timestamp}] 🚀 ${protocol.toUpperCase()} Server started successfully!`
           );
-          console.log(`📡 Server: ${protocol}://${this.config.host}:${port}`);
           console.log(
-            `📱 Open ${protocol}://localhost:${port} in your browser`
+            `[${timestamp}] 📡 Server: ${protocol}://${this.config.host}:${port}`
+          );
+          console.log(
+            `[${timestamp}] 📱 Open ${protocol}://localhost:${port} in your browser`
+          );
+          console.log(
+            `[${timestamp}] 🔧 Event logging: Comprehensive event tracking enabled`
+          );
+          console.log(
+            `[${timestamp}] 📊 API endpoints: /api/conferences, /api/participants, /api/stats`
+          );
+          console.log(
+            `[${timestamp}] 🛠️  Admin endpoints: /api/conferences/:id/close, /api/participants/:id/kick`
           );
 
           if (this.config.useHttps) {
             console.log(
-              `⚠️  You may need to accept the self-signed certificate warning`
+              `[${timestamp}] ⚠️  You may need to accept the self-signed certificate warning`
             );
           } else {
             console.log(
-              `💡 For production with WebRTC, use HTTPS by setting USE_HTTPS=true`
+              `[${timestamp}] 💡 For production with WebRTC, use HTTPS by setting USE_HTTPS=true`
             );
           }
 
-          console.log(`🎥 Ready for video conferences!\n`);
+          console.log(
+            `[${timestamp}] 🎥 Ready for video conferences with comprehensive event logging!\n`
+          );
           resolve();
         });
 

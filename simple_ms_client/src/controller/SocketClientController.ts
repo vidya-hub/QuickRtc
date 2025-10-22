@@ -389,41 +389,113 @@ export class SocketClientController extends EventTarget {
 
   // Setup socket event listeners for real-time events
   setupEventListeners() {
+    const logger = (
+      message: string,
+      level: "info" | "warn" | "error" = "info"
+    ) => {
+      const timestamp = new Date().toISOString();
+      const prefix = `[SocketClientController:${this.joinParams.participantId}]`;
+      console[level](`${timestamp} ${prefix} ${message}`);
+    };
+
+    logger("Setting up socket event listeners");
+
+    // Participant events
     this.socket.on("participantJoined", (data) => {
+      logger(`Participant joined event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(
         new CustomEvent("participantJoined", { detail: data })
       );
     });
+
     this.socket.on("participantLeft", (data) => {
+      logger(`Participant left event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("participantLeft", { detail: data }));
     });
 
+    // Producer/Consumer events
+    this.socket.on("newProducer", (data) => {
+      logger(`New producer event received: ${JSON.stringify(data)}`);
+      this.dispatchEvent(new CustomEvent("newProducer", { detail: data }));
+    });
+
     this.socket.on("producerClosed", (data) => {
+      logger(`Producer closed event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("producerClosed", { detail: data }));
     });
 
     this.socket.on("consumerClosed", (data) => {
+      logger(`Consumer closed event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("consumerClosed", { detail: data }));
     });
 
+    // Media state events
     this.socket.on("audioMuted", (data) => {
+      logger(`Audio muted event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("audioMuted", { detail: data }));
     });
 
     this.socket.on("audioUnmuted", (data) => {
+      logger(`Audio unmuted event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("audioUnmuted", { detail: data }));
     });
 
     this.socket.on("videoMuted", (data) => {
+      logger(`Video muted event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("videoMuted", { detail: data }));
     });
 
     this.socket.on("videoUnmuted", (data) => {
+      logger(`Video unmuted event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("videoUnmuted", { detail: data }));
     });
 
-    this.socket.on("newProducer", (data) => {
-      this.dispatchEvent(new CustomEvent("newProducer", { detail: data }));
+    // Connection events
+    this.socket.on("disconnect", (reason) => {
+      logger(`Socket disconnected: ${reason}`, "warn");
+      this.dispatchEvent(
+        new CustomEvent("disconnected", { detail: { reason } })
+      );
     });
+
+    // Connection events (using any socket for connection events since they're not in typed interface)
+    const anySocket = this.socket as any;
+
+    anySocket.on("connect", () => {
+      logger("Socket connected");
+      this.dispatchEvent(new CustomEvent("connected", { detail: {} }));
+    });
+
+    anySocket.on("connect_error", (error: any) => {
+      logger(`Socket connection error: ${error.message}`, "error");
+      this.dispatchEvent(
+        new CustomEvent("connectionError", { detail: { error } })
+      );
+    });
+
+    anySocket.on("reconnect", (attemptNumber: number) => {
+      logger(`Socket reconnected after ${attemptNumber} attempts`);
+      this.dispatchEvent(
+        new CustomEvent("reconnected", { detail: { attemptNumber } })
+      );
+    });
+
+    anySocket.on("reconnecting", (attemptNumber: number) => {
+      logger(`Socket reconnecting... attempt ${attemptNumber}`);
+      this.dispatchEvent(
+        new CustomEvent("reconnecting", { detail: { attemptNumber } })
+      );
+    });
+
+    anySocket.on("error", (error: any) => {
+      logger(`Socket error: ${error}`, "error");
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { error, message: error.toString() },
+        })
+      );
+    });
+
+    logger("Socket event listeners setup complete");
   }
 }
