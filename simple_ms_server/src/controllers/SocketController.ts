@@ -3,7 +3,15 @@ import { Server, Socket } from "socket.io";
 import MediasoupController from "./MediasoupController";
 import MediasoupConference from "../models/conference";
 import { ConsumerOptions } from "mediasoup/types";
-import { Conference, SocketEventData } from "@simple-mediasoup/types";
+import {
+  Conference,
+  ConnectTransportParams,
+  ConsumeParams,
+  CreateTransportParams,
+  ProduceParams,
+  ResumeConsumerParams,
+  SocketEventData,
+} from "@simple-mediasoup/types";
 
 class SocketEventController extends EnhancedEventEmitter {
   private mediasoupController?: MediasoupController;
@@ -37,35 +45,29 @@ class SocketEventController extends EnhancedEventEmitter {
 
       socket.on(
         "createTransport",
-        async (socketEventData: SocketEventData, callback) => {
+        async (socketEventData: CreateTransportParams, callback) => {
           await this.createTransport(socketEventData, callback);
         }
       );
 
       socket.on(
         "connectTransport",
-        async (socketEventData: SocketEventData, callback) => {
+        async (socketEventData: ConnectTransportParams, callback) => {
           await this.connectTransport(socketEventData, callback);
         }
       );
 
-      socket.on(
-        "produce",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.produce(socketEventData, socket, callback);
-        }
-      );
+      socket.on("produce", async (socketEventData: ProduceParams, callback) => {
+        await this.produce(socketEventData, socket, callback);
+      });
 
-      socket.on(
-        "consume",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.consume(socketEventData, callback);
-        }
-      );
+      socket.on("consume", async (socketEventData: ConsumeParams, callback) => {
+        await this.consume(socketEventData, callback);
+      });
 
       socket.on(
         "resumeConsumer",
-        async (socketEventData: SocketEventData, callback) => {
+        async (socketEventData: ResumeConsumerParams, callback) => {
           await this.resumeConsumer(socketEventData, callback);
         }
       );
@@ -86,8 +88,8 @@ class SocketEventController extends EnhancedEventEmitter {
 
       socket.on(
         "getProducers",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.getProducers(socketEventData, callback);
+        (socketEventData: SocketEventData, callback) => {
+          this.getProducers(socketEventData, callback);
         }
       );
 
@@ -191,6 +193,8 @@ class SocketEventController extends EnhancedEventEmitter {
     socketEventData: SocketEventData,
     callback: Function
   ) {
+    console.log("pause consumer data ", socketEventData);
+
     const { data } = socketEventData;
     const { extraData, conferenceId, participantId } = data;
     const { consumerId } = extraData || {};
@@ -317,22 +321,32 @@ class SocketEventController extends EnhancedEventEmitter {
   }
 
   private async createTransport(
-    socketEventData: SocketEventData,
+    socketEventData: CreateTransportParams,
     callback: Function
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
+    console.log("create transport data ", socketEventData);
+
+    const { direction, conferenceId, participantId } = socketEventData;
     try {
       const transport = await this.mediasoupController?.createTransport({
         conferenceId,
         participantId,
-        direction: extraData?.direction,
+        direction,
         options:
           this.mediasoupController.workerService.mediasoupConfig
             .transportConfig,
       });
       this.emit("transportCreated", transport);
-      callback({ status: "ok", data: transport });
+      callback({
+        status: "ok",
+        data: {
+          id: transport?.id,
+          iceParameters: transport?.iceParameters,
+          iceCandidates: transport?.iceCandidates,
+          dtlsParameters: transport?.dtlsParameters,
+          sctpParameters: transport?.sctpParameters,
+        },
+      });
     } catch (error) {
       console.error("Error creating transport:", error);
       callback({ status: "error", data: error });
@@ -340,12 +354,13 @@ class SocketEventController extends EnhancedEventEmitter {
   }
 
   private async connectTransport(
-    socketEventData: SocketEventData,
+    socketEventData: ConnectTransportParams,
     callback: Function
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
-    const { direction, dtlsParameters } = extraData || {};
+    console.log("connect data ", socketEventData);
+
+    const { conferenceId, participantId } = socketEventData;
+    const { direction, dtlsParameters } = socketEventData;
     if (!direction || !dtlsParameters) {
       callback({ status: "error", data: "Missing required parameters" });
       return;
@@ -354,8 +369,8 @@ class SocketEventController extends EnhancedEventEmitter {
       await this.mediasoupController?.connectTransport({
         conferenceId,
         participantId,
-        dtlsParameters: extraData?.dtlsParameters,
-        direction: extraData?.direction,
+        dtlsParameters: dtlsParameters,
+        direction: direction,
       });
       this.emit("transportConnected", {
         conferenceId,
@@ -369,13 +384,12 @@ class SocketEventController extends EnhancedEventEmitter {
     }
   }
   private async produce(
-    socketEventData: SocketEventData,
+    socketEventData: ProduceParams,
     socket: Socket,
     callback: Function
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
-    const { transportId, kind, rtpParameters } = extraData || {};
+    const { conferenceId, participantId } = socketEventData;
+    const { transportId, kind, rtpParameters } = socketEventData;
     const producerOptions = { kind, rtpParameters, appData: { participantId } };
     try {
       if (!transportId || !kind || !rtpParameters) {
@@ -390,6 +404,8 @@ class SocketEventController extends EnhancedEventEmitter {
         participantId,
         transportId,
         producerOptions,
+        kind,
+        rtpParameters,
       });
       socket.to(conferenceId).emit("newProducer", {
         producerId,
@@ -402,11 +418,11 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({ status: "error", data: error });
     }
   }
-  private async consume(socketEventData: SocketEventData, callback: Function) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
-    const { producerId, rtpCapabilities } = extraData || {};
-    const consumeOptions: ConsumerOptions = { producerId, rtpCapabilities };
+  private async consume(socketEventData: ConsumeParams, callback: Function) {
+    console.log("consume params came ", socketEventData);
+
+    const { conferenceId, participantId, consumeOptions } = socketEventData;
+    const { producerId, rtpCapabilities } = consumeOptions;
     const consumerParams = {
       conferenceId,
       participantId,
@@ -433,12 +449,10 @@ class SocketEventController extends EnhancedEventEmitter {
   }
 
   private async resumeConsumer(
-    socketEventData: SocketEventData,
+    socketEventData: ResumeConsumerParams,
     callback: Function
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
-    const { consumerId } = extraData || {};
+    const { conferenceId, participantId, consumerId } = socketEventData;
     const resumeConsumerParams = {
       conferenceId,
       participantId,
@@ -552,18 +566,13 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({ status: "error", data: error });
     }
   }
-  private async getProducers(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
+  private getProducers(socketEventData: any, callback: Function) {
+    const { conferenceId, participantId } = socketEventData;
     try {
-      const producerIds =
-        await this.mediasoupController?.getExistingProducerIds(
-          conferenceId,
-          participantId
-        );
+      const producerIds = this.mediasoupController?.getExistingProducerIds(
+        conferenceId,
+        participantId
+      );
       callback({ status: "ok", data: producerIds });
     } catch (error) {
       console.error("Error getting producers:", error);

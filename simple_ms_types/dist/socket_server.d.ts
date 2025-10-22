@@ -16,7 +16,7 @@ export type MeetingParams = {
  */
 export type SocketEventData = {
     eventType: SocketEventType;
-    data: MeetingParams;
+    data: MeetingParams | any;
 };
 /**
  * Standard socket response structure

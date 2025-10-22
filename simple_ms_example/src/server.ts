@@ -268,6 +268,44 @@ class MediaSoupExpressServer {
           logLevel: "warn",
           logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
         },
+        routerOptions: {
+          mediaCodecs: [
+            {
+              kind: "audio",
+              mimeType: "audio/opus",
+              clockRate: 48000,
+              channels: 2,
+            },
+            {
+              kind: "video",
+              mimeType: "video/H264",
+              clockRate: 90000,
+              parameters: {
+                "packetization-mode": 1,
+                "profile-level-id": "42e01f",
+                "level-asymmetry-allowed": 1,
+              },
+            },
+            {
+              kind: "video",
+              mimeType: "video/VP8",
+              clockRate: 90000,
+              parameters: {},
+            },
+          ],
+        },
+        transportOptions: {
+          listenIps: [
+            {
+              ip: "0.0.0.0",
+              announcedIp: process.env.ANNOUNCED_IP || "157.50.148.144",
+            },
+          ],
+          enableUdp: true,
+          enableTcp: true,
+          preferUdp: true,
+          enableSctp: false,
+        },
       },
     };
 

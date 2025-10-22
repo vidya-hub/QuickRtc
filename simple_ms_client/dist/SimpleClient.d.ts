@@ -1,4 +1,5 @@
 import { EventOrchestratorConfig } from "./EventOrchestrator";
+import { WebRtcTransportOptions } from "mediasoup/types";
 export interface SimpleClientConfig {
     serverUrl: string;
     iceServers?: RTCIceServer[];
@@ -105,7 +106,7 @@ export declare class SimpleClient extends EventTarget {
     /**
      * Initialize and connect to the conference
      */
-    connect(conferenceId: string, participantName: string, participantId?: string): Promise<void>;
+    connect(conferenceId: string, participantName: string, participantId?: string, webRtcTransportOptions?: WebRtcTransportOptions): Promise<void>;
     /**
      * Enable local audio/video
      */

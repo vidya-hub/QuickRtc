@@ -34,6 +34,10 @@ const elements = {
 
   // Logs
   logs: document.getElementById("logs"),
+  showLogsBtn: document.getElementById("showLogsBtn"),
+  logsModal: document.getElementById("logsModal"),
+  closeLogsBtn: document.getElementById("closeLogsBtn"),
+  clearLogsBtn: document.getElementById("clearLogsBtn"),
 };
 
 // Logging function
@@ -308,6 +312,20 @@ async function startScreenShare() {
   }
 }
 
+// Modal functions
+function showLogsModal() {
+  elements.logsModal.classList.add("show");
+}
+
+function hideLogsModal() {
+  elements.logsModal.classList.remove("show");
+}
+
+function clearLogs() {
+  elements.logs.innerHTML = "";
+  log("Logs cleared", "info");
+}
+
 // Initialize application when DOM is loaded
 function initializeApp() {
   // Bind event listeners
@@ -316,6 +334,25 @@ function initializeApp() {
   elements.toggleAudioBtn.addEventListener("click", toggleAudio);
   elements.toggleVideoBtn.addEventListener("click", toggleVideo);
   elements.screenShareBtn.addEventListener("click", startScreenShare);
+
+  // Modal event listeners
+  elements.showLogsBtn.addEventListener("click", showLogsModal);
+  elements.closeLogsBtn.addEventListener("click", hideLogsModal);
+  elements.clearLogsBtn.addEventListener("click", clearLogs);
+
+  // Close modal when clicking outside of it
+  elements.logsModal.addEventListener("click", (e) => {
+    if (e.target === elements.logsModal) {
+      hideLogsModal();
+    }
+  });
+
+  // Close modal with Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && elements.logsModal.classList.contains("show")) {
+      hideLogsModal();
+    }
+  });
 
   // Allow Enter key to connect
   elements.conferenceId.addEventListener("keypress", (e) => {

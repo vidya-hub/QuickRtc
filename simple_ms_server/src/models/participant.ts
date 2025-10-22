@@ -130,7 +130,7 @@ class MediasoupParticipant implements Participant {
   async createTransport(
     router: Router<AppData>,
     createTransportParams: CreateTransportParams
-  ): Promise<mediasoup.types.WebRtcTransport> {
+  ): Promise<mediasoup.types.WebRtcTransport<AppData>> {
     if (!createTransportParams.options) {
       throw new Error("Transport options are required");
     }
@@ -142,7 +142,9 @@ class MediasoupParticipant implements Participant {
     } else if (createTransportParams.direction === "consumer") {
       this.setConsumerTransport(transport);
     }
-    return transport; // Return the transport to avoid unused variable warning
+    console.log("transport is created ", transport.id);
+
+    return transport;
   }
   async connectTransport(direction: string, dtlsParameters: DtlsParameters) {
     if (direction === "producer" && this.producerTransport) {

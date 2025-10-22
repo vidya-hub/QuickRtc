@@ -6,6 +6,7 @@ import MediasoupClient, {
 import EventOrchestrator, {
   EventOrchestratorConfig,
 } from "./EventOrchestrator";
+import { WebRtcTransportOptions } from "mediasoup/types";
 
 // Simple, easy-to-use types
 export interface SimpleClientConfig {
@@ -130,7 +131,7 @@ export class SimpleClient extends EventTarget {
     conferenceId: string,
     participantName: string,
     participantId?: string,
-    conferenceName?: string
+    webRtcTransportOptions?: WebRtcTransportOptions
   ): Promise<void> {
     console.log("trying to connect ", conferenceId, participantName);
 
@@ -183,6 +184,7 @@ export class SimpleClient extends EventTarget {
         participantName,
         conferenceName: conferenceId,
         socketId: this.socket.id || "",
+        webRtcTransportOptions,
       });
 
       this.mediasoupClient = new MediasoupClient(this.socketController, {
@@ -202,31 +204,32 @@ export class SimpleClient extends EventTarget {
         console.error("Failed to join conference:", error);
       }
 
-      // console.log("join response ", joinResponse);
+      // Add local participant
+      this.participants.set(finalParticipantId, {
+        id: finalParticipantId,
+        name: participantName,
+        isLocal: true,
+      });
 
-      // // Add local participant
-      // this.participants.set(finalParticipantId, {
-      //   id: finalParticipantId,
-      //   name: participantName,
-      //   isLocal: true,
-      // });
+      this.isInitialized = true;
 
-      // this.isInitialized = true;
+      console.log("event is emitted ", this.connectionInfo);
 
-      // console.log("event is emitted ", this.connectionInfo);
+      // Emit connected event
+      this.emit("connected", { connection: this.connectionInfo });
 
-      // // Auto-enable media if configured
-      // if (this.config.enableAudio || this.config.enableVideo) {
-      //   await this.enableMedia(
-      //     this.config.enableAudio,
-      //     this.config.enableVideo
-      //   );
-      // }
+      // Auto-enable media if configured
+      if (this.config.enableAudio || this.config.enableVideo) {
+        await this.enableMedia(
+          this.config.enableAudio,
+          this.config.enableVideo
+        );
+      }
 
-      // // Auto-consume existing participants if configured
-      // if (this.config.autoConsume) {
-      //   await this.consumeExistingStreams();
-      // }
+      // Auto-consume existing participants if configured
+      if (this.config.autoConsume) {
+        await this.consumeExistingStreams();
+      }
     } catch (error) {
       console.error("Connection failed:", error);
       this.emit("error", {

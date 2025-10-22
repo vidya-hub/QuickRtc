@@ -109,14 +109,26 @@ class MediasoupClient extends EventTarget {
       if (!transports) {
         throw new Error("Failed to create transports");
       }
+      let { id, iceParameters, iceCandidates, dtlsParameters } =
+        transports.sendTransport;
 
       // Create mediasoup transports
-      this.sendTransport = this.device.createSendTransport(
-        transports.sendTransport
-      );
-      this.recvTransport = this.device.createRecvTransport(
-        transports.recvTransport
-      );
+      this.sendTransport = this.device.createSendTransport({
+        id,
+        iceParameters,
+        iceCandidates,
+        dtlsParameters,
+      });
+      ({ id, iceParameters, iceCandidates, dtlsParameters } =
+        transports.recvTransport);
+      this.recvTransport = this.device.createRecvTransport({
+        id,
+        iceParameters,
+        iceCandidates,
+        dtlsParameters,
+      });
+
+      console.log("Transports created");
 
       // Setup transport listeners
       this.socketClient.addSendTransportListener({

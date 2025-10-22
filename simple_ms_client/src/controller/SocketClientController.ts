@@ -218,8 +218,7 @@ export class SocketClientController extends EventTarget {
     const response = await this.socket.emitWithAck("consume", {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
-      producerId,
-      rtpCapabilities,
+      consumeOptions: { producerId, rtpCapabilities },
     });
     if (response.status == "error") {
       this.dispatchEvent(new CustomEvent("error", { detail: response.data }));

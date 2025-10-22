@@ -24,7 +24,7 @@ declare class MediasoupParticipant implements Participant {
         closedProducerIds: string[];
         closedConsumerIds: string[];
     }>;
-    createTransport(router: Router<AppData>, createTransportParams: CreateTransportParams): Promise<mediasoup.types.WebRtcTransport>;
+    createTransport(router: Router<AppData>, createTransportParams: CreateTransportParams): Promise<mediasoup.types.WebRtcTransport<AppData>>;
     connectTransport(direction: string, dtlsParameters: DtlsParameters): Promise<void>;
     produce(produceParams: ProduceParams): Promise<string>;
     consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;

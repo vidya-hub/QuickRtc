@@ -108,7 +108,8 @@ class MediasoupParticipant {
         else if (createTransportParams.direction === "consumer") {
             this.setConsumerTransport(transport);
         }
-        return transport; // Return the transport to avoid unused variable warning
+        console.log("transport is created ", transport.id);
+        return transport;
     }
     async connectTransport(direction, dtlsParameters) {
         if (direction === "producer" && this.producerTransport) {

@@ -36,6 +36,8 @@ export type ProduceParams = {
   participantId: string;
   transportId: string;
   producerOptions: ProducerOptions;
+  kind: MediaKind;
+  rtpParameters: RtpParameters;
 };
 
 /**
