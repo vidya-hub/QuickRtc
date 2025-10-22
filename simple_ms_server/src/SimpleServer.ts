@@ -463,7 +463,7 @@ export class SimpleServer extends EventTarget {
       console.log("conference event came here ", data);
 
       const { conferenceId, participantId, conferenceName, participantName } =
-        data.data;
+        data;
       const socketId = data.socketId || "unknown";
 
       // Create or update conference

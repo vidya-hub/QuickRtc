@@ -308,7 +308,7 @@ class SimpleServer extends EventTarget {
         // Conference events
         this.socketController.on("conferenceJoined", (data) => {
             console.log("conference event came here ", data);
-            const { conferenceId, participantId, conferenceName, participantName } = data.data;
+            const { conferenceId, participantId, conferenceName, participantName } = data;
             const socketId = data.socketId || "unknown";
             // Create or update conference
             if (!this.conferences.has(conferenceId)) {

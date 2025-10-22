@@ -595,14 +595,13 @@ export class SimpleClient extends EventTarget {
     this.eventOrchestrator.addEventListener(
       "participantJoined",
       (event: any) => {
-        const { participantId, participantName, conferenceId } = event.detail;
+        console.log("participant joined ", event);
+
+        const { participantId, participantName, conferenceId } =
+          event.detail.participant;
 
         // Create participant info
-        const participant: ParticipantInfo = {
-          id: participantId,
-          name: participantName,
-          isLocal: false,
-        };
+        const participant: ParticipantInfo = event.detail.participant;
 
         // Add to participants map
         this.participants.set(participantId, participant);

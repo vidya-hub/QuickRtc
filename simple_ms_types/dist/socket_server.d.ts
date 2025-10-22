@@ -9,7 +9,6 @@ export type MeetingParams = {
     conferenceId: string;
     participantId: string;
     socketId?: string;
-    extraData?: Record<string, any>;
 };
 /**
  * Socket event data structure

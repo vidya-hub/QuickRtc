@@ -17,7 +17,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
                 this.onUserDisconnected(socket);
             });
             socket.on("joinConference", async (socketEventData, callback) => {
-                await this.handleJoinConference(socketEventData, socket, callback);
+                await this.handleJoinConference(socketEventData.data, socket, callback);
             });
             socket.on("createTransport", async (socketEventData, callback) => {
                 await this.createTransport(socketEventData, callback);
@@ -180,16 +180,13 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
     async handleJoinConference(socketEventData, socket, callback) {
         console.log("received data socket ", socketEventData);
         try {
-            const { conferenceId, participantId, extraData } = socketEventData.data;
-            const conferenceName = extraData?.conferenceName;
-            const participantName = extraData?.participantName || "Guest";
-            const socketId = socket.id;
+            const { conferenceId, participantId, conferenceName, participantName } = socketEventData;
             const conference = await this.mediasoupController?.joinConference({
                 conferenceId: conferenceId,
                 participantId: participantId,
                 conferenceName: conferenceName,
                 participantName: participantName,
-                socketId: socketId,
+                socketId: socket.id,
             });
             console.log("mediasoup con response ", conference);
             socket.join(conferenceId);
@@ -198,7 +195,10 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
                 participantName,
                 conferenceId,
             });
-            this.emit("conferenceJoined", { ...socketEventData, socketId });
+            this.emit("conferenceJoined", {
+                ...socketEventData,
+                socketId: socket.id,
+            });
             if (conference) {
                 callback({
                     status: "ok",

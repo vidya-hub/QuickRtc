@@ -8,6 +8,7 @@ import {
   ConnectTransportParams,
   ConsumeParams,
   CreateTransportParams,
+  JoinConferenceParams,
   ProduceParams,
   ResumeConsumerParams,
   SocketEventData,
@@ -36,12 +37,9 @@ class SocketEventController extends EnhancedEventEmitter {
         this.emit("clientDisconnected", socket);
         this.onUserDisconnected(socket);
       });
-      socket.on(
-        "joinConference",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.handleJoinConference(socketEventData, socket, callback);
-        }
-      );
+      socket.on("joinConference", async (socketEventData: any, callback) => {
+        await this.handleJoinConference(socketEventData.data, socket, callback);
+      });
 
       socket.on(
         "createTransport",
@@ -285,24 +283,22 @@ class SocketEventController extends EnhancedEventEmitter {
   }
 
   private async handleJoinConference(
-    socketEventData: SocketEventData,
+    socketEventData: JoinConferenceParams,
     socket: Socket,
     callback: Function
   ) {
     console.log("received data socket ", socketEventData);
 
     try {
-      const { conferenceId, participantId, extraData } = socketEventData.data;
-      const conferenceName = extraData?.conferenceName;
-      const participantName = extraData?.participantName || "Guest";
-      const socketId = socket.id;
+      const { conferenceId, participantId, conferenceName, participantName } =
+        socketEventData;
       const conference: Conference | undefined =
         await this.mediasoupController?.joinConference({
           conferenceId: conferenceId,
           participantId: participantId,
           conferenceName: conferenceName,
           participantName: participantName,
-          socketId: socketId,
+          socketId: socket.id,
         });
       console.log("mediasoup con response ", conference);
 
@@ -312,7 +308,10 @@ class SocketEventController extends EnhancedEventEmitter {
         participantName,
         conferenceId,
       });
-      this.emit("conferenceJoined", { ...socketEventData, socketId });
+      this.emit("conferenceJoined", {
+        ...socketEventData,
+        socketId: socket.id,
+      });
       if (conference) {
         callback({
           status: "ok",
