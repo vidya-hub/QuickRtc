@@ -389,6 +389,11 @@ export class SocketClientController extends EventTarget {
 
   // Setup socket event listeners for real-time events
   setupEventListeners() {
+    this.socket.on("participantJoined", (data) => {
+      this.dispatchEvent(
+        new CustomEvent("participantJoined", { detail: data })
+      );
+    });
     this.socket.on("participantLeft", (data) => {
       this.dispatchEvent(new CustomEvent("participantLeft", { detail: data }));
     });

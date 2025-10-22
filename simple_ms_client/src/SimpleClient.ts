@@ -536,6 +536,7 @@ export class SimpleClient extends EventTarget {
       "socket",
       this.socketController,
       {
+        participantJoined: "participantJoined",
         participantLeft: "participantLeft",
         producerClosed: "producerClosed",
         consumerClosed: "consumerClosed",
@@ -588,6 +589,28 @@ export class SimpleClient extends EventTarget {
         const { streamId, participantId } = event.detail;
         this.remoteStreams.delete(streamId);
         this.emit("remoteStreamRemoved", { streamId, participantId });
+      }
+    );
+
+    this.eventOrchestrator.addEventListener(
+      "participantJoined",
+      (event: any) => {
+        const { participantId, participantName, conferenceId } = event.detail;
+
+        // Create participant info
+        const participant: ParticipantInfo = {
+          id: participantId,
+          name: participantName,
+          isLocal: false,
+        };
+
+        // Add to participants map
+        this.participants.set(participantId, participant);
+
+        console.log("Participant joined:", participant);
+
+        // Emit the participantJoined event
+        this.emit("participantJoined", { participant });
       }
     );
 

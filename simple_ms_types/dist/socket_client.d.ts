@@ -4,6 +4,7 @@ export type ClientSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 export interface ServerToClientEvents {
     connect: () => void;
     disconnect: (reason: string) => void;
+    participantJoined: (data: any) => void;
     participantLeft: (data: any) => void;
     producerClosed: (data: any) => void;
     consumerClosed: (data: any) => void;

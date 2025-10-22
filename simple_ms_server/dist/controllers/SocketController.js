@@ -193,6 +193,11 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
             });
             console.log("mediasoup con response ", conference);
             socket.join(conferenceId);
+            socket.to(conferenceId).emit("participantJoined", {
+                participantId,
+                participantName,
+                conferenceId,
+            });
             this.emit("conferenceJoined", { ...socketEventData, socketId });
             if (conference) {
                 callback({

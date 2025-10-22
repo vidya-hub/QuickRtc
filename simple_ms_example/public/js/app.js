@@ -77,6 +77,8 @@ function updateParticipantsList() {
   if (!client) return;
 
   const participants = client.getParticipants();
+  console.log("participants are ", participants);
+
   elements.participantsList.innerHTML = "";
 
   participants.forEach((participant) => {
