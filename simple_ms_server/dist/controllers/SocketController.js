@@ -553,8 +553,7 @@ class SocketEventController extends extras_1.EnhancedEventEmitter {
         this.emit("connected", socket);
     }
     async handleLeaveConference(socket, socketEventData, callback) {
-        const { data } = socketEventData;
-        const { participantId, conferenceId } = data;
+        const { participantId, conferenceId } = socketEventData;
         try {
             const cleanup = await this.mediasoupController?.removeFromConference(conferenceId, participantId);
             if (cleanup) {

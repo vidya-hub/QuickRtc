@@ -159,6 +159,7 @@ class MediasoupParticipant {
         if (userConsumers && userConsumers[consumerId]) {
             const consumer = userConsumers[consumerId];
             await consumer.resume();
+            console.log("consumer resumed in ", consumerId);
         }
         else {
             throw new Error("Consumer not found");

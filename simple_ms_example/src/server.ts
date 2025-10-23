@@ -267,6 +267,8 @@ class MediaSoupExpressServer {
         workerSettings: {
           logLevel: "warn",
           logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+          rtcMinPort: 40000,
+          rtcMaxPort: 49999,
         },
         routerOptions: {
           mediaCodecs: [
@@ -297,8 +299,8 @@ class MediaSoupExpressServer {
         transportOptions: {
           listenIps: [
             {
-              ip: "0.0.0.0",
-              announcedIp: process.env.ANNOUNCED_IP || "157.50.148.144",
+              ip: "127.0.0.1",
+              announcedIp: "157.50.159.179",
             },
           ],
           enableUdp: true,

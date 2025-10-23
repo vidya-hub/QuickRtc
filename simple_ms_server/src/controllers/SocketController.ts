@@ -72,7 +72,10 @@ class SocketEventController extends EnhancedEventEmitter {
 
       socket.on(
         "leaveConference",
-        async (socketEventData: SocketEventData, callback) => {
+        async (
+          socketEventData: { conferenceId: string; participantId: string },
+          callback
+        ) => {
           await this.handleLeaveConference(socket, socketEventData, callback);
         }
       );
@@ -772,11 +775,13 @@ class SocketEventController extends EnhancedEventEmitter {
   }
   private async handleLeaveConference(
     socket: any,
-    socketEventData: SocketEventData,
+    socketEventData: {
+      conferenceId: string;
+      participantId: string;
+    },
     callback: Function
   ) {
-    const { data } = socketEventData;
-    const { participantId, conferenceId } = data;
+    const { participantId, conferenceId } = socketEventData;
 
     try {
       const cleanup = await this.mediasoupController?.removeFromConference(

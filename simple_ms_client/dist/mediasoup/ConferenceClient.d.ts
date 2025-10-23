@@ -178,37 +178,6 @@ export declare class ConferenceClient extends EventTarget {
      * Enable local media (audio/video) - stateless version
      */
     enableMedia(audio?: boolean, video?: boolean): Promise<MediaStream | undefined>;
-    /**
-     * SIMPLIFIED: Consume media from a specific participant
-     * Just send participant ID → Get consumer parameters → Create tracks on demand
-     *
-     * @param participantId - The participant whose media you want to consume
-     * @returns Consumer parameters that can be used to create tracks
-     *
-     * @example
-     * ```typescript
-     * // Simple workflow - just get consumer params and create tracks
-     * const consumerParams = await conferenceClient.consumeParticipantMedia('participant-123');
-     *
-     * // Create tracks from consumer parameters
-     * for (const params of consumerParams) {
-     *   const consumer = await consumerTransport.consume(params);
-     *   const { track } = consumer;
-     *
-     *   // Listen for track events
-     *   track.addEventListener("ended", () => console.log("Track ended"));
-     *   track.onmute = () => console.log("Track muted");
-     *   track.onunmute = () => console.log("Track unmuted");
-     *
-     *   // Add to video element
-     *   const remoteVideo = document.getElementById(`video-${participantId}`);
-     *   remoteVideo.srcObject = new MediaStream([track]);
-     *
-     *   // Unpause the consumer
-     *   await conferenceClient.unpauseConsumer(consumer.id);
-     * }
-     * ```
-     */
     consumeParticipantMedia(participantId: string): Promise<any[]>;
     /**
      * Unpause a consumer after creating it

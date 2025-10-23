@@ -515,7 +515,6 @@ export class ConferenceClient extends EventTarget {
       }
 
       const consumer = await this.recvTransport.consume(consumerData);
-      await this.unpauseConsumer(consumer.id);
 
       // Store consumer for later reference
       this.consumers.set(consumer.id, consumer);
@@ -531,7 +530,7 @@ export class ConferenceClient extends EventTarget {
         "Unknown Participant";
 
       this.logger(
-        `Consumer created and resumed: ${consumer.id} for producer ${producerId} from participant ${participantId}`
+        `Consumer created: ${consumer.id} for producer ${producerId} from participant ${participantId}`
       );
 
       // Create or get existing stream for this participant
@@ -549,6 +548,7 @@ export class ConferenceClient extends EventTarget {
       this.logger(
         `Added ${consumer.track} ${consumer.kind} track to stream for participant: ${participantId}`
       );
+
       // Listen for various track events
       consumer.track.addEventListener("ended", () => {
         this.logger(
@@ -567,6 +567,16 @@ export class ConferenceClient extends EventTarget {
           `Track unmuted for consumer ${consumer.id} from participant ${participantId}`
         );
       };
+
+      // Unpause consumer after setting up all event handlers and stream
+      await this.unpauseConsumer(consumer.id);
+
+      this.logger(
+        `Consumer resumed: ${consumer.id} for producer ${producerId} from participant ${participantId}`
+      );
+
+      // Wait a brief moment for the track to be fully ready
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Emit remote stream event
       this.emit("remoteStreamAdded", {
