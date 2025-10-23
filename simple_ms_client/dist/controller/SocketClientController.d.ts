@@ -42,6 +42,16 @@ export declare class SocketClientController extends EventTarget {
     }): Promise<void>;
     consumeMedia(producerId: string, rtpCapabilities: RtpCapabilities): Promise<any>;
     getProducers(): Promise<string[] | undefined>;
+    /**
+     * SIMPLIFIED: Consume media by participant ID
+     * Send participant ID + RTP capabilities → Get consumer parameters
+     * Client can then create tracks directly with the consumer parameters
+     */
+    consumeParticipantMedia(targetParticipantId: string, rtpCapabilities: any): Promise<any[] | undefined>;
+    /**
+     * Unpause consumer
+     */
+    unpauseConsumer(consumerId: string): Promise<void>;
     resumeProducer(producerId: string): Promise<void>;
     pauseProducer(producerId: string): Promise<void>;
     pauseConsumer(consumerId: string): Promise<void>;
@@ -55,5 +65,6 @@ export declare class SocketClientController extends EventTarget {
     getMediaStates(): Promise<any>;
     leaveConference(): Promise<void>;
     getParticipants(): Promise<any>;
+    getProducersWithParticipantId(participantId: string): Promise<any>;
     setupEventListeners(): void;
 }

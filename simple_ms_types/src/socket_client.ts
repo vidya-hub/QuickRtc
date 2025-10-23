@@ -44,4 +44,13 @@ export interface ClientToServerEvents {
   unmuteVideo: (data: any, callback: (response: any) => void) => void;
   getMediaStates: (data: any, callback: (response: any) => void) => void;
   getParticipants: (data: any, callback: (response: any) => void) => void;
+  consumeParticipantMedia: (
+    data: any,
+    callback: (response: any) => void
+  ) => void;
+  unpauseConsumer: (data: any, callback: (response: any) => void) => void;
+  getProducersWithParticipantId: (
+    data: any,
+    callback: (response: any) => void
+  ) => void;
 }

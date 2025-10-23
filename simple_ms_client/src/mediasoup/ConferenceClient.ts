@@ -37,6 +37,11 @@ export interface ConferenceClientEvents {
     consumerId: string;
     producerId: string;
   };
+  participantStreamsReady: {
+    participantId: string;
+    participantName: string;
+    streams: RemoteStreamData[];
+  };
 
   // Producer/Consumer events
   producerCreated: {
@@ -95,31 +100,40 @@ export interface ParticipantInfo {
   participantId: string;
   participantName: string;
   isLocal: boolean;
-  producers: Map<string, Producer>;
-  consumers: Map<string, Consumer>;
   audioMuted: boolean;
   videoMuted: boolean;
 }
 
-export interface MediaState {
-  audioProducerId?: string;
-  videoProducerId?: string;
-  audioMuted: boolean;
-  videoMuted: boolean;
-  producers: Map<string, Producer>;
-  consumers: Map<string, Consumer>;
+export interface ParticipantTrackInfo {
+  participantId: string;
+  participantName: string;
+  tracks: {
+    producerId: string;
+    kind: MediaKind;
+    enabled: boolean;
+  }[];
+}
+
+export interface RemoteStreamData {
+  participantId: string;
+  participantName: string;
+  stream: MediaStream;
+  tracks: {
+    producerId: string;
+    consumerId: string;
+    kind: MediaKind;
+    track: MediaStreamTrack;
+  }[];
 }
 
 /**
- * ConferenceClient - Comprehensive MediaSoup client with full event orchestration
+ * ConferenceClient - Stateless MediaSoup client with server-side state management
  *
- * This is the main client that handles all MediaSoup operations:
- * - Device management
- * - Transport creation and management
- * - Producer/Consumer lifecycle
- * - Media stream handling
- * - Participant management
- * - Complete event system with proper logging
+ * This is a lightweight client that:
+ * - Only holds current participant info
+ * - Emits all operations to server
+ * - Creates tracks on-demand when user wants to consume
+ * - Handles all calls efficiently without local state storage
  */
 export class ConferenceClient extends EventTarget {
   private config: ConferenceClientConfig;
@@ -127,12 +141,15 @@ export class ConferenceClient extends EventTarget {
   private device: Device;
   private sendTransport?: Transport;
   private recvTransport?: Transport;
-  private mediaState: MediaState;
-  private participants: Map<string, ParticipantInfo>;
-  private localStream?: MediaStream;
-  private remoteStreams: Map<string, MediaStream>;
+
+  // Only store current participant info
+  private currentParticipant: ParticipantInfo;
   private isJoined = false;
   private logger: (message: string, level?: "info" | "warn" | "error") => void;
+
+  // Map to track remote streams by participant
+  private remoteStreams = new Map<string, MediaStream>();
+  private consumers = new Map<string, Consumer>();
 
   constructor(config: ConferenceClientConfig) {
     super();
@@ -155,16 +172,14 @@ export class ConferenceClient extends EventTarget {
     // Initialize device
     this.device = new Device();
 
-    // Initialize state
-    this.mediaState = {
+    // Only store current participant info
+    this.currentParticipant = {
+      participantId: config.participantId,
+      participantName: config.participantName,
+      isLocal: true,
       audioMuted: false,
       videoMuted: false,
-      producers: new Map(),
-      consumers: new Map(),
     };
-
-    this.participants = new Map();
-    this.remoteStreams = new Map();
 
     // Initialize socket controller
     this.socketController = new SocketClientController(config.socket, {
@@ -177,19 +192,19 @@ export class ConferenceClient extends EventTarget {
     });
 
     this.setupSocketEventListeners();
-    this.logger("ConferenceClient initialized");
+    this.logger("ConferenceClient initialized (stateless mode)");
   }
 
   /**
-   * Setup all socket event listeners with proper logging
+   * Setup all socket event listeners - stateless event forwarding
    */
   private setupSocketEventListeners(): void {
-    this.logger("Setting up socket event listeners");
+    this.logger("Setting up socket event listeners (stateless mode)");
 
     // Setup socket controller event listeners first
     this.socketController.setupEventListeners();
 
-    // Participant events
+    // Participant events - just forward to application
     this.socketController.addEventListener(
       "participantJoined",
       (event: any) => {
@@ -197,23 +212,29 @@ export class ConferenceClient extends EventTarget {
         this.logger(
           `Participant joined: ${participantName} (${participantId})`
         );
-        this.handleParticipantJoined(participantId, participantName);
+        this.emit("participantJoined", { participantId, participantName });
       }
     );
 
     this.socketController.addEventListener("participantLeft", (event: any) => {
       const { participantId, participantName } = event.detail;
       this.logger(`Participant left: ${participantName} (${participantId})`);
-      this.handleParticipantLeft(participantId, participantName);
+      this.emit("participantLeft", { participantId, participantName });
     });
 
-    // Producer events
+    // Producer events - handle new producer by creating consumer on demand
     this.socketController.addEventListener("newProducer", (event: any) => {
-      const { producerId, participantId, kind } = event.detail;
+      const { producerId, participantId, kind, participantName } = event.detail;
       this.logger(
         `New producer available: ${producerId} (${kind}) from ${participantId}`
       );
-      this.handleNewProducer(producerId, participantId, kind);
+      this.emit("producerCreated", { producerId, kind, participantId });
+
+      // Auto-consume new producers immediately with participant info
+      this.createConsumerOnDemand(producerId, {
+        participantId,
+        participantName,
+      });
     });
 
     this.socketController.addEventListener("producerClosed", (event: any) => {
@@ -221,41 +242,74 @@ export class ConferenceClient extends EventTarget {
       this.logger(
         `Producer closed: ${producerId} (${kind}) from ${participantId}`
       );
-      this.handleProducerClosed(producerId, participantId, kind);
+      this.emit("producerClosed", { producerId, kind, participantId });
     });
 
-    // Consumer events
+    // Consumer events - forward to application
     this.socketController.addEventListener("consumerClosed", (event: any) => {
       const { consumerId, producerId, participantId } = event.detail;
       this.logger(
         `Consumer closed: ${consumerId} for producer ${producerId} from ${participantId}`
       );
-      this.handleConsumerClosed(consumerId, producerId, participantId);
+      this.emit("consumerClosed", { consumerId, producerId, participantId });
+      this.emit("remoteStreamRemoved", {
+        participantId,
+        consumerId,
+        producerId,
+      });
     });
 
-    // Media state events
+    // Media state events - update current participant and forward
     this.socketController.addEventListener("audioMuted", (event: any) => {
       const { participantId } = event.detail;
       this.logger(`Audio muted by participant: ${participantId}`);
-      this.handleAudioMuted(participantId, false);
+
+      // Update current participant state if it's local
+      if (participantId === this.currentParticipant.participantId) {
+        this.currentParticipant.audioMuted = true;
+        this.emit("audioMuted", { participantId, isLocal: true });
+      } else {
+        this.emit("audioMuted", { participantId, isLocal: false });
+      }
     });
 
     this.socketController.addEventListener("audioUnmuted", (event: any) => {
       const { participantId } = event.detail;
       this.logger(`Audio unmuted by participant: ${participantId}`);
-      this.handleAudioUnmuted(participantId, false);
+
+      // Update current participant state if it's local
+      if (participantId === this.currentParticipant.participantId) {
+        this.currentParticipant.audioMuted = false;
+        this.emit("audioUnmuted", { participantId, isLocal: true });
+      } else {
+        this.emit("audioUnmuted", { participantId, isLocal: false });
+      }
     });
 
     this.socketController.addEventListener("videoMuted", (event: any) => {
       const { participantId } = event.detail;
       this.logger(`Video muted by participant: ${participantId}`);
-      this.handleVideoMuted(participantId, false);
+
+      // Update current participant state if it's local
+      if (participantId === this.currentParticipant.participantId) {
+        this.currentParticipant.videoMuted = true;
+        this.emit("videoMuted", { participantId, isLocal: true });
+      } else {
+        this.emit("videoMuted", { participantId, isLocal: false });
+      }
     });
 
     this.socketController.addEventListener("videoUnmuted", (event: any) => {
       const { participantId } = event.detail;
       this.logger(`Video unmuted by participant: ${participantId}`);
-      this.handleVideoUnmuted(participantId, false);
+
+      // Update current participant state if it's local
+      if (participantId === this.currentParticipant.participantId) {
+        this.currentParticipant.videoMuted = false;
+        this.emit("videoUnmuted", { participantId, isLocal: true });
+      } else {
+        this.emit("videoUnmuted", { participantId, isLocal: false });
+      }
     });
 
     // Error events
@@ -269,7 +323,7 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Join the conference
+   * Join the conference - stateless setup
    */
   public async joinConference(): Promise<void> {
     if (this.isJoined) {
@@ -325,19 +379,8 @@ export class ConferenceClient extends EventTarget {
       // Setup transport event listeners
       this.setupTransportListeners();
 
-      // Add local participant
-      this.participants.set(this.config.participantId, {
-        participantId: this.config.participantId,
-        participantName: this.config.participantName,
-        isLocal: true,
-        producers: new Map(),
-        consumers: new Map(),
-        audioMuted: false,
-        videoMuted: false,
-      });
-
       this.isJoined = true;
-      this.logger("Successfully joined conference");
+      this.logger("Successfully joined conference (stateless mode)");
 
       this.emit("joined", {
         participantId: this.config.participantId,
@@ -359,22 +402,26 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Setup transport event listeners
+   * Setup transport event listeners - stateless
    */
   private setupTransportListeners(): void {
     if (!this.sendTransport || !this.recvTransport) {
       throw new Error("Transports not initialized");
     }
 
-    this.logger("Setting up transport listeners");
+    this.logger("Setting up transport listeners (stateless mode)");
 
     // Setup send transport listeners
     this.socketController.addSendTransportListener({
       sendTransport: this.sendTransport,
       onProduce: (params) => {
         this.logger(`Producer created: ${params.producerId} (${params.kind})`);
-        // The producer object should already be in mediaState.producers from enableMedia()
-        this.handleProducerCreatedCallback(params);
+        // Just emit the event, don't store anything
+        this.emit("producerCreated", {
+          producerId: params.producerId,
+          kind: params.kind,
+          participantId: this.config.participantId,
+        });
       },
     });
 
@@ -382,9 +429,23 @@ export class ConferenceClient extends EventTarget {
     this.socketController.addConsumeTransportListener({
       recvTransport: this.recvTransport,
       onConsume: (params) => {
-        this.logger(`onConsume param: ${params}`);
-        this.logger(`Consumer params: ${JSON.stringify(params, null, 2)}`);
-        this.handleConsumerCreated(params);
+        this.logger(
+          `Consumer created: ${params.id} for producer ${params.producerId}`
+        );
+
+        // Note: params here is from the transport listener, which should have track
+        // The actual consumer creation with track will be handled in createConsumerOnDemand
+        const participantId =
+          (params.appData?.participantId as string) || "unknown";
+
+        this.emit("consumerCreated", {
+          consumerId: params.id,
+          producerId: params.producerId,
+          kind: params.kind,
+          participantId: participantId,
+        });
+
+        // Stream will be created when consumer is actually consumed with track
       },
     });
 
@@ -430,7 +491,141 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Enable local media (audio/video)
+   * Create consumer on demand when new producer is available
+   */
+  private async createConsumerOnDemand(
+    producerId: string,
+    participantInfo?: { participantId: string; participantName: string }
+  ): Promise<Consumer | undefined> {
+    if (!this.recvTransport) {
+      this.logger("Receive transport not available", "warn");
+      return;
+    }
+
+    try {
+      this.logger(`Creating consumer on demand for producer: ${producerId}`);
+
+      const consumerData = await this.socketController.consumeMedia(
+        producerId,
+        this.device.rtpCapabilities
+      );
+
+      if (!consumerData) {
+        throw new Error("Failed to get consumer data from server");
+      }
+
+      const consumer = await this.recvTransport.consume(consumerData);
+      await this.unpauseConsumer(consumer.id);
+
+      // Store consumer for later reference
+      this.consumers.set(consumer.id, consumer);
+
+      // Get participant info from appData or provided parameter
+      const participantId =
+        participantInfo?.participantId ||
+        (consumerData.appData?.participantId as string) ||
+        "unknown";
+      const participantName =
+        participantInfo?.participantName ||
+        (consumerData.appData?.participantName as string) ||
+        "Unknown Participant";
+
+      this.logger(
+        `Consumer created and resumed: ${consumer.id} for producer ${producerId} from participant ${participantId}`
+      );
+
+      // Create or get existing stream for this participant
+      let stream = this.remoteStreams.get(participantId);
+      if (!stream) {
+        stream = new MediaStream();
+        this.remoteStreams.set(participantId, stream);
+        this.logger(
+          `Created new remote stream for participant: ${participantId}`
+        );
+      }
+
+      // Add track to stream
+      stream.addTrack(consumer.track);
+      this.logger(
+        `Added ${consumer.track} ${consumer.kind} track to stream for participant: ${participantId}`
+      );
+      // Listen for various track events
+      consumer.track.addEventListener("ended", () => {
+        this.logger(
+          `Track ended for consumer ${consumer.id} from participant ${participantId}`
+        );
+      });
+
+      consumer.track.onmute = () => {
+        this.logger(
+          `Track muted for consumer ${consumer.id} from participant ${participantId}`
+        );
+      };
+
+      consumer.track.onunmute = () => {
+        this.logger(
+          `Track unmuted for consumer ${consumer.id} from participant ${participantId}`
+        );
+      };
+
+      // Emit remote stream event
+      this.emit("remoteStreamAdded", {
+        stream: stream,
+        participantId: participantId,
+        consumerId: consumer.id,
+        producerId: producerId,
+        kind: consumer.kind,
+      });
+
+      // Check if we should emit participant streams ready event
+      this.checkAndEmitParticipantStreamsReady(participantId, participantName);
+
+      // Handle consumer close
+      consumer.on("@close", () => {
+        this.logger(
+          `Consumer closed: ${consumer.id} for producer ${producerId}`
+        );
+
+        // Remove track from stream
+        const track = consumer.track;
+        if (track && stream && stream.getTracks().includes(track)) {
+          stream.removeTrack(track);
+          this.logger(
+            `Removed ${consumer.kind} track from stream for participant: ${participantId}`
+          );
+        }
+
+        // Clean up consumer reference
+        this.consumers.delete(consumer.id);
+
+        // If stream has no more tracks, remove it
+        if (stream && stream.getTracks().length === 0) {
+          this.remoteStreams.delete(participantId);
+          this.logger(`Removed empty stream for participant: ${participantId}`);
+        }
+
+        // Emit stream removed event
+        this.emit("remoteStreamRemoved", {
+          participantId: participantId,
+          consumerId: consumer.id,
+          producerId: producerId,
+        });
+      });
+
+      return consumer;
+    } catch (error) {
+      this.logger(
+        `Failed to create consumer on demand for producer ${producerId}: ${
+          error instanceof Error ? error.message : error
+        }`,
+        "error"
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Enable local media (audio/video) - stateless version
    */
   public async enableMedia(
     audio = true,
@@ -455,12 +650,11 @@ export class ConferenceClient extends EventTarget {
             : false,
       });
 
-      this.localStream = stream;
       this.logger(
         `Got local media stream with ${stream.getTracks().length} tracks`
       );
 
-      // Produce audio if enabled
+      // Produce audio if enabled - don't store producer locally
       if (audio && stream.getAudioTracks().length > 0) {
         const audioTrack = stream.getAudioTracks()[0];
         const audioProducer = await this.sendTransport.produce({
@@ -471,22 +665,11 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
-        // Store producer in media state
-        this.mediaState.producers.set(audioProducer.id, audioProducer);
-        this.mediaState.audioProducerId = audioProducer.id;
-
-        // Store producer in local participant
-        const localParticipant = this.participants.get(
-          this.config.participantId
-        );
-        if (localParticipant) {
-          localParticipant.producers.set(audioProducer.id, audioProducer);
-        }
-
         this.logger(`Audio producer created: ${audioProducer.id}`);
+        // Producer creation event will be emitted by transport listener
       }
 
-      // Produce video if enabled
+      // Produce video if enabled - don't store producer locally
       if (video && stream.getVideoTracks().length > 0) {
         const videoTrack = stream.getVideoTracks()[0];
         const videoProducer = await this.sendTransport.produce({
@@ -496,27 +679,17 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
-        // Store producer in media state
-        this.mediaState.producers.set(videoProducer.id, videoProducer);
-        this.mediaState.videoProducerId = videoProducer.id;
-
-        // Store producer in local participant
-        const localParticipant = this.participants.get(
-          this.config.participantId
-        );
-        if (localParticipant) {
-          localParticipant.producers.set(videoProducer.id, videoProducer);
-        }
-
         this.logger(`Video producer created: ${videoProducer.id}`);
+        // Producer creation event will be emitted by transport listener
       }
 
+      // Emit local stream ready
       this.emit("localStreamReady", {
-        stream: this.localStream,
+        stream: stream,
         participantId: this.config.participantId,
       });
 
-      return this.localStream;
+      return stream;
     } catch (error) {
       this.logger(
         `Failed to enable media: ${
@@ -533,167 +706,85 @@ export class ConferenceClient extends EventTarget {
     }
   }
 
-  /**
-   * Consume existing producers (for participants already in the conference)
-   */
-  public async consumeExistingProducers(): Promise<void> {
-    try {
-      this.logger("Consuming existing producers...");
-
-      const existingProducerIds = await this.socketController.getProducers();
-      if (!existingProducerIds || existingProducerIds.length === 0) {
-        this.logger("No existing producers to consume");
-        return;
-      }
-
-      this.logger(`Found ${existingProducerIds.length} existing producers`);
-
-      // Filter out producers we're already consuming
-      const unconsumedProducers = existingProducerIds.filter((producerId) => {
-        const alreadyConsuming = Array.from(
-          this.mediaState.consumers.values()
-        ).some((c) => c.producerId === producerId);
-        if (alreadyConsuming) {
-          this.logger(`Already consuming producer ${producerId}, skipping`);
-        }
-        return !alreadyConsuming;
-      });
-
-      this.logger(`${unconsumedProducers.length} new producers to consume`);
-
-      for (const producerId of unconsumedProducers) {
-        try {
-          await this.consumeProducer(producerId);
-        } catch (error) {
-          this.logger(
-            `Failed to consume individual producer ${producerId}: ${
-              error instanceof Error ? error.message : error
-            }`,
-            "error"
-          );
-          // Continue with other producers instead of failing completely
-        }
-      }
-
-      this.logger(
-        `Finished consuming existing producers. Total consumers: ${this.mediaState.consumers.size}`
-      );
-    } catch (error) {
-      this.logger(
-        `Failed to consume existing producers: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      this.emit("error", {
-        error:
-          error instanceof Error
-            ? error
-            : new Error("Failed to consume existing producers"),
-        context: "consume-existing",
-      });
-    }
-  }
-
-  /**
-   * Consume a specific producer
-   */
-  public async consumeProducer(producerId: string): Promise<void> {
+  public async consumeParticipantMedia(participantId: string): Promise<any[]> {
     if (!this.recvTransport) {
       throw new Error("Receive transport not available");
     }
 
     try {
-      this.logger(`Consuming producer: ${producerId}`);
+      this.logger(`Consuming media from participant: ${participantId}`);
 
-      // Check if we already have a consumer for this producer
-      const existingConsumer = Array.from(
-        this.mediaState.consumers.values()
-      ).find((c) => c.producerId === producerId);
-
-      if (existingConsumer) {
-        this.logger(
-          `Consumer already exists for producer ${producerId}, skipping`,
-          "warn"
+      const consumerParams =
+        await this.socketController.consumeParticipantMedia(
+          participantId,
+          this.device.rtpCapabilities
         );
-        return;
+
+      if (!consumerParams || consumerParams.length === 0) {
+        this.logger(`No media available from participant: ${participantId}`);
+        return [];
       }
-
-      const consumerData = await this.socketController.consumeMedia(
-        producerId,
-        this.device.rtpCapabilities
-      );
-
-      if (!consumerData) {
-        throw new Error("Failed to get consumer data from server");
-      }
-
-      const consumer = await this.recvTransport.consume(consumerData);
-
-      // Store consumer in media state
-      this.mediaState.consumers.set(consumer.id, consumer);
-
-      // Resume consumer
-      await consumer.resume();
 
       this.logger(
-        `Consumer created and resumed: ${consumer.id} for producer ${producerId}`
+        `Got ${consumerParams.length} consumer params from participant: ${participantId}`
       );
-
-      // Note: consumerCreated and remoteStreamAdded events are emitted by handleConsumerCreated
-      // which is called from the transport listener during consumer creation
+      return consumerParams;
     } catch (error) {
       this.logger(
-        `Failed to consume producer ${producerId}: ${
+        `Failed to consume media from participant ${participantId}: ${
           error instanceof Error ? error.message : error
         }`,
         "error"
       );
-      this.emit("error", {
-        error:
-          error instanceof Error
-            ? error
-            : new Error(`Failed to consume producer ${producerId}`),
-        context: "consume-producer",
-      });
+      throw error;
     }
   }
 
   /**
-   * Mute/unmute local audio
+   * Unpause a consumer after creating it
+   */
+  public async unpauseConsumer(consumerId: string): Promise<void> {
+    try {
+      await this.socketController.unpauseConsumer(consumerId);
+      this.logger(`Consumer unpaused: ${consumerId}`);
+    } catch (error) {
+      this.logger(
+        `Failed to unpause consumer ${consumerId}: ${error}`,
+        "error"
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Consume a specific producer - stateless version (delegates to createConsumerOnDemand)
+   */
+  public async consumeProducer(
+    producerId: string,
+    participantInfo?: { participantId: string; participantName: string }
+  ): Promise<Consumer | undefined> {
+    return await this.createConsumerOnDemand(producerId, participantInfo);
+  }
+
+  /**
+   * Mute/unmute local audio - stateless version (delegates to server)
    */
   public async toggleAudio(mute?: boolean): Promise<boolean> {
-    if (!this.mediaState.audioProducerId) {
-      this.logger("No audio producer to toggle", "warn");
-      return false;
-    }
-
-    const producer = this.mediaState.producers.get(
-      this.mediaState.audioProducerId
-    );
-    if (!producer) {
-      this.logger("Audio producer not found", "warn");
-      return false;
-    }
-
-    const shouldMute = mute !== undefined ? mute : !this.mediaState.audioMuted;
+    const shouldMute =
+      mute !== undefined ? mute : !this.currentParticipant.audioMuted;
 
     try {
-      if (shouldMute && !this.mediaState.audioMuted) {
-        producer.pause();
+      if (shouldMute && !this.currentParticipant.audioMuted) {
         await this.socketController.muteAudio();
-        this.mediaState.audioMuted = true;
+        this.currentParticipant.audioMuted = true;
         this.logger("Audio muted");
-        this.handleAudioMuted(this.config.participantId, true);
-      } else if (!shouldMute && this.mediaState.audioMuted) {
-        producer.resume();
+      } else if (!shouldMute && this.currentParticipant.audioMuted) {
         await this.socketController.unmuteAudio();
-        this.mediaState.audioMuted = false;
+        this.currentParticipant.audioMuted = false;
         this.logger("Audio unmuted");
-        this.handleAudioUnmuted(this.config.participantId, true);
       }
 
-      return this.mediaState.audioMuted;
+      return this.currentParticipant.audioMuted;
     } catch (error) {
       this.logger(
         `Failed to toggle audio: ${
@@ -706,40 +797,24 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Mute/unmute local video
+   * Mute/unmute local video - stateless version (delegates to server)
    */
   public async toggleVideo(mute?: boolean): Promise<boolean> {
-    if (!this.mediaState.videoProducerId) {
-      this.logger("No video producer to toggle", "warn");
-      return false;
-    }
-
-    const producer = this.mediaState.producers.get(
-      this.mediaState.videoProducerId
-    );
-    if (!producer) {
-      this.logger("Video producer not found", "warn");
-      return false;
-    }
-
-    const shouldMute = mute !== undefined ? mute : !this.mediaState.videoMuted;
+    const shouldMute =
+      mute !== undefined ? mute : !this.currentParticipant.videoMuted;
 
     try {
-      if (shouldMute && !this.mediaState.videoMuted) {
-        producer.pause();
+      if (shouldMute && !this.currentParticipant.videoMuted) {
         await this.socketController.muteVideo();
-        this.mediaState.videoMuted = true;
+        this.currentParticipant.videoMuted = true;
         this.logger("Video muted");
-        this.handleVideoMuted(this.config.participantId, true);
-      } else if (!shouldMute && this.mediaState.videoMuted) {
-        producer.resume();
+      } else if (!shouldMute && this.currentParticipant.videoMuted) {
         await this.socketController.unmuteVideo();
-        this.mediaState.videoMuted = false;
+        this.currentParticipant.videoMuted = false;
         this.logger("Video unmuted");
-        this.handleVideoUnmuted(this.config.participantId, true);
       }
 
-      return this.mediaState.videoMuted;
+      return this.currentParticipant.videoMuted;
     } catch (error) {
       this.logger(
         `Failed to toggle video: ${
@@ -752,7 +827,7 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Leave the conference
+   * Leave the conference - stateless version
    */
   public async leaveConference(): Promise<void> {
     if (!this.isJoined) {
@@ -761,53 +836,34 @@ export class ConferenceClient extends EventTarget {
     }
 
     try {
-      this.logger("Leaving conference...");
-
-      // Close all producers
-      for (const producer of this.mediaState.producers.values()) {
-        producer.close();
-      }
+      this.logger("Leaving conference (stateless mode)...");
 
       // Close all consumers
-      for (const consumer of this.mediaState.consumers.values()) {
+      for (const consumer of this.consumers.values()) {
         consumer.close();
       }
+      this.consumers.clear();
 
-      // Close transports
+      // Clear remote streams
+      this.remoteStreams.clear();
+
+      // Close transports (mediasoup client objects)
       this.sendTransport?.close();
       this.recvTransport?.close();
 
-      // Stop local media
-      if (this.localStream) {
-        this.localStream.getTracks().forEach((track) => track.stop());
-      }
-
-      // Leave conference on server
+      // Leave conference on server (server will handle all cleanup)
       await this.socketController.leaveConference();
 
-      // Clear all state thoroughly
-      this.mediaState.producers.clear();
-      this.mediaState.consumers.clear();
-      this.mediaState.audioProducerId = undefined;
-      this.mediaState.videoProducerId = undefined;
-      this.mediaState.audioMuted = false;
-      this.mediaState.videoMuted = false;
-
-      // Clear participants and their producer/consumer maps
-      for (const participant of this.participants.values()) {
-        participant.producers.clear();
-        participant.consumers.clear();
-      }
-      this.participants.clear();
-
-      this.remoteStreams.clear();
-
-      this.localStream = undefined;
+      // Reset only minimal local state
       this.sendTransport = undefined;
       this.recvTransport = undefined;
       this.isJoined = false;
 
-      this.logger("Successfully left conference - all state cleared");
+      // Reset current participant state
+      this.currentParticipant.audioMuted = false;
+      this.currentParticipant.videoMuted = false;
+
+      this.logger("Successfully left conference (stateless mode)");
       this.emit("left", {});
     } catch (error) {
       this.logger(
@@ -826,292 +882,8 @@ export class ConferenceClient extends EventTarget {
     }
   }
 
-  // Event handlers
-  private handleProducerCreatedCallback(params: {
-    kind: "audio" | "video";
-    rtpParameters: any;
-    appData: any;
-    producerId: string;
-  }): void {
-    this.logger(`Producer callback: ${params.producerId} (${params.kind})`);
-
-    // Verify the producer exists in our state
-    const producer = this.mediaState.producers.get(params.producerId);
-    if (!producer) {
-      this.logger(
-        `Producer ${params.producerId} not found in local state`,
-        "warn"
-      );
-      return;
-    }
-
-    // Update producer ID mappings if needed
-    if (params.kind === "audio" && !this.mediaState.audioProducerId) {
-      this.mediaState.audioProducerId = params.producerId;
-    } else if (params.kind === "video" && !this.mediaState.videoProducerId) {
-      this.mediaState.videoProducerId = params.producerId;
-    }
-
-    this.emit("producerCreated", {
-      producerId: params.producerId,
-      kind: params.kind,
-      participantId: this.config.participantId,
-    });
-  }
-
-  private handleParticipantJoined(
-    participantId: string,
-    participantName: string
-  ): void {
-    // Avoid adding duplicate participants
-    if (this.participants.has(participantId)) {
-      this.logger(
-        `Participant ${participantId} already exists, skipping`,
-        "warn"
-      );
-      return;
-    }
-
-    this.participants.set(participantId, {
-      participantId: participantId,
-      participantName: participantName,
-      isLocal: false,
-      producers: new Map(),
-      consumers: new Map(),
-      audioMuted: false,
-      videoMuted: false,
-    });
-
-    this.emit("participantJoined", { participantId, participantName });
-  }
-
-  private handleParticipantLeft(
-    participantId: string,
-    participantName: string
-  ): void {
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      // Clean up all consumers for this participant
-      for (const [consumerId, consumer] of participant.consumers.entries()) {
-        consumer.close();
-        this.mediaState.consumers.delete(consumerId);
-        this.remoteStreams.delete(consumerId);
-        this.logger(
-          `Cleaned up consumer ${consumerId} for leaving participant ${participantId}`
-        );
-      }
-
-      // Clean up all producers for this participant (shouldn't happen for remote participants, but just in case)
-      for (const [producerId, producer] of participant.producers.entries()) {
-        // Note: We don't close remote producers, just remove them from our tracking
-        this.logger(
-          `Removed producer ${producerId} tracking for leaving participant ${participantId}`
-        );
-      }
-
-      this.participants.delete(participantId);
-      this.logger(`Participant ${participantId} fully cleaned up`);
-    }
-
-    this.emit("participantLeft", { participantId, participantName });
-  }
-
-  private async handleNewProducer(
-    producerId: string,
-    participantId: string,
-    kind: MediaKind
-  ): Promise<void> {
-    // Auto-consume new producers
-    console.log("consuming new producers ", producerId, "kind ", kind);
-
-    await this.consumeProducer(producerId);
-  }
-
-  private handleProducerClosed(
-    producerId: string,
-    participantId: string,
-    kind: MediaKind
-  ): void {
-    // Remove producer from participant's producer map
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.producers.delete(producerId);
-      this.logger(
-        `Producer ${producerId} removed from participant ${participantId}`
-      );
-    }
-
-    // Remove producer from local media state if it's our producer
-    if (participantId === this.config.participantId) {
-      this.mediaState.producers.delete(producerId);
-      if (this.mediaState.audioProducerId === producerId) {
-        this.mediaState.audioProducerId = undefined;
-      }
-      if (this.mediaState.videoProducerId === producerId) {
-        this.mediaState.videoProducerId = undefined;
-      }
-    }
-
-    // Find and close related consumers
-    const consumersToClose: string[] = [];
-    for (const [consumerId, consumer] of this.mediaState.consumers.entries()) {
-      if (consumer.producerId === producerId) {
-        consumersToClose.push(consumerId);
-      }
-    }
-
-    consumersToClose.forEach((consumerId) => {
-      const consumer = this.mediaState.consumers.get(consumerId);
-      if (consumer) {
-        consumer.close();
-        this.mediaState.consumers.delete(consumerId);
-        this.remoteStreams.delete(consumerId);
-
-        // Remove from participant's consumer map
-        if (participant) {
-          participant.consumers.delete(consumerId);
-        }
-
-        this.emit("remoteStreamRemoved", {
-          participantId,
-          consumerId,
-          producerId,
-        });
-      }
-    });
-
-    this.emit("producerClosed", { producerId, kind, participantId });
-  }
-
-  private handleConsumerClosed(
-    consumerId: string,
-    producerId: string,
-    participantId: string
-  ): void {
-    const consumer = this.mediaState.consumers.get(consumerId);
-    if (consumer) {
-      consumer.close();
-      this.mediaState.consumers.delete(consumerId);
-      this.remoteStreams.delete(consumerId);
-
-      // Remove from participant's consumer map
-      const participant = this.participants.get(participantId);
-      if (participant) {
-        participant.consumers.delete(consumerId);
-        this.logger(
-          `Consumer ${consumerId} removed from participant ${participantId}`
-        );
-      }
-
-      this.emit("remoteStreamRemoved", {
-        participantId,
-        consumerId,
-        producerId,
-      });
-    }
-
-    this.emit("consumerClosed", { consumerId, producerId, participantId });
-  }
-
-  private handleConsumerCreated(params: any): void {
-    this.logger(
-      `Handling consumer created: ${params.id} for producer ${params.producerId}`
-    );
-
-    // Check if we already have this consumer
-    if (this.remoteStreams.has(params.id)) {
-      this.logger(
-        `Consumer stream ${params.id} already exists, skipping`,
-        "warn"
-      );
-      return;
-    }
-
-    // Get the actual consumer object from the media state
-    const consumer = this.mediaState.consumers.get(params.id);
-    if (!consumer) {
-      this.logger(`Consumer ${params.id} not found in media state`, "error");
-      return;
-    }
-
-    // Create media stream
-    const stream = new MediaStream([params.track]);
-    this.remoteStreams.set(params.id, stream);
-
-    // Get participant ID from appData - check multiple possible fields
-    const participantId =
-      (params.appData?.participantId as string) ||
-      (params.appData?.producerUserId as string) ||
-      (params.producerUserId as string) ||
-      "unknown";
-
-    // Store consumer in the appropriate participant
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.consumers.set(params.id, consumer);
-      this.logger(
-        `Consumer ${params.id} stored for participant ${participantId}`
-      );
-    } else {
-      this.logger(
-        `Participant ${participantId} not found, consumer ${params.id} stored in media state only`,
-        "warn"
-      );
-    }
-
-    this.logger(
-      `Consumer stream ready: ${params.id} from participant ${participantId}`
-    );
-
-    // Emit consumerCreated event
-    this.emit("consumerCreated", {
-      consumerId: params.id,
-      producerId: params.producerId,
-      kind: params.kind,
-      participantId: participantId,
-    });
-
-    // Emit remoteStreamAdded event
-    this.emit("remoteStreamAdded", {
-      stream: stream,
-      participantId: participantId,
-      consumerId: params.id,
-      producerId: params.producerId,
-      kind: params.kind,
-    });
-  }
-
-  private handleAudioMuted(participantId: string, isLocal: boolean): void {
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.audioMuted = true;
-    }
-    this.emit("audioMuted", { participantId, isLocal });
-  }
-
-  private handleAudioUnmuted(participantId: string, isLocal: boolean): void {
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.audioMuted = false;
-    }
-    this.emit("audioUnmuted", { participantId, isLocal });
-  }
-
-  private handleVideoMuted(participantId: string, isLocal: boolean): void {
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.videoMuted = true;
-    }
-    this.emit("videoMuted", { participantId, isLocal });
-  }
-
-  private handleVideoUnmuted(participantId: string, isLocal: boolean): void {
-    const participant = this.participants.get(participantId);
-    if (participant) {
-      participant.videoMuted = false;
-    }
-    this.emit("videoUnmuted", { participantId, isLocal });
-  }
+  // All event handling is now done in setupSocketEventListeners
+  // No local state management needed
 
   // Type-safe event emitter
   private emit<K extends keyof ConferenceClientEvents>(
@@ -1121,29 +893,50 @@ export class ConferenceClient extends EventTarget {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
-  // Public getters
-  public getLocalStream(): MediaStream | undefined {
-    return this.localStream;
+  /**
+   * Check if all expected streams for a participant are ready and emit event
+   */
+  private checkAndEmitParticipantStreamsReady(
+    participantId: string,
+    participantName: string
+  ): void {
+    const stream = this.remoteStreams.get(participantId);
+    if (!stream) return;
+
+    // Get all remote stream data for this participant
+    const participantStreams = this.getRemoteStreams().filter(
+      (streamData) => streamData.participantId === participantId
+    );
+
+    if (participantStreams.length > 0) {
+      this.emit("participantStreamsReady", {
+        participantId,
+        participantName,
+        streams: participantStreams,
+      });
+    }
   }
 
-  public getRemoteStreams(): Map<string, MediaStream> {
-    return new Map(this.remoteStreams);
-  }
-
-  public getParticipants(): Promise<ParticipantInfo[]> {
+  // Public getters - stateless versions
+  public async getParticipants(): Promise<ParticipantInfo[]> {
+    // Delegate to server for all participant data
     return this.socketController.getParticipants();
   }
-
-  public getMediaState(): MediaState {
-    return { ...this.mediaState };
+  public async getProducersWithParticipantId(participantId: string) {
+    return await this.socketController.getProducersWithParticipantId(
+      participantId
+    );
+  }
+  public getCurrentParticipant(): ParticipantInfo {
+    return { ...this.currentParticipant };
   }
 
   public isAudioMuted(): boolean {
-    return this.mediaState.audioMuted;
+    return this.currentParticipant.audioMuted;
   }
 
   public isVideoMuted(): boolean {
-    return this.mediaState.videoMuted;
+    return this.currentParticipant.videoMuted;
   }
 
   public isJoinedToConference(): boolean {
@@ -1159,158 +952,61 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * Get detailed state information for debugging
+   * Get all remote streams currently available
    */
-  public getDetailedState(): {
-    mediaState: MediaState;
-    participants: ParticipantInfo[];
-    remoteStreams: { [consumerId: string]: MediaStream };
-    isJoined: boolean;
-  } {
-    return {
-      mediaState: { ...this.mediaState },
-      participants: Array.from(this.participants.values()),
-      remoteStreams: Object.fromEntries(this.remoteStreams.entries()),
-      isJoined: this.isJoined,
-    };
+  public getRemoteStreams(): RemoteStreamData[] {
+    const streamData: RemoteStreamData[] = [];
+
+    for (const [participantId, stream] of this.remoteStreams.entries()) {
+      const tracks: RemoteStreamData["tracks"] = [];
+
+      // Find consumers for this participant's tracks
+      for (const [consumerId, consumer] of this.consumers.entries()) {
+        const consumerParticipantId =
+          (consumer.appData?.participantId as string) || participantId;
+
+        if (
+          consumerParticipantId === participantId &&
+          stream.getTracks().includes(consumer.track)
+        ) {
+          tracks.push({
+            producerId: (consumer.appData?.producerId as string) || "unknown",
+            consumerId: consumerId,
+            kind: consumer.kind,
+            track: consumer.track,
+          });
+        }
+      }
+
+      if (tracks.length > 0) {
+        streamData.push({
+          participantId,
+          participantName:
+            (this.consumers.values().next().value?.appData
+              ?.participantName as string) || "Unknown Participant",
+          stream,
+          tracks,
+        });
+      }
+    }
+
+    return streamData;
   }
 
   /**
-   * Validate and sync state consistency
+   * Get remote stream for specific participant
    */
-  public validateState(): {
-    isValid: boolean;
-    issues: string[];
-  } {
-    const issues: string[] = [];
-
-    // Check if producers in mediaState match participant producers
-    const localParticipant = this.participants.get(this.config.participantId);
-    if (localParticipant) {
-      for (const [
-        producerId,
-        producer,
-      ] of this.mediaState.producers.entries()) {
-        if (!localParticipant.producers.has(producerId)) {
-          issues.push(
-            `Producer ${producerId} in mediaState but not in local participant`
-          );
-        }
-      }
-
-      for (const [producerId] of localParticipant.producers.entries()) {
-        if (!this.mediaState.producers.has(producerId)) {
-          issues.push(
-            `Producer ${producerId} in local participant but not in mediaState`
-          );
-        }
-      }
-    }
-
-    // Check if consumers in mediaState have corresponding remote streams
-    for (const [consumerId] of this.mediaState.consumers.entries()) {
-      if (!this.remoteStreams.has(consumerId)) {
-        issues.push(
-          `Consumer ${consumerId} in mediaState but no corresponding remote stream`
-        );
-      }
-    }
-
-    // Check if remote streams have corresponding consumers
-    for (const [consumerId] of this.remoteStreams.entries()) {
-      if (!this.mediaState.consumers.has(consumerId)) {
-        issues.push(
-          `Remote stream ${consumerId} exists but no corresponding consumer in mediaState`
-        );
-      }
-    }
-
-    // Check producer ID consistency
-    if (
-      this.mediaState.audioProducerId &&
-      !this.mediaState.producers.has(this.mediaState.audioProducerId)
-    ) {
-      issues.push(
-        `Audio producer ID ${this.mediaState.audioProducerId} not found in producers map`
-      );
-    }
-
-    if (
-      this.mediaState.videoProducerId &&
-      !this.mediaState.producers.has(this.mediaState.videoProducerId)
-    ) {
-      issues.push(
-        `Video producer ID ${this.mediaState.videoProducerId} not found in producers map`
-      );
-    }
-
-    return {
-      isValid: issues.length === 0,
-      issues,
-    };
+  public getRemoteStreamForParticipant(
+    participantId: string
+  ): MediaStream | undefined {
+    return this.remoteStreams.get(participantId);
   }
 
-  /**
-   * Sync and fix state inconsistencies
-   */
-  public syncState(): void {
-    this.logger("Syncing state...");
-
-    const localParticipant = this.participants.get(this.config.participantId);
-
-    if (localParticipant) {
-      // Sync producers: ensure all mediaState producers are in local participant
-      for (const [
-        producerId,
-        producer,
-      ] of this.mediaState.producers.entries()) {
-        if (!localParticipant.producers.has(producerId)) {
-          localParticipant.producers.set(producerId, producer);
-          this.logger(`Synced producer ${producerId} to local participant`);
-        }
-      }
-
-      // Remove producers from local participant that are not in mediaState
-      for (const [producerId] of localParticipant.producers.entries()) {
-        if (!this.mediaState.producers.has(producerId)) {
-          localParticipant.producers.delete(producerId);
-          this.logger(
-            `Removed stale producer ${producerId} from local participant`
-          );
-        }
-      }
-    }
-
-    // Remove remote streams without corresponding consumers
-    for (const [consumerId] of this.remoteStreams.entries()) {
-      if (!this.mediaState.consumers.has(consumerId)) {
-        this.remoteStreams.delete(consumerId);
-        this.logger(`Removed stale remote stream ${consumerId}`);
-      }
-    }
-
-    // Validate producer IDs
-    if (
-      this.mediaState.audioProducerId &&
-      !this.mediaState.producers.has(this.mediaState.audioProducerId)
-    ) {
-      this.mediaState.audioProducerId = undefined;
-      this.logger("Reset invalid audio producer ID");
-    }
-
-    if (
-      this.mediaState.videoProducerId &&
-      !this.mediaState.producers.has(this.mediaState.videoProducerId)
-    ) {
-      this.mediaState.videoProducerId = undefined;
-      this.logger("Reset invalid video producer ID");
-    }
-
-    this.logger("State sync completed");
-  }
+  // No state validation needed in stateless mode
+  // All state is managed by the server
 
   /**
-   * Start screen sharing
+   * Start screen sharing - stateless version
    */
   public async startScreenShare(): Promise<MediaStream | undefined> {
     if (!this.sendTransport) {
@@ -1318,7 +1014,7 @@ export class ConferenceClient extends EventTarget {
     }
 
     try {
-      this.logger("Starting screen share...");
+      this.logger("Starting screen share (stateless mode)...");
 
       // Get screen media
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -1330,7 +1026,7 @@ export class ConferenceClient extends EventTarget {
         `Got screen share stream with ${stream.getTracks().length} tracks`
       );
 
-      // Produce screen share video
+      // Produce screen share video - don't store producer locally
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         const screenProducer = await this.sendTransport.produce({
@@ -1343,18 +1039,16 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
-        this.mediaState.producers.set(screenProducer.id, screenProducer);
         this.logger(`Screen share producer created: ${screenProducer.id}`);
 
-        // Handle screen share end
+        // Handle screen share end - just close producer, server will handle cleanup
         videoTrack.onended = () => {
           this.logger("Screen share ended");
           screenProducer.close();
-          this.mediaState.producers.delete(screenProducer.id);
         };
       }
 
-      // Produce screen share audio if available
+      // Produce screen share audio if available - don't store producer locally
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
         const screenAudioProducer = await this.sendTransport.produce({
@@ -1368,19 +1062,14 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
-        this.mediaState.producers.set(
-          screenAudioProducer.id,
-          screenAudioProducer
-        );
         this.logger(
           `Screen share audio producer created: ${screenAudioProducer.id}`
         );
 
-        // Handle screen share end
+        // Handle screen share end - just close producer, server will handle cleanup
         audioTrack.onended = () => {
           this.logger("Screen share audio ended");
           screenAudioProducer.close();
-          this.mediaState.producers.delete(screenAudioProducer.id);
         };
       }
 

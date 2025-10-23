@@ -1,6 +1,6 @@
 import { Device } from "mediasoup-client";
 import { SocketClientController } from "../controller/SocketClientController";
-import type { Producer, Consumer, MediaKind } from "mediasoup-client/types";
+import type { Consumer, MediaKind } from "mediasoup-client/types";
 import { ClientSocket } from "@simple-mediasoup/types";
 import { WebRtcTransportOptions } from "mediasoup/types";
 export interface ConferenceClientEvents {
@@ -40,6 +40,11 @@ export interface ConferenceClientEvents {
         participantId: string;
         consumerId: string;
         producerId: string;
+    };
+    participantStreamsReady: {
+        participantId: string;
+        participantName: string;
+        streams: RemoteStreamData[];
     };
     producerCreated: {
         producerId: string;
@@ -109,29 +114,37 @@ export interface ParticipantInfo {
     participantId: string;
     participantName: string;
     isLocal: boolean;
-    producers: Map<string, Producer>;
-    consumers: Map<string, Consumer>;
     audioMuted: boolean;
     videoMuted: boolean;
 }
-export interface MediaState {
-    audioProducerId?: string;
-    videoProducerId?: string;
-    audioMuted: boolean;
-    videoMuted: boolean;
-    producers: Map<string, Producer>;
-    consumers: Map<string, Consumer>;
+export interface ParticipantTrackInfo {
+    participantId: string;
+    participantName: string;
+    tracks: {
+        producerId: string;
+        kind: MediaKind;
+        enabled: boolean;
+    }[];
+}
+export interface RemoteStreamData {
+    participantId: string;
+    participantName: string;
+    stream: MediaStream;
+    tracks: {
+        producerId: string;
+        consumerId: string;
+        kind: MediaKind;
+        track: MediaStreamTrack;
+    }[];
 }
 /**
- * ConferenceClient - Comprehensive MediaSoup client with full event orchestration
+ * ConferenceClient - Stateless MediaSoup client with server-side state management
  *
- * This is the main client that handles all MediaSoup operations:
- * - Device management
- * - Transport creation and management
- * - Producer/Consumer lifecycle
- * - Media stream handling
- * - Participant management
- * - Complete event system with proper logging
+ * This is a lightweight client that:
+ * - Only holds current participant info
+ * - Emits all operations to server
+ * - Creates tracks on-demand when user wants to consume
+ * - Handles all calls efficiently without local state storage
  */
 export declare class ConferenceClient extends EventTarget {
     private config;
@@ -139,94 +152,110 @@ export declare class ConferenceClient extends EventTarget {
     private device;
     private sendTransport?;
     private recvTransport?;
-    private mediaState;
-    private participants;
-    private localStream?;
-    private remoteStreams;
+    private currentParticipant;
     private isJoined;
     private logger;
+    private remoteStreams;
+    private consumers;
     constructor(config: ConferenceClientConfig);
     /**
-     * Setup all socket event listeners with proper logging
+     * Setup all socket event listeners - stateless event forwarding
      */
     private setupSocketEventListeners;
     /**
-     * Join the conference
+     * Join the conference - stateless setup
      */
     joinConference(): Promise<void>;
     /**
-     * Setup transport event listeners
+     * Setup transport event listeners - stateless
      */
     private setupTransportListeners;
     /**
-     * Enable local media (audio/video)
+     * Create consumer on demand when new producer is available
+     */
+    private createConsumerOnDemand;
+    /**
+     * Enable local media (audio/video) - stateless version
      */
     enableMedia(audio?: boolean, video?: boolean): Promise<MediaStream | undefined>;
     /**
-     * Consume existing producers (for participants already in the conference)
+     * SIMPLIFIED: Consume media from a specific participant
+     * Just send participant ID → Get consumer parameters → Create tracks on demand
+     *
+     * @param participantId - The participant whose media you want to consume
+     * @returns Consumer parameters that can be used to create tracks
+     *
+     * @example
+     * ```typescript
+     * // Simple workflow - just get consumer params and create tracks
+     * const consumerParams = await conferenceClient.consumeParticipantMedia('participant-123');
+     *
+     * // Create tracks from consumer parameters
+     * for (const params of consumerParams) {
+     *   const consumer = await consumerTransport.consume(params);
+     *   const { track } = consumer;
+     *
+     *   // Listen for track events
+     *   track.addEventListener("ended", () => console.log("Track ended"));
+     *   track.onmute = () => console.log("Track muted");
+     *   track.onunmute = () => console.log("Track unmuted");
+     *
+     *   // Add to video element
+     *   const remoteVideo = document.getElementById(`video-${participantId}`);
+     *   remoteVideo.srcObject = new MediaStream([track]);
+     *
+     *   // Unpause the consumer
+     *   await conferenceClient.unpauseConsumer(consumer.id);
+     * }
+     * ```
      */
-    consumeExistingProducers(): Promise<void>;
+    consumeParticipantMedia(participantId: string): Promise<any[]>;
     /**
-     * Consume a specific producer
+     * Unpause a consumer after creating it
      */
-    consumeProducer(producerId: string): Promise<void>;
+    unpauseConsumer(consumerId: string): Promise<void>;
     /**
-     * Mute/unmute local audio
+     * Consume a specific producer - stateless version (delegates to createConsumerOnDemand)
+     */
+    consumeProducer(producerId: string, participantInfo?: {
+        participantId: string;
+        participantName: string;
+    }): Promise<Consumer | undefined>;
+    /**
+     * Mute/unmute local audio - stateless version (delegates to server)
      */
     toggleAudio(mute?: boolean): Promise<boolean>;
     /**
-     * Mute/unmute local video
+     * Mute/unmute local video - stateless version (delegates to server)
      */
     toggleVideo(mute?: boolean): Promise<boolean>;
     /**
-     * Leave the conference
+     * Leave the conference - stateless version
      */
     leaveConference(): Promise<void>;
-    private handleProducerCreatedCallback;
-    private handleParticipantJoined;
-    private handleParticipantLeft;
-    private handleNewProducer;
-    private handleProducerClosed;
-    private handleConsumerClosed;
-    private handleConsumerCreated;
-    private handleAudioMuted;
-    private handleAudioUnmuted;
-    private handleVideoMuted;
-    private handleVideoUnmuted;
     private emit;
-    getLocalStream(): MediaStream | undefined;
-    getRemoteStreams(): Map<string, MediaStream>;
+    /**
+     * Check if all expected streams for a participant are ready and emit event
+     */
+    private checkAndEmitParticipantStreamsReady;
     getParticipants(): Promise<ParticipantInfo[]>;
-    getMediaState(): MediaState;
+    getProducersWithParticipantId(participantId: string): Promise<any>;
+    getCurrentParticipant(): ParticipantInfo;
     isAudioMuted(): boolean;
     isVideoMuted(): boolean;
     isJoinedToConference(): boolean;
     getDevice(): Device;
     getSocketController(): SocketClientController;
     /**
-     * Get detailed state information for debugging
+     * Get all remote streams currently available
      */
-    getDetailedState(): {
-        mediaState: MediaState;
-        participants: ParticipantInfo[];
-        remoteStreams: {
-            [consumerId: string]: MediaStream;
-        };
-        isJoined: boolean;
-    };
+    getRemoteStreams(): RemoteStreamData[];
     /**
-     * Validate and sync state consistency
+     * Get remote stream for specific participant
      */
-    validateState(): {
-        isValid: boolean;
-        issues: string[];
-    };
+    getRemoteStreamForParticipant(participantId: string): MediaStream | undefined;
     /**
-     * Sync and fix state inconsistencies
-     */
-    syncState(): void;
-    /**
-     * Start screen sharing
+     * Start screen sharing - stateless version
      */
     startScreenShare(): Promise<MediaStream | undefined>;
 }

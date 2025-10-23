@@ -106,6 +106,7 @@ declare class MediasoupController extends EnhancedEventEmitter implements AppSta
         participantName: string;
         socketId: string;
     }[];
+    getProducersByParticipantId(conferenceId: string, participantId: string): string[];
 }
 export default MediasoupController;
 //# sourceMappingURL=MediasoupController.d.ts.map

@@ -159,6 +159,30 @@ class SocketEventController extends EnhancedEventEmitter {
           await this.getParticipants(socketEventData, callback);
         }
       );
+
+      socket.on(
+        "getProducersWithParticipants",
+        async (socketEventData: SocketEventData, callback) => {
+          await this.getProducersWithParticipants(socketEventData, callback);
+        }
+      );
+
+      socket.on(
+        "consumeParticipantMedia",
+        async (socketEventData: any, callback) => {
+          await this.consumeParticipantMedia(socketEventData, callback);
+        }
+      );
+
+      socket.on("unpauseConsumer", async (socketEventData: any, callback) => {
+        await this.unpauseConsumer(socketEventData, callback);
+      });
+      socket.on(
+        "getProducersWithParticipantId",
+        (socketEventData: any, callback) => {
+          this.getProducersWithParticipantId(socketEventData, callback);
+        }
+      );
     });
   }
   private async getParticipants(
@@ -176,6 +200,196 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({ status: "ok", data: participants });
     } catch (error) {
       console.error("Error getting participants:", error);
+      callback({ status: "error", data: error });
+    }
+  }
+
+  private async getProducersWithParticipants(
+    socketEventData: SocketEventData,
+    callback: Function
+  ) {
+    const { data } = socketEventData;
+    const { conferenceId, participantId } = data;
+
+    try {
+      // Get existing producer data using the existing method
+      const producerData = this.mediasoupController?.getExistingProducerIds(
+        participantId,
+        conferenceId
+      );
+
+      if (!producerData || producerData.length === 0) {
+        callback({ status: "ok", data: [] });
+        return;
+      }
+
+      // Get all participants to get their names
+      const allParticipants =
+        this.mediasoupController?.getParticipants(conferenceId);
+      const participantMap = new Map();
+
+      if (allParticipants) {
+        for (const participant of allParticipants) {
+          participantMap.set(
+            participant.participantId,
+            participant.participantName
+          );
+        }
+      }
+
+      // Transform the data to include participant names and producer details
+      const participantsWithProducers = producerData.map((item) => {
+        const producers = item.producerIds.map((producerId: string) => ({
+          producerId,
+          kind: "unknown", // We could enhance this later by accessing the actual producer objects
+          enabled: true, // Default to enabled, could be enhanced with actual producer state
+          appData: {},
+        }));
+
+        return {
+          participantId: item.participantId,
+          participantName:
+            participantMap.get(item.participantId) || "Unknown Participant",
+          producers: producers,
+        };
+      });
+
+      callback({ status: "ok", data: participantsWithProducers });
+    } catch (error) {
+      console.error("Error getting producers with participants:", error);
+      callback({ status: "error", data: error });
+    }
+  }
+
+  /**
+   * Simplified method to consume media by participant ID
+   * Client sends participant ID and gets consumer parameters for all their producers
+   */
+  private async consumeParticipantMedia(
+    socketEventData: any,
+    callback: Function
+  ) {
+    const {
+      conferenceId,
+      participantId,
+      targetParticipantId,
+      rtpCapabilities,
+    } = socketEventData;
+
+    try {
+      if (
+        !conferenceId ||
+        !participantId ||
+        !targetParticipantId ||
+        !rtpCapabilities
+      ) {
+        callback({
+          status: "error",
+          data: "Missing required parameters: conferenceId, participantId, targetParticipantId, rtpCapabilities",
+        });
+        return;
+      }
+
+      // Get producer IDs for the target participant
+      const producerData = this.mediasoupController?.getExistingProducerIds(
+        participantId, // requesting participant (to exclude from results)
+        conferenceId
+      );
+
+      if (!producerData || producerData.length === 0) {
+        callback({ status: "ok", data: [] });
+        return;
+      }
+
+      // Find the target participant's producers
+      const targetParticipantData = producerData.find(
+        (item) => item.participantId === targetParticipantId
+      );
+
+      if (
+        !targetParticipantData ||
+        targetParticipantData.producerIds.length === 0
+      ) {
+        callback({ status: "ok", data: [] });
+        return;
+      }
+
+      // Create consumers for each producer
+      const consumerParams = [];
+
+      for (const producerId of targetParticipantData.producerIds) {
+        try {
+          const consumerResponse = await this.mediasoupController?.consume({
+            conferenceId,
+            participantId,
+            consumeOptions: {
+              producerId,
+              rtpCapabilities,
+            },
+          });
+
+          if (consumerResponse) {
+            consumerParams.push({
+              ...consumerResponse,
+              targetParticipantId,
+            });
+          }
+        } catch (error) {
+          console.error(
+            `Error creating consumer for producer ${producerId}:`,
+            error
+          );
+          // Continue with other producers
+        }
+      }
+
+      callback({ status: "ok", data: consumerParams });
+    } catch (error) {
+      console.error("Error consuming participant media:", error);
+      callback({ status: "error", data: error });
+    }
+  }
+
+  /**
+   * Unpause consumer - simplified version
+   */
+  private async unpauseConsumer(socketEventData: any, callback: Function) {
+    const { conferenceId, participantId, consumerId } = socketEventData;
+
+    try {
+      if (!consumerId) {
+        callback({ status: "error", data: "Missing consumerId" });
+        return;
+      }
+
+      await this.mediasoupController?.resumeConsumer({
+        conferenceId,
+        participantId,
+        consumerId,
+      });
+
+      callback({ status: "ok" });
+    } catch (error) {
+      console.error("Error unpausing consumer:", error);
+      callback({ status: "error", data: error });
+    }
+  }
+  private getProducersWithParticipantId(
+    socketEventData: {
+      conferenceId: string;
+      participantId: string;
+    },
+    callback: Function
+  ) {
+    try {
+      const { conferenceId, participantId } = socketEventData;
+      const producers = this.mediasoupController?.getProducersByParticipantId(
+        conferenceId,
+        participantId
+      );
+      callback({ status: "ok", data: producers });
+    } catch (error) {
+      console.error("Error getting producers:", error);
       callback({ status: "error", data: error });
     }
   }
@@ -435,9 +649,20 @@ class SocketEventController extends EnhancedEventEmitter {
         kind,
         rtpParameters,
       });
+
+      // Get participant name for the event
+      const participants =
+        this.mediasoupController?.getParticipants(conferenceId);
+      const participant = participants?.find(
+        (p) => p.participantId === participantId
+      );
+      const participantName =
+        participant?.participantName || "Unknown Participant";
+
       socket.to(conferenceId).emit("newProducer", {
         producerId,
         participantId,
+        participantName,
         kind,
       });
       callback({ status: "ok", data: { producerId } });

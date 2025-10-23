@@ -1,5 +1,5 @@
 export { default as ConferenceClient } from "./mediasoup/ConferenceClient";
-export type { ConferenceClientConfig, ConferenceClientEvents, ParticipantInfo, MediaState, } from "./mediasoup/ConferenceClient";
+export type { ConferenceClientConfig, ConferenceClientEvents, ParticipantInfo, } from "./mediasoup/ConferenceClient";
 export { default as EventOrchestrator } from "./EventOrchestrator";
 export type { EventOrchestratorConfig, EventLog, EventSource, OrchestratedEvent, } from "./EventOrchestrator";
 export { SocketClientController } from "./controller/SocketClientController";

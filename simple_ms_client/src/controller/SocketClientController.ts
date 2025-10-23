@@ -237,6 +237,43 @@ export class SocketClientController extends EventTarget {
     }
     return response.data.producerIds as string[];
   }
+
+  /**
+   * SIMPLIFIED: Consume media by participant ID
+   * Send participant ID + RTP capabilities → Get consumer parameters
+   * Client can then create tracks directly with the consumer parameters
+   */
+  async consumeParticipantMedia(
+    targetParticipantId: string,
+    rtpCapabilities: any
+  ): Promise<any[] | undefined> {
+    const response = await this.socket.emitWithAck("consumeParticipantMedia", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      targetParticipantId: targetParticipantId,
+      rtpCapabilities: rtpCapabilities,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return undefined;
+    }
+    return response.data;
+  }
+
+  /**
+   * Unpause consumer
+   */
+  async unpauseConsumer(consumerId: string): Promise<void> {
+    const response = await this.socket.emitWithAck("unpauseConsumer", {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      consumerId: consumerId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      throw new Error(response.data);
+    }
+  }
   async resumeProducer(producerId: string) {
     const response = await this.socket.emitWithAck("resumeProducer", {
       conferenceId: this.joinParams.conferenceId,
@@ -396,6 +433,20 @@ export class SocketClientController extends EventTarget {
     }
     console.log("participants ", response.data);
 
+    return response.data;
+  }
+  async getProducersWithParticipantId(participantId: string) {
+    const response = await this.socket.emitWithAck(
+      "getProducersWithParticipantId",
+      {
+        conferenceId: this.joinParams.conferenceId,
+        participantId,
+      }
+    );
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
     return response.data;
   }
 

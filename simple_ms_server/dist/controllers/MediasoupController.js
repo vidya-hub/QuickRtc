@@ -400,5 +400,16 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
             };
         });
     }
+    getProducersByParticipantId(conferenceId, participantId) {
+        const conference = this.conferences.get(conferenceId);
+        if (!conference) {
+            throw new Error("Conference does not exist");
+        }
+        const participant = conference.getParticipant(participantId);
+        if (!participant) {
+            throw new Error("Participant does not exist");
+        }
+        return participant.getProducerIds();
+    }
 }
 exports.default = MediasoupController;

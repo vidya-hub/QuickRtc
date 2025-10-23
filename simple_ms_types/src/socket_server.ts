@@ -22,7 +22,11 @@ export type SocketEventType =
   | "unmuteVideo"
   | "getMediaStates"
   | "leaveConference"
-  | "getProducers";
+  | "getProducers"
+  | "getProducersWithParticipants"
+  | "consumeParticipantMedia"
+  | "getProducersWithParticipantId"
+  | "unpauseConsumer";
 
 /**
  * Base meeting parameters used in socket events

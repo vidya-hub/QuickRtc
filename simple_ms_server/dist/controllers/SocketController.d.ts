@@ -8,6 +8,17 @@ declare class SocketEventController extends EnhancedEventEmitter {
     constructor(mediasoupController: MediasoupController, mediasoupSocket: Server);
     private setupSocketEvents;
     private getParticipants;
+    private getProducersWithParticipants;
+    /**
+     * Simplified method to consume media by participant ID
+     * Client sends participant ID and gets consumer parameters for all their producers
+     */
+    private consumeParticipantMedia;
+    /**
+     * Unpause consumer - simplified version
+     */
+    private unpauseConsumer;
+    private getProducersWithParticipantId;
     private pauseProducerHandler;
     private pauseConsumer;
     private closeProducer;

@@ -602,6 +602,20 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
       };
     });
   }
+  public getProducersByParticipantId(
+    conferenceId: string,
+    participantId: string
+  ): string[] {
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    const participant = conference.getParticipant(participantId);
+    if (!participant) {
+      throw new Error("Participant does not exist");
+    }
+    return participant.getProducerIds();
+  }
 }
 
 export default MediasoupController;

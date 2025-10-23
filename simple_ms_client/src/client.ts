@@ -6,7 +6,6 @@ export type {
   ConferenceClientConfig,
   ConferenceClientEvents,
   ParticipantInfo,
-  MediaState,
 } from "./mediasoup/ConferenceClient";
 
 // Event orchestrator for advanced usage
