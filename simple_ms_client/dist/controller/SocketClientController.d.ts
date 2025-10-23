@@ -54,5 +54,6 @@ export declare class SocketClientController extends EventTarget {
     unmuteVideo(): Promise<any>;
     getMediaStates(): Promise<any>;
     leaveConference(): Promise<void>;
+    getParticipants(): Promise<any>;
     setupEventListeners(): void;
 }

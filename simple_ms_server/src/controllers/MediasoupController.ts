@@ -585,6 +585,23 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
 
     this.emit("shutdown");
   }
+  public getParticipants(conferenceId: string): {
+    participantId: string;
+    participantName: string;
+    socketId: string;
+  }[] {
+    const conference = this.conferences.get(conferenceId);
+    if (!conference) {
+      throw new Error("Conference does not exist");
+    }
+    return conference.getParticipants().map(function (participant) {
+      return {
+        participantId: participant.id,
+        participantName: participant.name,
+        socketId: participant.socketId,
+      };
+    });
+  }
 }
 
 export default MediasoupController;

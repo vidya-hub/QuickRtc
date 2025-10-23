@@ -7,6 +7,7 @@ declare class SocketEventController extends EnhancedEventEmitter {
     private mediasoupSocket;
     constructor(mediasoupController: MediasoupController, mediasoupSocket: Server);
     private setupSocketEvents;
+    private getParticipants;
     private pauseProducerHandler;
     private pauseConsumer;
     private closeProducer;

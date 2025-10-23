@@ -43,4 +43,5 @@ export interface ClientToServerEvents {
   muteVideo: (data: any, callback: (response: any) => void) => void;
   unmuteVideo: (data: any, callback: (response: any) => void) => void;
   getMediaStates: (data: any, callback: (response: any) => void) => void;
+  getParticipants: (data: any, callback: (response: any) => void) => void;
 }

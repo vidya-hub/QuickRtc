@@ -196,7 +196,7 @@ export declare class ConferenceClient extends EventTarget {
     private emit;
     getLocalStream(): MediaStream | undefined;
     getRemoteStreams(): Map<string, MediaStream>;
-    getParticipants(): ParticipantInfo[];
+    getParticipants(): Promise<ParticipantInfo[]>;
     getMediaState(): MediaState;
     isAudioMuted(): boolean;
     isVideoMuted(): boolean;

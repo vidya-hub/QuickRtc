@@ -386,6 +386,18 @@ export class SocketClientController extends EventTarget {
     }
     return;
   }
+  async getParticipants() {
+    const response = await this.socket.emitWithAck("getParticipants", {
+      conferenceId: this.joinParams.conferenceId,
+    });
+    if (response.status == "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      return;
+    }
+    console.log("participants ", response.data);
+
+    return response.data;
+  }
 
   // Setup socket event listeners for real-time events
   setupEventListeners() {

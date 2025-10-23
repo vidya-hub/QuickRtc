@@ -1130,8 +1130,8 @@ export class ConferenceClient extends EventTarget {
     return new Map(this.remoteStreams);
   }
 
-  public getParticipants(): ParticipantInfo[] {
-    return Array.from(this.participants.values());
+  public getParticipants(): Promise<ParticipantInfo[]> {
+    return this.socketController.getParticipants();
   }
 
   public getMediaState(): MediaState {

@@ -101,6 +101,11 @@ declare class MediasoupController extends EnhancedEventEmitter implements AppSta
     private setupErrorHandling;
     private handleWorkerError;
     shutdown(): Promise<void>;
+    getParticipants(conferenceId: string): {
+        participantId: string;
+        participantName: string;
+        socketId: string;
+    }[];
 }
 export default MediasoupController;
 //# sourceMappingURL=MediasoupController.d.ts.map

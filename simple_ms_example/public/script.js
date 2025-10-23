@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const partList = document.getElementById("partList");
   const remoteStreams = document.getElementById("remoteStreams");
   const details = document.getElementById("details");
+  let currentParticipant = null;
 
   button.addEventListener("click", async function () {
     const socket = io(window.location.origin);
@@ -22,6 +23,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     details.innerText = `Participant Name: ${client.config.participantName}\nParticipant ID: ${client.config.participantId}`;
 
+    currentParticipant = client.config;
     client.addEventListener("participantJoined", (event) => {
       const li = document.createElement("li");
       li.textContent = event.detail.participantName;
@@ -29,15 +31,19 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     await client.joinConference();
+    button.disabled = true;
     const track = await client.enableMedia(true, true);
     localVideo.srcObject = track;
-    const existingParticipants = client.getParticipants();
+    const existingParticipants = await client.getParticipants();
     console.log("existingParticipants ", existingParticipants);
     existingParticipants.forEach((part) => {
       const li = document.createElement("li");
-      li.textContent = part.participantName;
+      li.textContent = `${part.participantName} ${
+        part.participantId === currentParticipant.participantId ? "(You)" : ""
+      }`;
       partList.appendChild(li);
     });
+    await client.consumeExistingProducers();
 
     console.log("local track received ", track);
   });

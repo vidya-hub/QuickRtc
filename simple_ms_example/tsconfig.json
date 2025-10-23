@@ -26,8 +26,8 @@
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
     "exactOptionalPropertyTypes": false,
-    "allowImportingTsExtensions": false,
-    "ignoreDeprecations": "6.0"
+    "allowImportingTsExtensions": false
+    // "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "typeRoots": ["./node_modules/@types", "./src"],

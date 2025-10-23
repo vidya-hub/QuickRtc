@@ -153,7 +153,31 @@ class SocketEventController extends EnhancedEventEmitter {
           await this.getMediaStates(socketEventData, callback);
         }
       );
+      socket.on(
+        "getParticipants",
+        async (socketEventData: { conferenceId: string }, callback) => {
+          await this.getParticipants(socketEventData, callback);
+        }
+      );
     });
+  }
+  private async getParticipants(
+    socketEventData: {
+      conferenceId: string;
+    },
+    callback: Function
+  ) {
+    const { conferenceId } = socketEventData;
+
+    try {
+      const participants =
+        this.mediasoupController?.getParticipants(conferenceId);
+
+      callback({ status: "ok", data: participants });
+    } catch (error) {
+      console.error("Error getting participants:", error);
+      callback({ status: "error", data: error });
+    }
   }
 
   private async pauseProducerHandler(
