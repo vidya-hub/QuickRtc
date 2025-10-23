@@ -562,11 +562,17 @@ export class SimpleServer extends EventTarget {
     });
 
     this.socketController.on("consumerCreated", (data: any) => {
-      const { consumerId, participantId, producerId } = data;
+      console.log("consume created data ", data);
+
+      const { id, participantId, producerId } = data;
       console.log(
-        `📺 Consumer created: ${consumerId} for participant ${participantId}`
+        `📺 Consumer created: ${id} for participant ${participantId}`
       );
-      this.emit("consumerCreated", { participantId, consumerId, producerId });
+      this.emit("consumerCreated", {
+        participantId,
+        consumerId: id,
+        producerId,
+      });
     });
 
     this.socketController.on("consumerClosed", (data: any) => {

@@ -106,8 +106,8 @@ export interface ConferenceClientConfig {
     audioConstraints?: MediaTrackConstraints;
 }
 export interface ParticipantInfo {
-    id: string;
-    name: string;
+    participantId: string;
+    participantName: string;
     isLocal: boolean;
     producers: Map<string, Producer>;
     consumers: Map<string, Consumer>;
@@ -182,6 +182,7 @@ export declare class ConferenceClient extends EventTarget {
      * Leave the conference
      */
     leaveConference(): Promise<void>;
+    private handleProducerCreatedCallback;
     private handleParticipantJoined;
     private handleParticipantLeft;
     private handleNewProducer;
@@ -202,6 +203,28 @@ export declare class ConferenceClient extends EventTarget {
     isJoinedToConference(): boolean;
     getDevice(): Device;
     getSocketController(): SocketClientController;
+    /**
+     * Get detailed state information for debugging
+     */
+    getDetailedState(): {
+        mediaState: MediaState;
+        participants: ParticipantInfo[];
+        remoteStreams: {
+            [consumerId: string]: MediaStream;
+        };
+        isJoined: boolean;
+    };
+    /**
+     * Validate and sync state consistency
+     */
+    validateState(): {
+        isValid: boolean;
+        issues: string[];
+    };
+    /**
+     * Sync and fix state inconsistencies
+     */
+    syncState(): void;
     /**
      * Start screen sharing
      */

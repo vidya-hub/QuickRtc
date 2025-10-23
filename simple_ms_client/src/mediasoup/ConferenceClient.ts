@@ -92,8 +92,8 @@ export interface ConferenceClientConfig {
 }
 
 export interface ParticipantInfo {
-  id: string;
-  name: string;
+  participantId: string;
+  participantName: string;
   isLocal: boolean;
   producers: Map<string, Producer>;
   consumers: Map<string, Consumer>;
@@ -327,8 +327,8 @@ export class ConferenceClient extends EventTarget {
 
       // Add local participant
       this.participants.set(this.config.participantId, {
-        id: this.config.participantId,
-        name: this.config.participantName,
+        participantId: this.config.participantId,
+        participantName: this.config.participantName,
         isLocal: true,
         producers: new Map(),
         consumers: new Map(),
@@ -373,20 +373,8 @@ export class ConferenceClient extends EventTarget {
       sendTransport: this.sendTransport,
       onProduce: (params) => {
         this.logger(`Producer created: ${params.producerId} (${params.kind})`);
-        const producer = this.mediaState.producers.get(params.producerId);
-        if (producer) {
-          if (params.kind === "audio") {
-            this.mediaState.audioProducerId = params.producerId;
-          } else if (params.kind === "video") {
-            this.mediaState.videoProducerId = params.producerId;
-          }
-
-          this.emit("producerCreated", {
-            producerId: params.producerId,
-            kind: params.kind,
-            participantId: this.config.participantId,
-          });
-        }
+        // The producer object should already be in mediaState.producers from enableMedia()
+        this.handleProducerCreatedCallback(params);
       },
     });
 
@@ -394,9 +382,7 @@ export class ConferenceClient extends EventTarget {
     this.socketController.addConsumeTransportListener({
       recvTransport: this.recvTransport,
       onConsume: (params) => {
-        this.logger(
-          `Consumer created: ${params.id} for producer ${params.producerId} (${params.kind})`
-        );
+        this.logger(`onConsume param: ${params}`);
         this.logger(`Consumer params: ${JSON.stringify(params, null, 2)}`);
         this.handleConsumerCreated(params);
       },
@@ -485,8 +471,18 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
+        // Store producer in media state
         this.mediaState.producers.set(audioProducer.id, audioProducer);
         this.mediaState.audioProducerId = audioProducer.id;
+
+        // Store producer in local participant
+        const localParticipant = this.participants.get(
+          this.config.participantId
+        );
+        if (localParticipant) {
+          localParticipant.producers.set(audioProducer.id, audioProducer);
+        }
+
         this.logger(`Audio producer created: ${audioProducer.id}`);
       }
 
@@ -500,8 +496,18 @@ export class ConferenceClient extends EventTarget {
           },
         });
 
+        // Store producer in media state
         this.mediaState.producers.set(videoProducer.id, videoProducer);
         this.mediaState.videoProducerId = videoProducer.id;
+
+        // Store producer in local participant
+        const localParticipant = this.participants.get(
+          this.config.participantId
+        );
+        if (localParticipant) {
+          localParticipant.producers.set(videoProducer.id, videoProducer);
+        }
+
         this.logger(`Video producer created: ${videoProducer.id}`);
       }
 
@@ -542,9 +548,36 @@ export class ConferenceClient extends EventTarget {
 
       this.logger(`Found ${existingProducerIds.length} existing producers`);
 
-      for (const producerId of existingProducerIds) {
-        await this.consumeProducer(producerId);
+      // Filter out producers we're already consuming
+      const unconsumedProducers = existingProducerIds.filter((producerId) => {
+        const alreadyConsuming = Array.from(
+          this.mediaState.consumers.values()
+        ).some((c) => c.producerId === producerId);
+        if (alreadyConsuming) {
+          this.logger(`Already consuming producer ${producerId}, skipping`);
+        }
+        return !alreadyConsuming;
+      });
+
+      this.logger(`${unconsumedProducers.length} new producers to consume`);
+
+      for (const producerId of unconsumedProducers) {
+        try {
+          await this.consumeProducer(producerId);
+        } catch (error) {
+          this.logger(
+            `Failed to consume individual producer ${producerId}: ${
+              error instanceof Error ? error.message : error
+            }`,
+            "error"
+          );
+          // Continue with other producers instead of failing completely
+        }
       }
+
+      this.logger(
+        `Finished consuming existing producers. Total consumers: ${this.mediaState.consumers.size}`
+      );
     } catch (error) {
       this.logger(
         `Failed to consume existing producers: ${
@@ -573,6 +606,19 @@ export class ConferenceClient extends EventTarget {
     try {
       this.logger(`Consuming producer: ${producerId}`);
 
+      // Check if we already have a consumer for this producer
+      const existingConsumer = Array.from(
+        this.mediaState.consumers.values()
+      ).find((c) => c.producerId === producerId);
+
+      if (existingConsumer) {
+        this.logger(
+          `Consumer already exists for producer ${producerId}, skipping`,
+          "warn"
+        );
+        return;
+      }
+
       const consumerData = await this.socketController.consumeMedia(
         producerId,
         this.device.rtpCapabilities
@@ -583,6 +629,8 @@ export class ConferenceClient extends EventTarget {
       }
 
       const consumer = await this.recvTransport.consume(consumerData);
+
+      // Store consumer in media state
       this.mediaState.consumers.set(consumer.id, consumer);
 
       // Resume consumer
@@ -737,10 +785,21 @@ export class ConferenceClient extends EventTarget {
       // Leave conference on server
       await this.socketController.leaveConference();
 
-      // Clear state
+      // Clear all state thoroughly
       this.mediaState.producers.clear();
       this.mediaState.consumers.clear();
+      this.mediaState.audioProducerId = undefined;
+      this.mediaState.videoProducerId = undefined;
+      this.mediaState.audioMuted = false;
+      this.mediaState.videoMuted = false;
+
+      // Clear participants and their producer/consumer maps
+      for (const participant of this.participants.values()) {
+        participant.producers.clear();
+        participant.consumers.clear();
+      }
       this.participants.clear();
+
       this.remoteStreams.clear();
 
       this.localStream = undefined;
@@ -748,7 +807,7 @@ export class ConferenceClient extends EventTarget {
       this.recvTransport = undefined;
       this.isJoined = false;
 
-      this.logger("Successfully left conference");
+      this.logger("Successfully left conference - all state cleared");
       this.emit("left", {});
     } catch (error) {
       this.logger(
@@ -768,13 +827,54 @@ export class ConferenceClient extends EventTarget {
   }
 
   // Event handlers
+  private handleProducerCreatedCallback(params: {
+    kind: "audio" | "video";
+    rtpParameters: any;
+    appData: any;
+    producerId: string;
+  }): void {
+    this.logger(`Producer callback: ${params.producerId} (${params.kind})`);
+
+    // Verify the producer exists in our state
+    const producer = this.mediaState.producers.get(params.producerId);
+    if (!producer) {
+      this.logger(
+        `Producer ${params.producerId} not found in local state`,
+        "warn"
+      );
+      return;
+    }
+
+    // Update producer ID mappings if needed
+    if (params.kind === "audio" && !this.mediaState.audioProducerId) {
+      this.mediaState.audioProducerId = params.producerId;
+    } else if (params.kind === "video" && !this.mediaState.videoProducerId) {
+      this.mediaState.videoProducerId = params.producerId;
+    }
+
+    this.emit("producerCreated", {
+      producerId: params.producerId,
+      kind: params.kind,
+      participantId: this.config.participantId,
+    });
+  }
+
   private handleParticipantJoined(
     participantId: string,
     participantName: string
   ): void {
+    // Avoid adding duplicate participants
+    if (this.participants.has(participantId)) {
+      this.logger(
+        `Participant ${participantId} already exists, skipping`,
+        "warn"
+      );
+      return;
+    }
+
     this.participants.set(participantId, {
-      id: participantId,
-      name: participantName,
+      participantId: participantId,
+      participantName: participantName,
       isLocal: false,
       producers: new Map(),
       consumers: new Map(),
@@ -789,7 +889,30 @@ export class ConferenceClient extends EventTarget {
     participantId: string,
     participantName: string
   ): void {
-    this.participants.delete(participantId);
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      // Clean up all consumers for this participant
+      for (const [consumerId, consumer] of participant.consumers.entries()) {
+        consumer.close();
+        this.mediaState.consumers.delete(consumerId);
+        this.remoteStreams.delete(consumerId);
+        this.logger(
+          `Cleaned up consumer ${consumerId} for leaving participant ${participantId}`
+        );
+      }
+
+      // Clean up all producers for this participant (shouldn't happen for remote participants, but just in case)
+      for (const [producerId, producer] of participant.producers.entries()) {
+        // Note: We don't close remote producers, just remove them from our tracking
+        this.logger(
+          `Removed producer ${producerId} tracking for leaving participant ${participantId}`
+        );
+      }
+
+      this.participants.delete(participantId);
+      this.logger(`Participant ${participantId} fully cleaned up`);
+    }
+
     this.emit("participantLeft", { participantId, participantName });
   }
 
@@ -799,6 +922,8 @@ export class ConferenceClient extends EventTarget {
     kind: MediaKind
   ): Promise<void> {
     // Auto-consume new producers
+    console.log("consuming new producers ", producerId, "kind ", kind);
+
     await this.consumeProducer(producerId);
   }
 
@@ -807,6 +932,26 @@ export class ConferenceClient extends EventTarget {
     participantId: string,
     kind: MediaKind
   ): void {
+    // Remove producer from participant's producer map
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      participant.producers.delete(producerId);
+      this.logger(
+        `Producer ${producerId} removed from participant ${participantId}`
+      );
+    }
+
+    // Remove producer from local media state if it's our producer
+    if (participantId === this.config.participantId) {
+      this.mediaState.producers.delete(producerId);
+      if (this.mediaState.audioProducerId === producerId) {
+        this.mediaState.audioProducerId = undefined;
+      }
+      if (this.mediaState.videoProducerId === producerId) {
+        this.mediaState.videoProducerId = undefined;
+      }
+    }
+
     // Find and close related consumers
     const consumersToClose: string[] = [];
     for (const [consumerId, consumer] of this.mediaState.consumers.entries()) {
@@ -821,6 +966,11 @@ export class ConferenceClient extends EventTarget {
         consumer.close();
         this.mediaState.consumers.delete(consumerId);
         this.remoteStreams.delete(consumerId);
+
+        // Remove from participant's consumer map
+        if (participant) {
+          participant.consumers.delete(consumerId);
+        }
 
         this.emit("remoteStreamRemoved", {
           participantId,
@@ -844,6 +994,15 @@ export class ConferenceClient extends EventTarget {
       this.mediaState.consumers.delete(consumerId);
       this.remoteStreams.delete(consumerId);
 
+      // Remove from participant's consumer map
+      const participant = this.participants.get(participantId);
+      if (participant) {
+        participant.consumers.delete(consumerId);
+        this.logger(
+          `Consumer ${consumerId} removed from participant ${participantId}`
+        );
+      }
+
       this.emit("remoteStreamRemoved", {
         participantId,
         consumerId,
@@ -859,11 +1018,25 @@ export class ConferenceClient extends EventTarget {
       `Handling consumer created: ${params.id} for producer ${params.producerId}`
     );
 
-    // Create media stream if not already exists
-    if (!this.remoteStreams.has(params.id)) {
-      const stream = new MediaStream([params.track]);
-      this.remoteStreams.set(params.id, stream);
+    // Check if we already have this consumer
+    if (this.remoteStreams.has(params.id)) {
+      this.logger(
+        `Consumer stream ${params.id} already exists, skipping`,
+        "warn"
+      );
+      return;
     }
+
+    // Get the actual consumer object from the media state
+    const consumer = this.mediaState.consumers.get(params.id);
+    if (!consumer) {
+      this.logger(`Consumer ${params.id} not found in media state`, "error");
+      return;
+    }
+
+    // Create media stream
+    const stream = new MediaStream([params.track]);
+    this.remoteStreams.set(params.id, stream);
 
     // Get participant ID from appData - check multiple possible fields
     const participantId =
@@ -871,6 +1044,20 @@ export class ConferenceClient extends EventTarget {
       (params.appData?.producerUserId as string) ||
       (params.producerUserId as string) ||
       "unknown";
+
+    // Store consumer in the appropriate participant
+    const participant = this.participants.get(participantId);
+    if (participant) {
+      participant.consumers.set(params.id, consumer);
+      this.logger(
+        `Consumer ${params.id} stored for participant ${participantId}`
+      );
+    } else {
+      this.logger(
+        `Participant ${participantId} not found, consumer ${params.id} stored in media state only`,
+        "warn"
+      );
+    }
 
     this.logger(
       `Consumer stream ready: ${params.id} from participant ${participantId}`
@@ -886,7 +1073,7 @@ export class ConferenceClient extends EventTarget {
 
     // Emit remoteStreamAdded event
     this.emit("remoteStreamAdded", {
-      stream: this.remoteStreams.get(params.id)!,
+      stream: stream,
       participantId: participantId,
       consumerId: params.id,
       producerId: params.producerId,
@@ -969,6 +1156,157 @@ export class ConferenceClient extends EventTarget {
 
   public getSocketController(): SocketClientController {
     return this.socketController;
+  }
+
+  /**
+   * Get detailed state information for debugging
+   */
+  public getDetailedState(): {
+    mediaState: MediaState;
+    participants: ParticipantInfo[];
+    remoteStreams: { [consumerId: string]: MediaStream };
+    isJoined: boolean;
+  } {
+    return {
+      mediaState: { ...this.mediaState },
+      participants: Array.from(this.participants.values()),
+      remoteStreams: Object.fromEntries(this.remoteStreams.entries()),
+      isJoined: this.isJoined,
+    };
+  }
+
+  /**
+   * Validate and sync state consistency
+   */
+  public validateState(): {
+    isValid: boolean;
+    issues: string[];
+  } {
+    const issues: string[] = [];
+
+    // Check if producers in mediaState match participant producers
+    const localParticipant = this.participants.get(this.config.participantId);
+    if (localParticipant) {
+      for (const [
+        producerId,
+        producer,
+      ] of this.mediaState.producers.entries()) {
+        if (!localParticipant.producers.has(producerId)) {
+          issues.push(
+            `Producer ${producerId} in mediaState but not in local participant`
+          );
+        }
+      }
+
+      for (const [producerId] of localParticipant.producers.entries()) {
+        if (!this.mediaState.producers.has(producerId)) {
+          issues.push(
+            `Producer ${producerId} in local participant but not in mediaState`
+          );
+        }
+      }
+    }
+
+    // Check if consumers in mediaState have corresponding remote streams
+    for (const [consumerId] of this.mediaState.consumers.entries()) {
+      if (!this.remoteStreams.has(consumerId)) {
+        issues.push(
+          `Consumer ${consumerId} in mediaState but no corresponding remote stream`
+        );
+      }
+    }
+
+    // Check if remote streams have corresponding consumers
+    for (const [consumerId] of this.remoteStreams.entries()) {
+      if (!this.mediaState.consumers.has(consumerId)) {
+        issues.push(
+          `Remote stream ${consumerId} exists but no corresponding consumer in mediaState`
+        );
+      }
+    }
+
+    // Check producer ID consistency
+    if (
+      this.mediaState.audioProducerId &&
+      !this.mediaState.producers.has(this.mediaState.audioProducerId)
+    ) {
+      issues.push(
+        `Audio producer ID ${this.mediaState.audioProducerId} not found in producers map`
+      );
+    }
+
+    if (
+      this.mediaState.videoProducerId &&
+      !this.mediaState.producers.has(this.mediaState.videoProducerId)
+    ) {
+      issues.push(
+        `Video producer ID ${this.mediaState.videoProducerId} not found in producers map`
+      );
+    }
+
+    return {
+      isValid: issues.length === 0,
+      issues,
+    };
+  }
+
+  /**
+   * Sync and fix state inconsistencies
+   */
+  public syncState(): void {
+    this.logger("Syncing state...");
+
+    const localParticipant = this.participants.get(this.config.participantId);
+
+    if (localParticipant) {
+      // Sync producers: ensure all mediaState producers are in local participant
+      for (const [
+        producerId,
+        producer,
+      ] of this.mediaState.producers.entries()) {
+        if (!localParticipant.producers.has(producerId)) {
+          localParticipant.producers.set(producerId, producer);
+          this.logger(`Synced producer ${producerId} to local participant`);
+        }
+      }
+
+      // Remove producers from local participant that are not in mediaState
+      for (const [producerId] of localParticipant.producers.entries()) {
+        if (!this.mediaState.producers.has(producerId)) {
+          localParticipant.producers.delete(producerId);
+          this.logger(
+            `Removed stale producer ${producerId} from local participant`
+          );
+        }
+      }
+    }
+
+    // Remove remote streams without corresponding consumers
+    for (const [consumerId] of this.remoteStreams.entries()) {
+      if (!this.mediaState.consumers.has(consumerId)) {
+        this.remoteStreams.delete(consumerId);
+        this.logger(`Removed stale remote stream ${consumerId}`);
+      }
+    }
+
+    // Validate producer IDs
+    if (
+      this.mediaState.audioProducerId &&
+      !this.mediaState.producers.has(this.mediaState.audioProducerId)
+    ) {
+      this.mediaState.audioProducerId = undefined;
+      this.logger("Reset invalid audio producer ID");
+    }
+
+    if (
+      this.mediaState.videoProducerId &&
+      !this.mediaState.producers.has(this.mediaState.videoProducerId)
+    ) {
+      this.mediaState.videoProducerId = undefined;
+      this.logger("Reset invalid video producer ID");
+    }
+
+    this.logger("State sync completed");
   }
 
   /**
