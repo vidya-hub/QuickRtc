@@ -289,13 +289,14 @@ function setupEventListeners() {
     const participant = client.getRemoteParticipant(participantId);
     const participantName =
       participant?.participantName || participantId.substring(0, 8);
+    console.log(`❌ ${participantName} stopped sharing ${kind}`);
 
     // Show alert based on media type
-    if (kind === "audio") {
-      alert(`🔇 ${participantName} stopped sharing audio`);
-    } else if (kind === "video") {
-      alert(`📹 ${participantName} stopped sharing video`);
-    }
+    // if (kind === "audio") {
+    //   // alert(`🔇 ${participantName} stopped sharing audio`);
+    // } else if (kind === "video") {
+    //   // alert(`📹 ${participantName} stopped sharing video`);
+    // }
 
     removeParticipantStream(participantId, kind);
   });
@@ -353,7 +354,7 @@ function setupEventListeners() {
   // Error events
   client.addEventListener("error", (event) => {
     console.error("❌ Client error:", event.detail.message);
-    alert(`Error: ${event.detail.message}`);
+    // alert(`Error: ${event.detail.message}`);
   });
 }
 

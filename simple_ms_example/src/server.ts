@@ -300,10 +300,10 @@ class MediaSoupExpressServer {
           listenIps: [
             {
               ip: "0.0.0.0",
-              announcedIp: "49.37.249.111", // public ip address
+              announcedIp: "152.57.9.208", // public ip address
             },
             {
-              ip: "192.168.29.46", // local ip address
+              ip: "172.25.217.226", // local network ip address
               announcedIp: null,
             },
           ],
