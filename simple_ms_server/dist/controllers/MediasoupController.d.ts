@@ -56,7 +56,7 @@ declare class MediasoupController extends EnhancedEventEmitter implements AppSta
         conferenceId: string;
         participantId: string;
         producerId: string;
-    }): Promise<void>;
+    }): Promise<"audio" | "video" | null>;
     closeConsumer(params: {
         conferenceId: string;
         participantId: string;

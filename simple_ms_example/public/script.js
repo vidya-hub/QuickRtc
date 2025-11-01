@@ -135,15 +135,29 @@ async function handleToggleAudio() {
   if (!client) return;
 
   try {
-    const enabled = await client.toggleAudio(localAudioStreamId);
-    elements.toggleAudioButton.textContent = enabled
-      ? "🔇 Mute Audio"
-      : "🔊 Unmute Audio";
-    elements.toggleAudioButton.style.background = enabled
-      ? "#dc3545"
-      : "#28a745";
+    // Check if audio stream exists
+    const hasAudio = localAudioStreamId !== null;
+
+    if (hasAudio) {
+      // Mute: stop the audio stream
+      await client.toggleAudio(localAudioStreamId, true);
+      localAudioStreamId = null;
+      elements.toggleAudioButton.textContent = "🔊 Unmute Audio";
+      elements.toggleAudioButton.style.background = "#28a745";
+    } else {
+      // Unmute: create new audio stream
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      const audioTrack = audioStream.getAudioTracks()[0];
+      const { audioStreamId } = await client.produceMedia(audioTrack);
+      localAudioStreamId = audioStreamId;
+      elements.toggleAudioButton.textContent = "� Mute Audio";
+      elements.toggleAudioButton.style.background = "#dc3545";
+    }
   } catch (error) {
     console.error("Error toggling audio:", error);
+    alert("Failed to toggle audio: " + error.message);
   }
 }
 
@@ -152,15 +166,46 @@ async function handleToggleVideo() {
   if (!client) return;
 
   try {
-    const enabled = await client.toggleVideo(localVideoStreamId);
-    elements.toggleVideoButton.textContent = enabled
-      ? "📹 Turn Off Video"
-      : "📷 Turn On Video";
-    elements.toggleVideoButton.style.background = enabled
-      ? "#dc3545"
-      : "#28a745";
+    // Check if video stream exists
+    const hasVideo = localVideoStreamId !== null;
+
+    if (hasVideo) {
+      // Turn off: stop the video stream
+      await client.toggleVideo(localVideoStreamId, true);
+      localVideoStreamId = null;
+      elements.toggleVideoButton.textContent = "📷 Turn On Video";
+      elements.toggleVideoButton.style.background = "#28a745";
+
+      // Clear local video display if no screenshare
+      if (!localScreenShareId && elements.localVideo) {
+        elements.localVideo.srcObject = null;
+      }
+    } else {
+      // Turn on: create new video stream
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+      const videoTrack = videoStream.getVideoTracks()[0];
+      const { videoStreamId } = await client.produceMedia(
+        undefined,
+        videoTrack,
+        "video"
+      );
+      localVideoStreamId = videoStreamId;
+      elements.toggleVideoButton.textContent = "� Turn Off Video";
+      elements.toggleVideoButton.style.background = "#dc3545";
+
+      // Update local video display if no screenshare
+      if (!localScreenShareId) {
+        const localStream = client.getLocalStream(videoStreamId);
+        if (localStream && elements.localVideo) {
+          elements.localVideo.srcObject = localStream;
+        }
+      }
+    }
   } catch (error) {
     console.error("Error toggling video:", error);
+    alert("Failed to toggle video: " + error.message);
   }
 }
 
@@ -239,6 +284,19 @@ function setupEventListeners() {
   client.addEventListener("remoteStreamRemoved", (event) => {
     const { participantId, kind } = event.detail;
     console.log("❌ Remote stream removed:", participantId, kind);
+
+    // Get participant name for better alert message
+    const participant = client.getRemoteParticipant(participantId);
+    const participantName =
+      participant?.participantName || participantId.substring(0, 8);
+
+    // Show alert based on media type
+    if (kind === "audio") {
+      alert(`🔇 ${participantName} stopped sharing audio`);
+    } else if (kind === "video") {
+      alert(`📹 ${participantName} stopped sharing video`);
+    }
+
     removeParticipantStream(participantId, kind);
   });
 
@@ -290,25 +348,6 @@ function setupEventListeners() {
         elements.localVideo.srcObject = localStream;
       }
     }
-  });
-
-  // Remote media toggle events
-  client.addEventListener("remoteAudioToggled", (event) => {
-    const { participantId, enabled } = event.detail;
-    console.log(
-      `🎤 Remote audio from ${participantId}:`,
-      enabled ? "ON" : "OFF"
-    );
-    updateRemoteMediaIndicator(participantId, "audio", enabled);
-  });
-
-  client.addEventListener("remoteVideoToggled", (event) => {
-    const { participantId, enabled } = event.detail;
-    console.log(
-      `📹 Remote video from ${participantId}:`,
-      enabled ? "ON" : "OFF"
-    );
-    updateRemoteMediaIndicator(participantId, "video", enabled);
   });
 
   // Error events
@@ -553,24 +592,6 @@ function removeParticipantStream(participantId, kind) {
 }
 
 // Update remote media indicator (for remote mute/unmute events)
-function updateRemoteMediaIndicator(participantId, kind, enabled) {
-  const container = document.getElementById(`participant-${participantId}`);
-  if (!container) return;
-
-  if (kind === "audio") {
-    const indicator = container.querySelector(".audio-indicator");
-    if (indicator) {
-      indicator.innerHTML = enabled ? "🔊" : "🔇";
-      indicator.style.opacity = enabled ? "1" : "0.5";
-    }
-  } else if (kind === "video") {
-    const videoEl = container.querySelector(".video-element");
-    if (videoEl) {
-      videoEl.style.opacity = enabled ? "1" : "0.3";
-    }
-  }
-}
-
 // Add participant to list
 function addParticipantToList(participantName, participantId) {
   const li = document.createElement("li");

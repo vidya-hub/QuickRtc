@@ -147,16 +147,16 @@ export declare class ConferenceClient extends EventTarget {
     stopWatchingStream(participantId: string): Promise<void>;
     /**
      * 5a. Toggle local audio on/off
-     * Stops the audio track when muting (turns off microphone)
-     * Gets a new track when unmuting
+     * Stops the audio track and closes producer when muting
+     * Creates new track and producer when unmuting
      * @param streamId - ID of the audio stream to toggle, or first audio stream if not provided
      * @param mute - Explicit mute state (true = mute, false = unmute)
      */
     toggleAudio(streamId?: string, mute?: boolean): Promise<boolean>;
     /**
      * 5b. Toggle local video on/off
-     * Stops the video track when muting (turns off camera)
-     * Gets a new track when unmuting
+     * Stops the video track and closes producer when muting
+     * Creates new track and producer when unmuting
      * @param streamId - ID of the video stream to toggle, or first video stream if not provided
      * @param mute - Explicit mute state (true = mute, false = unmute)
      */

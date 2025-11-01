@@ -183,7 +183,7 @@ class MediasoupConference {
         if (!participant) {
             throw new Error("Participant does not exist in the conference");
         }
-        participant.removeProducer(producerId);
+        return participant.removeProducer(producerId);
     }
     async closeConsumer(participantId, consumerId) {
         const participant = this.getParticipant(participantId);

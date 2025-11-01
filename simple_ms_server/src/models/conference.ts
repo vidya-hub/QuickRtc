@@ -250,14 +250,14 @@ class MediasoupConference implements Conference {
   async closeProducer(
     participantId: string,
     producerId: string
-  ): Promise<void> {
+  ): Promise<"audio" | "video" | null> {
     const participant = this.getParticipant(
       participantId
     ) as MediasoupParticipant;
     if (!participant) {
       throw new Error("Participant does not exist in the conference");
     }
-    participant.removeProducer(producerId);
+    return participant.removeProducer(producerId);
   }
 
   async closeConsumer(

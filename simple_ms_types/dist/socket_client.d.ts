@@ -141,6 +141,7 @@ export interface NewProducerData {
 export interface ProducerClosedData {
     participantId: string;
     producerId: string;
+    kind: "audio" | "video";
 }
 export interface ConsumerClosedData {
     participantId: string;

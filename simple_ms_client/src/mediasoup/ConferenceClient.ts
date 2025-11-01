@@ -484,8 +484,8 @@ export class ConferenceClient extends EventTarget {
 
   /**
    * 5a. Toggle local audio on/off
-   * Stops the audio track when muting (turns off microphone)
-   * Gets a new track when unmuting
+   * Stops the audio track and closes producer when muting
+   * Creates new track and producer when unmuting
    * @param streamId - ID of the audio stream to toggle, or first audio stream if not provided
    * @param mute - Explicit mute state (true = mute, false = unmute)
    */
@@ -513,48 +513,19 @@ export class ConferenceClient extends EventTarget {
     }
 
     try {
-      const shouldMute =
-        mute !== undefined ? mute : !audioStream.producer.paused;
+      const isCurrentlyEnabled = !audioStream.producer.closed;
+      const shouldMute = mute !== undefined ? mute : isCurrentlyEnabled;
 
       if (shouldMute) {
-        // Mute audio - stop the microphone track
-        audioStream.producer.pause();
-        audioStream.track.enabled = false;
-        audioStream.track.stop(); // Stop the microphone
-        await this.socketController!.pauseProducer(audioStream.producer.id);
+        // Mute: Close producer and stop track
+        await this.stopLocalStream(audioStream.id);
+        console.log(`Audio muted for stream ${audioStream.id}`);
+        return false;
       } else {
-        // Unmute audio - get a new audio track
-        try {
-          const newAudioStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
-          });
-          const newAudioTrack = newAudioStream.getAudioTracks()[0];
-
-          // Replace the track in the producer
-          await audioStream.producer.replaceTrack({ track: newAudioTrack });
-
-          // Update stored track and stream
-          audioStream.track = newAudioTrack;
-          audioStream.stream = new MediaStream([newAudioTrack]);
-
-          audioStream.producer.resume();
-          await this.socketController!.resumeProducer(audioStream.producer.id);
-        } catch (err) {
-          console.error("Failed to get audio track:", err);
-          throw new Error("Could not access microphone");
-        }
+        // This shouldn't happen - if stream exists and we want to unmute, it's already unmuted
+        console.warn("Audio stream already active");
+        return true;
       }
-
-      this.dispatchEvent(
-        new CustomEvent("localAudioToggled", {
-          detail: { streamId: audioStream.id, enabled: !shouldMute },
-        })
-      );
-
-      console.log(
-        `Audio ${shouldMute ? "muted" : "unmuted"} for stream ${audioStream.id}`
-      );
-      return !shouldMute;
     } catch (error) {
       console.error("Error toggling audio:", error);
       this.dispatchEvent(
@@ -562,14 +533,14 @@ export class ConferenceClient extends EventTarget {
           detail: { message: "Failed to toggle audio", error },
         })
       );
-      return audioStream.producer.paused;
+      return false;
     }
   }
 
   /**
    * 5b. Toggle local video on/off
-   * Stops the video track when muting (turns off camera)
-   * Gets a new track when unmuting
+   * Stops the video track and closes producer when muting
+   * Creates new track and producer when unmuting
    * @param streamId - ID of the video stream to toggle, or first video stream if not provided
    * @param mute - Explicit mute state (true = mute, false = unmute)
    */
@@ -590,10 +561,8 @@ export class ConferenceClient extends EventTarget {
         return false;
       }
     } else {
-      // Find first video or screenshare stream
-      videoStream = this.localStreams.find(
-        (s) => s.type === "video" || s.type === "screenshare"
-      );
+      // Find first video stream (not screenshare)
+      videoStream = this.localStreams.find((s) => s.type === "video");
     }
 
     if (!videoStream) {
@@ -602,48 +571,19 @@ export class ConferenceClient extends EventTarget {
     }
 
     try {
-      const shouldMute =
-        mute !== undefined ? mute : !videoStream.producer.paused;
+      const isCurrentlyEnabled = !videoStream.producer.closed;
+      const shouldMute = mute !== undefined ? mute : isCurrentlyEnabled;
 
       if (shouldMute) {
-        // Mute video - stop the camera track
-        videoStream.producer.pause();
-        videoStream.track.enabled = false;
-        videoStream.track.stop(); // Stop the camera
-        await this.socketController!.pauseProducer(videoStream.producer.id);
+        // Mute: Close producer and stop track
+        await this.stopLocalStream(videoStream.id);
+        console.log(`Video muted for stream ${videoStream.id}`);
+        return false;
       } else {
-        // Unmute video - get a new video track
-        try {
-          const newVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-          });
-          const newVideoTrack = newVideoStream.getVideoTracks()[0];
-
-          // Replace the track in the producer
-          await videoStream.producer.replaceTrack({ track: newVideoTrack });
-
-          // Update stored track and stream
-          videoStream.track = newVideoTrack;
-          videoStream.stream = new MediaStream([newVideoTrack]);
-
-          videoStream.producer.resume();
-          await this.socketController!.resumeProducer(videoStream.producer.id);
-        } catch (err) {
-          console.error("Failed to get video track:", err);
-          throw new Error("Could not access camera");
-        }
+        // This shouldn't happen - if stream exists and we want to unmute, it's already unmuted
+        console.warn("Video stream already active");
+        return true;
       }
-
-      this.dispatchEvent(
-        new CustomEvent("localVideoToggled", {
-          detail: { streamId: videoStream.id, enabled: !shouldMute },
-        })
-      );
-
-      console.log(
-        `Video ${shouldMute ? "muted" : "unmuted"} for stream ${videoStream.id}`
-      );
-      return !shouldMute;
     } catch (error) {
       console.error("Error toggling video:", error);
       this.dispatchEvent(
@@ -651,7 +591,7 @@ export class ConferenceClient extends EventTarget {
           detail: { message: "Failed to toggle video", error },
         })
       );
-      return videoStream.producer.paused;
+      return false;
     }
   }
 
@@ -844,8 +784,46 @@ export class ConferenceClient extends EventTarget {
     this.socketController.addEventListener("producerClosed", ((
       event: CustomEvent
     ) => {
-      const { producerId, participantId } = event.detail;
-      console.log("Producer closed:", producerId, "from", participantId);
+      const { producerId, participantId, kind } = event.detail;
+      console.log(
+        `Producer closed: ${producerId} (${kind}) from participant ${participantId}`
+      );
+
+      // Find and close the corresponding consumer
+      const participant = this.remoteParticipants.get(participantId);
+      if (!participant) {
+        return;
+      }
+
+      // Close the appropriate consumer based on kind
+      if (kind === "audio" && participant.audioConsumer) {
+        participant.audioConsumer.close();
+        participant.audioConsumer = undefined;
+        participant.audioStream = undefined;
+
+        // Emit event for UI to remove audio
+        this.dispatchEvent(
+          new CustomEvent("remoteStreamRemoved", {
+            detail: { participantId, kind: "audio" },
+          })
+        );
+      } else if (kind === "video" && participant.videoConsumer) {
+        participant.videoConsumer.close();
+        participant.videoConsumer = undefined;
+        participant.videoStream = undefined;
+
+        // Emit event for UI to remove video
+        this.dispatchEvent(
+          new CustomEvent("remoteStreamRemoved", {
+            detail: { participantId, kind: "video" },
+          })
+        );
+      }
+
+      // If both consumers are closed, remove the participant
+      if (!participant.audioConsumer && !participant.videoConsumer) {
+        this.remoteParticipants.delete(participantId);
+      }
     }) as EventListener);
 
     // Consumer closed
@@ -856,54 +834,7 @@ export class ConferenceClient extends EventTarget {
       console.log("Consumer closed:", consumerId);
     }) as EventListener);
 
-    // Remote participant audio muted
-    this.socketController.addEventListener("audioMuted", ((
-      event: CustomEvent
-    ) => {
-      const { participantId } = event.detail;
-      this.dispatchEvent(
-        new CustomEvent("remoteAudioToggled", {
-          detail: { participantId, enabled: false },
-        })
-      );
-    }) as EventListener);
-
-    // Remote participant audio unmuted
-    this.socketController.addEventListener("audioUnmuted", ((
-      event: CustomEvent
-    ) => {
-      const { participantId } = event.detail;
-      this.dispatchEvent(
-        new CustomEvent("remoteAudioToggled", {
-          detail: { participantId, enabled: true },
-        })
-      );
-    }) as EventListener);
-
-    // Remote participant video muted
-    this.socketController.addEventListener("videoMuted", ((
-      event: CustomEvent
-    ) => {
-      const { participantId } = event.detail;
-      this.dispatchEvent(
-        new CustomEvent("remoteVideoToggled", {
-          detail: { participantId, enabled: false },
-        })
-      );
-    }) as EventListener);
-
-    // Remote participant video unmuted
-    this.socketController.addEventListener("videoUnmuted", ((
-      event: CustomEvent
-    ) => {
-      const { participantId } = event.detail;
-      this.dispatchEvent(
-        new CustomEvent("remoteVideoToggled", {
-          detail: { participantId, enabled: true },
-        })
-      );
-    }) as EventListener);
-
+    // Socket errors    // Remote participant audio unmuted
     // Socket errors
     this.socketController.addEventListener("error", ((event: CustomEvent) => {
       console.error("Socket error:", event.detail);

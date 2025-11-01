@@ -51,8 +51,6 @@ export declare class SocketClientController extends EventTarget {
      * Unpause consumer
      */
     unpauseConsumer(consumerId: string): Promise<void>;
-    resumeProducer(producerId: string): Promise<void>;
-    pauseProducer(producerId: string): Promise<void>;
     closeProducer(producerId: string): Promise<void>;
     closeConsumer(consumerId: string): Promise<void>;
     leaveConference(): Promise<void>;

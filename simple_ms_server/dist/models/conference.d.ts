@@ -42,7 +42,7 @@ declare class MediasoupConference implements Conference {
     }>;
     resumeProducer(participantId: string, producerId: string): Promise<void>;
     pauseConsumer(participantId: string, consumerId: string): Promise<void>;
-    closeProducer(participantId: string, producerId: string): Promise<void>;
+    closeProducer(participantId: string, producerId: string): Promise<"audio" | "video" | null>;
     closeConsumer(participantId: string, consumerId: string): Promise<void>;
     isEmpty(): boolean;
     getParticipantCount(): number;
