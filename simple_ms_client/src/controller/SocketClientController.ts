@@ -300,42 +300,6 @@ export class SocketClientController extends EventTarget {
     }
   }
 
-  async resumeProducer(producerId: string): Promise<void> {
-    const requestData: ProducerControlRequest = {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-      extraData: {
-        producerId,
-      },
-    };
-
-    const response = await this.socket.emitWithAck(
-      "resumeProducer",
-      requestData
-    );
-    if (response.status === "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
-      throw new Error(response.error);
-    }
-  }
-
-  async pauseProducer(producerId: string): Promise<void> {
-    const requestData: ProducerControlRequest = {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-      extraData: { producerId },
-    };
-
-    const response = await this.socket.emitWithAck(
-      "pauseProducer",
-      requestData
-    );
-    if (response.status === "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
-      throw new Error(response.error);
-    }
-  }
-
   async closeProducer(producerId: string): Promise<void> {
     const requestData: ProducerControlRequest = {
       conferenceId: this.joinParams.conferenceId,
@@ -444,27 +408,6 @@ export class SocketClientController extends EventTarget {
     this.socket.on("consumerClosed", (data) => {
       logger(`Consumer closed event received: ${JSON.stringify(data)}`);
       this.dispatchEvent(new CustomEvent("consumerClosed", { detail: data }));
-    });
-
-    // Media state events
-    this.socket.on("audioMuted", (data) => {
-      logger(`Audio muted event received: ${JSON.stringify(data)}`);
-      this.dispatchEvent(new CustomEvent("audioMuted", { detail: data }));
-    });
-
-    this.socket.on("audioUnmuted", (data) => {
-      logger(`Audio unmuted event received: ${JSON.stringify(data)}`);
-      this.dispatchEvent(new CustomEvent("audioUnmuted", { detail: data }));
-    });
-
-    this.socket.on("videoMuted", (data) => {
-      logger(`Video muted event received: ${JSON.stringify(data)}`);
-      this.dispatchEvent(new CustomEvent("videoMuted", { detail: data }));
-    });
-
-    this.socket.on("videoUnmuted", (data) => {
-      logger(`Video unmuted event received: ${JSON.stringify(data)}`);
-      this.dispatchEvent(new CustomEvent("videoUnmuted", { detail: data }));
     });
 
     // Connection events

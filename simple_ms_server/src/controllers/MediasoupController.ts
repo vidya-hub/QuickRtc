@@ -342,19 +342,33 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
     conferenceId: string;
     participantId: string;
     producerId: string;
-  }): Promise<void> {
+  }): Promise<"audio" | "video" | null> {
     const { conferenceId, participantId, producerId } = params;
     const conference = this.conferences.get(conferenceId);
     if (!conference) {
       throw new Error("Conference does not exist");
     }
-    await conference.closeProducer(participantId, producerId);
+    const kind = await conference.closeProducer(participantId, producerId);
 
     this.emit("producerClosed", {
       conferenceId,
       participantId,
       producerId,
+      kind,
     });
+
+    console.log(
+      `📹 Producer closed: ${producerId} for participant ${participantId}`
+    );
+    console.log(
+      `[${new Date().toISOString()}] 📹 Producer closed: ${producerId}`
+    );
+    console.log(
+      `[${new Date().toISOString()}] 👤 Participant: ${participantId}`
+    );
+    console.log(`[${new Date().toISOString()}] 🎭 Media kind: ${kind}`);
+
+    return kind;
   }
 
   async closeConsumer(params: {

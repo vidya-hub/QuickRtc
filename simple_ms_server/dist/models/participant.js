@@ -29,11 +29,15 @@ class MediasoupParticipant {
         const userProducers = this.producers.get(this.id);
         if (userProducers && userProducers[producerId]) {
             const producer = userProducers[producerId];
+            const mediaState = this.getMediaState(producerId);
+            const kind = mediaState?.kind || producer.kind;
             producer.close();
             delete userProducers[producerId];
             this.producers.set(this.id, userProducers);
             this.updateMediaState(producerId, { closed: true });
+            return kind;
         }
+        return null;
     }
     removeConsumer(consumerId) {
         const userConsumers = this.consumers.get(this.id);
@@ -169,8 +173,11 @@ class MediasoupParticipant {
         const userProducers = this.producers.get(this.id);
         if (userProducers && userProducers[producerId]) {
             const producer = userProducers[producerId];
+            const mediaState = this.getMediaState(producerId);
+            const kind = mediaState?.kind || producer.kind;
             producer.pause();
             this.updateMediaState(producerId, { paused: true });
+            return kind;
         }
         else {
             throw new Error("Producer not found");

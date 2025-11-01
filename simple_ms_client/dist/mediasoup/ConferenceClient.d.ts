@@ -1,4 +1,4 @@
-import { Consumer } from "mediasoup-client/types";
+import { Producer, Consumer } from "mediasoup-client/types";
 import { ClientSocket } from "@simple-mediasoup/types";
 /**
  * Configuration for ConferenceClient
@@ -22,6 +22,20 @@ export interface RemoteParticipant {
     audioConsumer?: Consumer;
 }
 /**
+ * Local stream types
+ */
+export type LocalStreamType = "audio" | "video" | "screenshare";
+/**
+ * Local stream information
+ */
+export interface LocalStreamInfo {
+    id: string;
+    type: LocalStreamType;
+    track: MediaStreamTrack;
+    producer: Producer;
+    stream: MediaStream;
+}
+/**
  * Events emitted by ConferenceClient
  */
 export interface ConferenceClientEvents {
@@ -41,10 +55,21 @@ export interface ConferenceClientEvents {
         participantId: string;
         kind: "audio" | "video";
     };
+    localStreamAdded: {
+        streamId: string;
+        type: LocalStreamType;
+        stream: MediaStream;
+    };
+    localStreamRemoved: {
+        streamId: string;
+        type: LocalStreamType;
+    };
     localAudioToggled: {
+        streamId: string;
         enabled: boolean;
     };
     localVideoToggled: {
+        streamId: string;
         enabled: boolean;
     };
     remoteAudioToggled: {
@@ -66,10 +91,17 @@ export interface ConferenceClientEvents {
  * Usage:
  * 1. Create client with config
  * 2. Call joinMeeting()
- * 3. Call enableMedia(audio, video)
- * 4. Listen to events for remote participants
- * 5. Use toggleAudio/toggleVideo for media controls
- * 6. Call leaveMeeting() when done
+ * 3. Get media tracks from navigator.mediaDevices.getUserMedia()
+ * 4. Extract audio/video tracks and call produceMedia(audioTrack, videoTrack) to send media
+ * 5. Listen to events for remote participants
+ * 6. Use toggleAudio/toggleVideo for media controls
+ * 7. Call leaveMeeting() when done
+ *
+ * Example:
+ *   const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+ *   const audioTrack = mediaStream.getAudioTracks()[0];
+ *   const videoTrack = mediaStream.getVideoTracks()[0];
+ *   await client.produceMedia(audioTrack, videoTrack);
  */
 export declare class ConferenceClient extends EventTarget {
     config: ConferenceClientConfig;
@@ -77,12 +109,9 @@ export declare class ConferenceClient extends EventTarget {
     private sendTransport;
     private recvTransport;
     private socketController;
-    private localStream;
-    private audioProducer;
-    private videoProducer;
+    private localStreams;
     private remoteParticipants;
     private isJoined;
-    private isMediaEnabled;
     constructor(config: ConferenceClientConfig);
     /**
      * 1. Join the meeting
@@ -90,10 +119,18 @@ export declare class ConferenceClient extends EventTarget {
      */
     joinMeeting(): Promise<void>;
     /**
-     * 2. Enable local media (audio/video)
-     * Gets user media and creates producers
+     * 2. Produce media to the conference
+     * Takes audio and/or video tracks and sends them to other participants
+     * Returns stream IDs for tracking and toggling
+     * @param audioTrack - Optional audio MediaStreamTrack to produce
+     * @param videoTrack - Optional video MediaStreamTrack to produce
+     * @param type - Type of stream: "audio", "video", or "screenshare"
+     * @returns Object with streamIds for audio and video
      */
-    enableMedia(audio?: boolean, video?: boolean): Promise<MediaStream>;
+    produceMedia(audioTrack?: MediaStreamTrack, videoTrack?: MediaStreamTrack, type?: LocalStreamType): Promise<{
+        audioStreamId?: string;
+        videoStreamId?: string;
+    }>;
     /**
      * 3. Consume existing participants' streams
      * Fetches and consumes media from all participants already in the conference
@@ -110,12 +147,26 @@ export declare class ConferenceClient extends EventTarget {
     stopWatchingStream(participantId: string): Promise<void>;
     /**
      * 5a. Toggle local audio on/off
+     * Stops the audio track and closes producer when muting
+     * Creates new track and producer when unmuting
+     * @param streamId - ID of the audio stream to toggle, or first audio stream if not provided
+     * @param mute - Explicit mute state (true = mute, false = unmute)
      */
-    toggleAudio(mute?: boolean): Promise<boolean>;
+    toggleAudio(streamId?: string, mute?: boolean): Promise<boolean>;
     /**
      * 5b. Toggle local video on/off
+     * Stops the video track and closes producer when muting
+     * Creates new track and producer when unmuting
+     * @param streamId - ID of the video stream to toggle, or first video stream if not provided
+     * @param mute - Explicit mute state (true = mute, false = unmute)
      */
-    toggleVideo(mute?: boolean): Promise<boolean>;
+    toggleVideo(streamId?: string, mute?: boolean): Promise<boolean>;
+    /**
+     * 5c. Stop a specific local stream
+     * Useful for stopping screen share or individual streams
+     * @param streamId - ID of the stream to stop
+     */
+    stopLocalStream(streamId: string): Promise<boolean>;
     /**
      * 6. Leave the meeting
      * Cleans up all resources and disconnects
@@ -147,7 +198,15 @@ export declare class ConferenceClient extends EventTarget {
      */
     isLocalMediaEnabled(): boolean;
     /**
-     * Get local media stream
+     * Get all local streams
      */
-    getLocalStream(): MediaStream | null;
+    getLocalStreams(): LocalStreamInfo[];
+    /**
+     * Get a specific local stream by ID
+     */
+    getLocalStream(streamId: string): MediaStream | null;
+    /**
+     * Get local streams by type
+     */
+    getLocalStreamsByType(type: LocalStreamType): LocalStreamInfo[];
 }

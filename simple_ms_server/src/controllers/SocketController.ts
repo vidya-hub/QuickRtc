@@ -106,26 +106,6 @@ class SocketEventController extends EnhancedEventEmitter {
       );
 
       socket.on(
-        "pauseProducer",
-        async (
-          socketEventData: ProducerControlRequest,
-          callback: (response: SocketResponse) => void
-        ) => {
-          await this.pauseProducerHandler(socketEventData, callback);
-        }
-      );
-
-      socket.on(
-        "resumeProducer",
-        async (
-          socketEventData: ProducerControlRequest,
-          callback: (response: SocketResponse) => void
-        ) => {
-          await this.resumeProducer(socketEventData, callback);
-        }
-      );
-
-      socket.on(
         "closeProducer",
         async (
           socketEventData: ProducerControlRequest,
@@ -328,42 +308,6 @@ class SocketEventController extends EnhancedEventEmitter {
     }
   }
 
-  private async pauseProducerHandler(
-    socketEventData: ProducerControlRequest,
-    callback: (response: SocketResponse) => void
-  ) {
-    console.log("pause producer ", socketEventData);
-
-    const { extraData, conferenceId, participantId } = socketEventData;
-    const { producerId } = extraData || {};
-
-    if (!producerId) {
-      callback({ status: "error", error: "Missing producerId" });
-      return;
-    }
-
-    try {
-      await this.mediasoupController?.pauseProducer({
-        conferenceId,
-        participantId,
-        producerId,
-      });
-      callback({ status: "ok" });
-
-      const producerClosedData: ProducerClosedData = {
-        participantId,
-        producerId,
-      };
-      this.mediasoupSocket
-        .to(conferenceId)
-        .emit("producerPaused", producerClosedData);
-      this.emit("producerPaused", producerClosedData);
-    } catch (error) {
-      console.error("Error pausing producer:", error);
-      callback({ status: "error", error: (error as Error).message });
-    }
-  }
-
   private async closeProducer(
     socketEventData: ProducerControlRequest,
     callback: (response: SocketResponse) => void
@@ -377,7 +321,7 @@ class SocketEventController extends EnhancedEventEmitter {
     }
 
     try {
-      await this.mediasoupController?.closeProducer({
+      const kind = await this.mediasoupController?.closeProducer({
         conferenceId,
         participantId,
         producerId,
@@ -387,6 +331,7 @@ class SocketEventController extends EnhancedEventEmitter {
       const producerClosedData: ProducerClosedData = {
         participantId,
         producerId,
+        kind: kind || "video", // Default to video if kind is null
       };
       this.mediasoupSocket
         .to(conferenceId)
@@ -650,6 +595,7 @@ class SocketEventController extends EnhancedEventEmitter {
           const producerClosedData: ProducerClosedData = {
             participantId: cleanup.participantId!,
             producerId,
+            kind: "video", // Default for cleanup
           };
           socket.to(conferenceId).emit("producerClosed", producerClosedData);
         });
@@ -704,6 +650,7 @@ class SocketEventController extends EnhancedEventEmitter {
           const producerClosedData: ProducerClosedData = {
             participantId,
             producerId,
+            kind: "video", // Default for cleanup
           };
           socket.to(conferenceId).emit("producerClosed", producerClosedData);
         });
@@ -728,32 +675,6 @@ class SocketEventController extends EnhancedEventEmitter {
       });
     } catch (error) {
       console.error("Error handling leave conference:", error);
-      callback({ status: "error", error: (error as Error).message });
-    }
-  }
-
-  public async resumeProducer(
-    socketEventData: ProducerControlRequest,
-    callback: (response: SocketResponse) => void
-  ) {
-    const { extraData, conferenceId, participantId } = socketEventData;
-    const { producerId } = extraData || {};
-
-    if (!producerId) {
-      callback({ status: "error", error: "Missing producerId" });
-      return;
-    }
-
-    try {
-      await this.mediasoupController?.resumeProducer({
-        conferenceId,
-        participantId,
-        producerId,
-      });
-      callback({ status: "ok" });
-      this.emit("producerResumed", { producerId, participantId });
-    } catch (error) {
-      console.error("Error resuming producer:", error);
       callback({ status: "error", error: (error as Error).message });
     }
   }

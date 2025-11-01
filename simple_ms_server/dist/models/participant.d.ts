@@ -15,7 +15,7 @@ declare class MediasoupParticipant implements Participant {
     setConsumerTransport(transport: Transport): void;
     addProducer(producer: mediasoup.types.Producer): void;
     addConsumer(consumer: mediasoup.types.Consumer): void;
-    removeProducer(producerId: string): void;
+    removeProducer(producerId: string): "audio" | "video" | null;
     removeConsumer(consumerId: string): void;
     closeAllProducers(): Promise<string[]>;
     closeAllConsumers(): Promise<string[]>;
@@ -29,7 +29,7 @@ declare class MediasoupParticipant implements Participant {
     produce(produceParams: ProduceParams): Promise<string>;
     consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;
     resumeConsumer(consumerId: string): Promise<void>;
-    pauseProducer(producerId: string): void;
+    pauseProducer(producerId: string): "audio" | "video" | null;
     resumeProducer(producerId: string): void;
     pauseConsumer(consumerId: string): void;
     getProducerById(producerId: string): mediasoup.types.Producer | null;

@@ -1,7 +1,6 @@
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import { Server } from "socket.io";
 import MediasoupController from "./MediasoupController";
-import { SocketResponse, ProducerControlRequest } from "@simple-mediasoup/types";
 declare class SocketEventController extends EnhancedEventEmitter {
     private mediasoupController?;
     private mediasoupSocket;
@@ -17,7 +16,6 @@ declare class SocketEventController extends EnhancedEventEmitter {
      * Unpause consumer - simplified version
      */
     private unpauseConsumer;
-    private pauseProducerHandler;
     private closeProducer;
     private closeConsumer;
     private handleJoinConference;
@@ -28,7 +26,6 @@ declare class SocketEventController extends EnhancedEventEmitter {
     private onUserDisconnected;
     private onNewConnection;
     private handleLeaveConference;
-    resumeProducer(socketEventData: ProducerControlRequest, callback: (response: SocketResponse) => void): Promise<void>;
 }
 export default SocketEventController;
 //# sourceMappingURL=SocketController.d.ts.map

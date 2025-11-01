@@ -1,409 +1,636 @@
-# Simple MediaSoup Example - TypeScript with Dependency Injection
+# 🎬 Simple MediaSoup Example
 
-This example demonstrates how to use the Simple MediaSoup library with **proper dependency injection** principles. The library no longer creates HTTP/HTTPS servers internally - instead, it accepts your externally created servers, giving you full control over server configuration and lifecycle.
+A complete working example demonstrating how to build a video conferencing application using Simple MediaSoup Client and Server packages with dependency injection architecture.
 
-## 🚀 Key Features
+---
 
-- **Dependency Injection**: Inject your own HTTP/HTTPS servers and Socket.IO instances
-- **TypeScript Support**: Full type safety and IntelliSense support
-- **HTTPS Support**: Easy SSL certificate generation and HTTPS setup
-- **Production Ready**: Proper error handling and graceful shutdown
-- **Flexible Architecture**: Use with Express, Fastify, or any Node.js HTTP framework
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Setup Instructions](#-setup-instructions)
+- [Usage Guide](#-usage-guide)
+- [Flow Diagrams](#-flow-diagrams)
+- [Development](#-development)
+
+---
+
+## ✨ Features
+
+- **🔌 Dependency Injection**: Server doesn't create HTTP/HTTPS servers - you control them
+- **🔐 HTTPS Support**: Self-signed certificates for development
+- **📱 Responsive UI**: Works on desktop and mobile browsers
+- **🎥 Full Media Support**: Audio, video, and screen sharing
+- **👥 Multi-Participant**: Support for multiple participants in a conference
+- **🎮 Media Controls**: Mute/unmute audio and video
+- **🖥️ Screen Sharing**: Built-in screen share support
+- **📊 Participant List**: Real-time participant tracking
+- **🔔 Notifications**: Visual notifications for participant events
+- **⚡ TypeScript**: Fully typed with TypeScript
+
+---
+
+## ⚡ Quick Start
+
+### One-Command Setup and Run
+
+```bash
+# Clone the repository
+git clone https://github.com/vidya-hub/simple_mediasoup.git
+cd simple_mediasoup/simple_ms_example
+
+# Install, build, generate certificates, and start
+npm run setup && npm run start:https
+```
+
+Then open **https://localhost:3443** in your browser and accept the certificate warning.
+
+**That's it!** You now have a fully functional video conferencing application.
+
+---
+
+## 🏗️ Architecture
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        BROWSER CLIENT                            │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
+│  │   HTML     │  │ JavaScript │  │   Socket   │                │
+│  │   UI       │←→│   Client   │←→│    .IO     │                │
+│  └────────────┘  └────────────┘  └────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ WebSocket + WebRTC
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      EXPRESS SERVER                              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
+│  │   HTTP/    │  │  Socket.IO │  │   Static   │                │
+│  │   HTTPS    │←→│   Server   │  │   Files    │                │
+│  └────────────┘  └────────────┘  └────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            │ Dependency Injection
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    SIMPLE MEDIASOUP SERVER                       │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
+│  │ Conference │  │Participant │  │   Media    │                │
+│  │  Manager   │←→│  Manager   │←→│  Handler   │                │
+│  └────────────┘  └────────────┘  └────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      MEDIASOUP CORE                              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
+│  │  Workers   │  │  Routers   │  │ Transports │                │
+│  │            │→ │            │→ │            │                │
+│  └────────────┘  └────────────┘  └────────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Dependency Injection Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  YOUR APPLICATION                            │
+│                   (server.ts)                                │
+│                                                              │
+│  1. Create Express App                                       │
+│  2. Create HTTP/HTTPS Server    ← YOU CONTROL THIS          │
+│  3. Create Socket.IO Server     ← YOU CONTROL THIS          │
+│                                                              │
+│  4. Inject into SimpleServer                                 │
+│     new SimpleServer({                                       │
+│       httpServer,      // Your HTTP server                   │
+│       socketServer,    // Your Socket.IO server              │
+│       mediasoup: {}    // MediaSoup config                   │
+│     })                                                       │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│               SIMPLE MEDIASOUP SERVER                        │
+│                                                              │
+│  • Uses YOUR HTTP server (doesn't create its own)            │
+│  • Uses YOUR Socket.IO instance (doesn't create its own)     │
+│  • Handles MediaSoup logic only                              │
+│  • Emits events back to your app                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 📁 Project Structure
 
 ```
 simple_ms_example/
 ├── src/
-│   ├── server.ts          # Main TypeScript server implementation
-│   └── types.d.ts         # Type declarations for library compatibility
+│   └── server.ts              # TypeScript Express + MediaSoup server
 ├── public/
-│   └── index.html         # Client web interface
-├── certs/                 # SSL certificates (generated)
-├── dist/                  # Compiled JavaScript (generated)
-├── package.json           # Dependencies and scripts
-└── tsconfig.json          # TypeScript configuration
+│   ├── index.html             # Client UI
+│   ├── script.js              # Client JavaScript
+│   └── simple_ms_client/      # Client library (symlinked)
+│       └── client.js
+├── certs/
+│   ├── cert.pem               # SSL certificate (generated)
+│   └── key.pem                # SSL private key (generated)
+├── dist/                      # Compiled TypeScript output
+│   └── server.js
+├── package.json               # Dependencies and scripts
+├── tsconfig.json              # TypeScript configuration
+├── setup.sh                   # Setup script
+└── README.md                  # This file
 ```
 
-## Quick Start
+---
 
-### Option 1: One-Command Setup
+## 🛠️ Setup Instructions
+
+### Prerequisites
+
+- Node.js 18+
+- npm, yarn, or pnpm
+
+### Option 1: Automated Setup (Recommended)
 
 ```bash
-npm run setup && npm run start:https
+# Run the setup script
+npm run setup
+
+# This will:
+# 1. Install dependencies
+# 2. Build all packages
+# 3. Generate SSL certificates
+# 4. Test HTTPS setup
 ```
 
-Then open `https://localhost:3443` in your browser and accept the certificate warning.
+### Option 2: Manual Setup
 
-### Option 2: Step-by-Step Setup
-
-### 1. Install Dependencies
+#### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Build Required Packages
+#### 2. Build Packages
 
 ```bash
+# Build all related packages
 npm run build
 ```
 
-### 3. Generate SSL Certificates (for HTTPS)
+This builds:
+
+- `simple_ms_types` - Shared TypeScript types
+- `simple_ms_server` - Server package
+- `simple_ms_client` - Client package
+- `simple_ms_example` - This example app
+
+#### 3. Generate SSL Certificates
+
+**For HTTPS (Required for WebRTC):**
 
 ```bash
 npm run generate-certs
 ```
 
-### 4. Test HTTPS Setup (Optional)
+This creates self-signed certificates in the `certs/` directory.
+
+#### 4. Test HTTPS Setup (Optional)
 
 ```bash
 npm run test-https
 ```
 
-### 5. Start the Server
+---
 
-**HTTP (Development only - limited WebRTC features):**
+## 🚀 Usage Guide
+
+### Starting the Server
+
+**HTTP (Development - Limited WebRTC features):**
 
 ```bash
 npm start
-```
-
-**HTTPS (Recommended for full WebRTC features):**
-
-```bash
-npm run start:https
-```
-
-### 6. Open Your Browser
-
-**HTTP:** Navigate to `http://localhost:3000`  
-**HTTPS:** Navigate to `https://localhost:3443`
-
-**Note:** For HTTPS with self-signed certificates, you'll need to accept the browser security warning.
-
-## How It Works
-
-### Server Side (`server.js`)
-
-The Express server integrates Simple MediaSoup Server with a web interface:
-
-```javascript
-import { SimpleServer } from "simple_ms_server";
-
-const mediaServer = new SimpleServer({
-  port: 3000,
-  cors: { origin: "*" },
-});
-
-await mediaServer.start();
-```
-
-### Client Side (`public/index.html`)
-
-The web interface uses Simple MediaSoup Client:
-
-```javascript
-import { ConferenceClient } from "simple_ms_client";
-import { io } from "socket.io-client";
-
-// Connect to server
-const socket = io(window.location.origin);
-
-// Create conference client
-const client = new ConferenceClient({
-  conferenceId: "my-room",
-  participantId: "participant-123",
-  participantName: "John Doe",
-  socket,
-  conferenceName: "My Conference",
-  enableAudio: true,
-  enableVideo: true,
-});
-
-// Join and enable media
-await client.joinConference();
-await client.enableMedia(true, true);
-```
-
-## API Endpoints
-
-The server exposes REST API endpoints for monitoring and administration:
-
-### Monitoring
-
-- `GET /api/conferences` - List all active conferences
-- `GET /api/participants` - List all participants
-- `GET /api/stats` - Get server statistics
-- `GET /api/conferences/:id/participants` - Get participants in a conference
-
-### Administration
-
-- `POST /api/conferences/:id/close` - Close a conference
-- `POST /api/participants/:id/kick` - Kick a participant
-
-## Project Structure
-
-```
-simple_ms_example/
-├── server.js              # Express server with MediaSoup integration
-├── package.json           # Dependencies and scripts
-├── public/
-│   └── index.html         # Web client interface
-└── README.md             # This file
-```
-
-## Development
-
-### Start in Development Mode
-
-**HTTP:**
-
-```bash
+# or
 npm run dev
 ```
 
-**HTTPS:**
+Server runs at: **http://localhost:3000**
+
+**HTTPS (Recommended - Full WebRTC features):**
 
 ```bash
+npm run start:https
+# or
 npm run dev:https
 ```
 
-This uses nodemon for automatic server restarts when files change.
+Server runs at: **https://localhost:3443**
 
-### SSL Certificate Generation
+> ⚠️ **Note**: When using HTTPS with self-signed certificates, your browser will show a security warning. Click "Advanced" → "Proceed to localhost" to access the app.
 
-The server supports both HTTP and HTTPS. For production and optimal WebRTC performance, HTTPS is strongly recommended.
+---
 
-**Generate Self-Signed Certificates (Development):**
+### Using the Application
 
-```bash
-npm run generate-certs
+#### 1. Join a Conference
+
+1. Open the application in your browser
+2. Click **"Join Conference"** button
+3. Allow camera and microphone access when prompted
+4. Your video will appear in the "Local Video" section
+
+#### 2. Invite Others
+
+1. Open the same URL in another browser tab or device
+2. Click **"Join Conference"**
+3. Both participants will see each other's video
+
+#### 3. Media Controls
+
+- **🔇 Mute/Unmute Audio**: Toggle your microphone
+- **📹 Turn Off/On Video**: Toggle your camera
+- **🖥️ Share Screen**: Start/stop screen sharing
+- **👁️ Stop Watching**: Stop receiving a specific participant's stream
+
+#### 4. Leave Conference
+
+Click **"Leave Conference"** to disconnect and clean up resources.
+
+---
+
+## 📊 Flow Diagrams
+
+### Application Startup Flow
+
+```
+User Starts App
+      │
+      ▼
+┌─────────────────┐
+│  npm start:https│
+└─────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  Load TypeScript Server (server.ts) │
+└─────────────────────────────────────┘
+      │
+      ├─→ Create Express App
+      │
+      ├─→ Load SSL Certificates
+      │
+      ├─→ Create HTTPS Server
+      │
+      ├─→ Create Socket.IO Server
+      │
+      ├─→ Create SimpleServer
+      │   (with dependency injection)
+      │
+      ├─→ Setup API Routes
+      │   • GET /api/conferences
+      │   • GET /api/participants
+      │   • GET /api/stats
+      │   • POST /api/conferences/:id/close
+      │   • POST /api/participants/:id/kick
+      │
+      ├─→ Serve Static Files
+      │   • index.html
+      │   • script.js
+      │   • client.js
+      │
+      └─→ Start Listening on Port 3443
+          │
+          ▼
+    ┌─────────────────┐
+    │  Server Running │
+    │  ✅ Ready!      │
+    └─────────────────┘
 ```
 
-This creates:
+### User Join Conference Flow
 
-- `certs/key.pem` - Private key
-- `certs/cert.pem` - Self-signed certificate
-
-### MediaSoup Worker Binary Setup
-
-**Important:** This example uses npm instead of pnpm for MediaSoup compatibility. MediaSoup requires native binary compilation during installation, and npm handles this more reliably than pnpm.
-
-If you encounter `mediasoup-worker ENOENT` errors:
-
-1. **Switch to npm** (recommended):
-
-   ```bash
-   rm -rf node_modules pnpm-lock.yaml
-   npm install
-   ```
-
-2. **Or rebuild MediaSoup manually**:
-   ```bash
-   cd node_modules/mediasoup
-   npm run worker:build
-   ```
-
-**Manual Certificate Generation:**
-
-```bash
-# Create certificates directory
-mkdir -p certs
-
-# Generate private key and certificate
-openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes \
-  -subj '/C=US/ST=CA/L=San Francisco/O=Simple MediaSoup/OU=Development/CN=localhost'
-
-# Or with interactive prompts
-openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes
+```
+User Opens Browser
+      │
+      ▼
+Load index.html
+      │
+      ├─→ Load script.js
+      ├─→ Load ConferenceClient library
+      │
+      ▼
+User Clicks "Join Conference"
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  1. Create Socket.IO Connection     │
+└─────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  2. Create ConferenceClient         │
+│     {                                │
+│       conferenceId: "my-room"        │
+│       participantId: random()        │
+│       participantName: random()      │
+│       socket: io()                   │
+│     }                                │
+└─────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  3. Setup Event Listeners           │
+│     • participantJoined              │
+│     • participantLeft                │
+│     • remoteStreamAdded              │
+│     • remoteStreamRemoved            │
+│     • localStreamAdded               │
+│     • error                          │
+└─────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  4. Join Meeting                     │
+│     await client.joinMeeting()       │
+└─────────────────────────────────────┘
+      │
+      ├─→ Server creates/gets conference
+      ├─→ Client receives router capabilities
+      ├─→ Client creates send/recv transports
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  5. Get User Media                   │
+│     getUserMedia({audio, video})     │
+└─────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  6. Produce Media                    │
+│     await client.produceMedia(       │
+│       audioTrack, videoTrack)        │
+└─────────────────────────────────────┘
+      │
+      ├─→ Create audio producer
+      ├─→ Create video producer
+      ├─→ Notify other participants
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  7. Consume Existing Streams         │
+│     await client.                    │
+│       consumeExistingStreams()       │
+└─────────────────────────────────────┘
+      │
+      ├─→ Get list of participants
+      ├─→ Create consumers for each participant
+      ├─→ Display remote streams
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  ✅ In Conference                    │
+│     • Can see/hear others            │
+│     • Others can see/hear you        │
+│     • Can toggle audio/video         │
+│     • Can share screen               │
+└─────────────────────────────────────┘
 ```
 
-**Production Certificates:**
-For production, use certificates from a trusted CA like Let's Encrypt:
+### Media Toggle Flow (Audio Example)
+
+```
+User Clicks "Mute Audio"
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  Check Current State                 │
+│  • localAudioStreamId exists?        │
+└─────────────────────────────────────┘
+      │
+      ├─── YES (Audio is ON) ──→ MUTE
+      │                          │
+      │                          ▼
+      │               ┌──────────────────────┐
+      │               │ Close Audio Producer │
+      │               │ Stop Audio Track     │
+      │               │ Remove from array    │
+      │               └──────────────────────┘
+      │                          │
+      │                          ├─→ Server closes producer
+      │                          ├─→ Notify other participants
+      │                          ├─→ Event: localAudioToggled
+      │                          │    (enabled: false)
+      │                          ▼
+      │               ┌──────────────────────┐
+      │               │ Update UI            │
+      │               │ Button: "🔊 Unmute"  │
+      │               └──────────────────────┘
+      │
+      └─── NO (Audio is OFF) ──→ UNMUTE
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │ Get New Audio Track  │
+                      │ getUserMedia({audio})│
+                      └──────────────────────┘
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │ Produce Audio        │
+                      │ Create New Producer  │
+                      └──────────────────────┘
+                                 │
+                                 ├─→ Server creates producer
+                                 ├─→ Notify other participants
+                                 ├─→ Event: localAudioToggled
+                                 │    (enabled: true)
+                                 ▼
+                      ┌──────────────────────┐
+                      │ Update UI            │
+                      │ Button: "🔇 Mute"    │
+                      └──────────────────────┘
+```
+
+---
+
+## 💻 Development
+
+### Running in Development Mode
 
 ```bash
-# Example with certbot (Let's Encrypt)
-sudo certbot certonly --standalone -d yourdomain.com
-# Then copy the certificates to the certs/ directory
+# Watch mode for TypeScript
+npm run dev:https
+
+# In another terminal, build client in watch mode
+cd ../simple_ms_client
+npm run build:watch
 ```
 
 ### Environment Variables
 
-```bash
+Create a `.env` file:
+
+```env
 # Server Configuration
-PORT=3000                    # HTTP port
-HTTPS_PORT=3443             # HTTPS port
-USE_HTTPS=true              # Enable HTTPS
-SSL_KEY=certs/key.pem       # Path to private key
-SSL_CERT=certs/cert.pem     # Path to certificate
+PORT=3000
+HTTPS_PORT=3443
+USE_HTTPS=true
+HOST=0.0.0.0
+
+# SSL Certificates
+SSL_CERT=./certs/cert.pem
+SSL_KEY=./certs/key.pem
 
 # MediaSoup Configuration
-MEDIASOUP_MIN_PORT=10000    # Min RTC port
-MEDIASOUP_MAX_PORT=10100    # Max RTC port
+RTC_MIN_PORT=40000
+RTC_MAX_PORT=49999
+ANNOUNCED_IP=YOUR_PUBLIC_IP
 ```
 
-### Build Packages Individually
+### API Endpoints
+
+The server exposes these REST API endpoints:
+
+| Method | Endpoint                            | Description                 |
+| ------ | ----------------------------------- | --------------------------- |
+| GET    | `/`                                 | Serve main application      |
+| GET    | `/health`                           | Health check                |
+| GET    | `/api/conferences`                  | Get all conferences         |
+| GET    | `/api/participants`                 | Get all participants        |
+| GET    | `/api/stats`                        | Get server statistics       |
+| GET    | `/api/conferences/:id/participants` | Get conference participants |
+| POST   | `/api/conferences/:id/close`        | Close a conference          |
+| POST   | `/api/participants/:id/kick`        | Kick a participant          |
+
+### Testing the API
 
 ```bash
-npm run build:types    # Build type definitions
-npm run build:server   # Build server package
-npm run build:client   # Build client package
-```
-
-## Usage Examples
-
-### Basic Conference
-
-1. Generate certificates: `npm run generate-certs`
-2. Start HTTPS server: `npm run start:https`
-3. Open `https://localhost:3443` in your browser
-4. Accept the self-signed certificate warning
-5. Enter a room name (e.g., "my-meeting")
-6. Enter your name
-7. Click "Connect"
-8. Allow camera/microphone access
-9. Share the room name with others to join
-
-### Multiple Participants
-
-1. Open multiple browser tabs/windows
-2. Use the same room name for all participants
-3. Use different names for each participant
-4. Everyone will see each other's video streams
-
-### Screen Sharing
-
-1. Connect to a conference
-2. Click "Share Screen"
-3. Select the screen/window to share
-4. Other participants will see your screen
-
-### Admin Controls
-
-Use the REST API to manage conferences:
-
-```bash
-# For HTTPS (recommended)
 # Get all conferences
-curl -k https://localhost:3443/api/conferences
+curl http://localhost:3000/api/conferences
 
 # Get server stats
-curl -k https://localhost:3443/api/stats
+curl http://localhost:3000/api/stats
 
-# Kick a participant
-curl -k -X POST https://localhost:3443/api/participants/PARTICIPANT_ID/kick \
-  -H "Content-Type: application/json" \
-  -d '{"reason": "Administrative action"}'
+# Get participants in a conference
+curl http://localhost:3000/api/conferences/my-room/participants
 
 # Close a conference
-curl -k -X POST https://localhost:3443/api/conferences/CONFERENCE_ID/close \
+curl -X POST http://localhost:3000/api/conferences/my-room/close
+
+# Kick a participant
+curl -X POST http://localhost:3000/api/participants/user-123/kick \
   -H "Content-Type: application/json" \
-  -d '{"reason": "Meeting ended"}'
-
-# For HTTP (development only)
-curl http://localhost:3000/api/conferences
+  -d '{"reason": "Violated rules"}'
 ```
 
-## Troubleshooting
+---
 
-### Common Issues
+## 🔧 Customization
 
-**Connection Failed**
+### Changing MediaSoup Configuration
 
-- Ensure the server is running on the correct port
-- Check firewall settings
-- Verify CORS configuration
+Edit `src/server.ts`:
 
-**No Video/Audio**
+```typescript
+const mediaServerConfig: SimpleServerConfig = {
+  httpServer,
+  socketServer,
+  mediasoup: {
+    workerSettings: {
+      logLevel: "debug", // Change to "debug" for more logs
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999,
+    },
+    routerOptions: {
+      mediaCodecs: [
+        // Add/modify codecs here
+      ],
+    },
+    transportOptions: {
+      listenIps: [
+        {
+          ip: "0.0.0.0",
+          announcedIp: "YOUR_PUBLIC_IP", // Change to your public IP
+        },
+      ],
+    },
+  },
+};
+```
 
-- Grant browser permissions for camera/microphone
-- **Use HTTPS** - Many browsers require HTTPS for WebRTC features
-- Check browser compatibility (modern browsers required)
-- For self-signed certificates, accept the browser security warning
+### Customizing the UI
 
-**Media Not Working**
+Edit `public/index.html` and `public/script.js` to customize the user interface.
 
-- Verify MediaSoup worker ports (10000-10100) are available
-- Check network configuration for WebRTC
-- Ensure proper NAT/firewall traversal setup
+---
 
-### Browser Requirements
+## 🐛 Troubleshooting
 
-- Chrome 74+
-- Firefox 66+
-- Safari 12.1+
-- Edge 79+
+### Issue: SSL Certificate Warning
 
-### Network Requirements
+**Solution**: This is expected with self-signed certificates. Click "Advanced" → "Proceed to localhost".
 
-- **HTTPS required** for WebRTC features (camera, microphone, screen sharing)
-- UDP ports 10000-10100 (configurable via environment variables)
-- Proper STUN/TURN server configuration for NAT traversal
-- Self-signed certificates acceptable for development, trusted CA certificates required for production
+For production, use real SSL certificates from Let's Encrypt.
 
-## Production Deployment
+---
 
-### Environment Variables
+### Issue: Camera/Microphone Access Denied
+
+**Solution**:
+
+1. Use HTTPS (required for WebRTC)
+2. Grant browser permissions for camera/microphone
+3. Check if another application is using the camera
+
+---
+
+### Issue: No Remote Video
+
+**Solution**:
+
+1. Check if both clients are on HTTPS
+2. Check firewall settings for UDP ports 40000-49999
+3. Check console for errors
+4. Ensure `announcedIp` is set correctly in production
+
+---
+
+### Issue: Port Already in Use
+
+**Solution**:
 
 ```bash
-# Server Configuration
-PORT=3000                    # HTTP port (default: 3000)
-HTTPS_PORT=3443             # HTTPS port (default: 3443)
-USE_HTTPS=true              # Enable HTTPS (default: false)
-SSL_KEY=certs/key.pem       # Path to SSL private key
-SSL_CERT=certs/cert.pem     # Path to SSL certificate
+# Find process using port
+lsof -i :3443
 
-# Application Configuration
-NODE_ENV=production         # Environment
-MEDIASOUP_MIN_PORT=10000    # Min RTC port
-MEDIASOUP_MAX_PORT=10100    # Max RTC port
+# Kill the process
+kill -9 <PID>
 ```
 
-### HTTPS Setup
+---
 
-**Development (Self-signed certificates):**
+## 📚 Learn More
 
-```bash
-# Generate certificates and start HTTPS server
-npm run generate-certs
-npm run start:https
-```
+- [Client API Documentation](../simple_ms_client/README.md)
+- [Server API Documentation](../simple_ms_server/README.md)
+- [Main Project Documentation](../README.md)
 
-**Production (Trusted CA certificates):**
+---
 
-```bash
-# Set environment variables
-export USE_HTTPS=true
-export SSL_CERT=/path/to/your/certificate.pem
-export SSL_KEY=/path/to/your/private-key.pem
-export HTTPS_PORT=443
+## 🤝 Contributing
 
-# Start server
-npm start
-```
+Contributions are welcome! Please see the main project README for guidelines.
 
-**Docker with HTTPS:**
+---
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY . .
-RUN npm install && npm run build && npm run generate-certs
-EXPOSE 3443 10000-10100/udp
-ENV USE_HTTPS=true
-CMD ["npm", "run", "start:https"]
-```
+## 📄 License
 
-### Scaling
-
-For larger deployments:
-
-- Use multiple MediaSoup workers
-- Implement load balancing
-- Use Redis for session management
-- Deploy with Docker/Kubernetes
-
-## License
-
-MIT License - see the main project LICENSE file for details.
+MIT License - see LICENSE file for details.

@@ -50,15 +50,21 @@ class MediasoupParticipant implements Participant {
     userConsumers[consumer.id] = consumer;
     this.consumers.set(this.id, userConsumers);
   }
-  removeProducer(producerId: string) {
+  removeProducer(producerId: string): "audio" | "video" | null {
     const userProducers = this.producers.get(this.id);
     if (userProducers && userProducers[producerId]) {
       const producer = userProducers[producerId];
+      const mediaState = this.getMediaState(producerId);
+      const kind = mediaState?.kind || (producer.kind as "audio" | "video");
+
       producer.close();
       delete userProducers[producerId];
       this.producers.set(this.id, userProducers);
       this.updateMediaState(producerId, { closed: true });
+
+      return kind;
     }
+    return null;
   }
 
   removeConsumer(consumerId: string) {
@@ -205,12 +211,16 @@ class MediasoupParticipant implements Participant {
       throw new Error("Consumer not found");
     }
   }
-  public pauseProducer(producerId: string): void {
+  public pauseProducer(producerId: string): "audio" | "video" | null {
     const userProducers = this.producers.get(this.id);
     if (userProducers && userProducers[producerId]) {
       const producer = userProducers[producerId];
+      const mediaState = this.getMediaState(producerId);
+      const kind = mediaState?.kind || (producer.kind as "audio" | "video");
+
       producer.pause();
       this.updateMediaState(producerId, { paused: true });
+      return kind;
     } else {
       throw new Error("Producer not found");
     }
