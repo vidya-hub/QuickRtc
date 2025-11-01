@@ -27,15 +27,41 @@ export interface RemoteParticipant {
 }
 
 /**
+ * Local stream types
+ */
+export type LocalStreamType = "audio" | "video" | "screenshare";
+
+/**
+ * Local stream information
+ */
+export interface LocalStreamInfo {
+  id: string; // Unique ID for this stream
+  type: LocalStreamType;
+  track: MediaStreamTrack;
+  producer: Producer;
+  stream: MediaStream; // For frontend display
+}
+
+/**
  * Events emitted by ConferenceClient
  */
 export interface ConferenceClientEvents {
   participantJoined: { participantId: string; participantName: string };
   participantLeft: { participantId: string };
-  remoteStreamAdded: { participantId: string; kind: "audio" | "video"; stream: MediaStream };
+  remoteStreamAdded: {
+    participantId: string;
+    kind: "audio" | "video";
+    stream: MediaStream;
+  };
   remoteStreamRemoved: { participantId: string; kind: "audio" | "video" };
-  localAudioToggled: { enabled: boolean };
-  localVideoToggled: { enabled: boolean };
+  localStreamAdded: {
+    streamId: string;
+    type: LocalStreamType;
+    stream: MediaStream;
+  };
+  localStreamRemoved: { streamId: string; type: LocalStreamType };
+  localAudioToggled: { streamId: string; enabled: boolean };
+  localVideoToggled: { streamId: string; enabled: boolean };
   remoteAudioToggled: { participantId: string; enabled: boolean };
   remoteVideoToggled: { participantId: string; enabled: boolean };
   error: { message: string; error?: any };
@@ -43,14 +69,21 @@ export interface ConferenceClientEvents {
 
 /**
  * Simplified MediaSoup Conference Client
- * 
+ *
  * Usage:
  * 1. Create client with config
  * 2. Call joinMeeting()
- * 3. Call enableMedia(audio, video)
- * 4. Listen to events for remote participants
- * 5. Use toggleAudio/toggleVideo for media controls
- * 6. Call leaveMeeting() when done
+ * 3. Get media tracks from navigator.mediaDevices.getUserMedia()
+ * 4. Extract audio/video tracks and call produceMedia(audioTrack, videoTrack) to send media
+ * 5. Listen to events for remote participants
+ * 6. Use toggleAudio/toggleVideo for media controls
+ * 7. Call leaveMeeting() when done
+ *
+ * Example:
+ *   const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+ *   const audioTrack = mediaStream.getAudioTracks()[0];
+ *   const videoTrack = mediaStream.getVideoTracks()[0];
+ *   await client.produceMedia(audioTrack, videoTrack);
  */
 export class ConferenceClient extends EventTarget {
   public config: ConferenceClientConfig;
@@ -58,18 +91,15 @@ export class ConferenceClient extends EventTarget {
   private sendTransport: Transport | null = null;
   private recvTransport: Transport | null = null;
   private socketController: SocketClientController | null = null;
-  
-  // Local media state
-  private localStream: MediaStream | null = null;
-  private audioProducer: Producer | null = null;
-  private videoProducer: Producer | null = null;
-  
+
+  // Local media state - array of stream objects
+  private localStreams: LocalStreamInfo[] = [];
+
   // Remote participants tracking
   private remoteParticipants: Map<string, RemoteParticipant> = new Map();
-  
+
   // State flags
   private isJoined: boolean = false;
-  private isMediaEnabled: boolean = false;
 
   constructor(config: ConferenceClientConfig) {
     super();
@@ -115,7 +145,9 @@ export class ConferenceClient extends EventTarget {
       }
 
       // Setup send transport
-      this.sendTransport = this.device.createSendTransport(transports.sendTransport);
+      this.sendTransport = this.device.createSendTransport(
+        transports.sendTransport
+      );
       this.socketController.addSendTransportListener({
         sendTransport: this.sendTransport,
         onProduce: (params) => {
@@ -124,7 +156,9 @@ export class ConferenceClient extends EventTarget {
       });
 
       // Setup receive transport
-      this.recvTransport = this.device.createRecvTransport(transports.recvTransport);
+      this.recvTransport = this.device.createRecvTransport(
+        transports.recvTransport
+      );
       this.socketController.addConsumeTransportListener({
         recvTransport: this.recvTransport,
         onConsume: (params) => {
@@ -146,62 +180,117 @@ export class ConferenceClient extends EventTarget {
   }
 
   /**
-   * 2. Enable local media (audio/video)
-   * Gets user media and creates producers
+   * 2. Produce media to the conference
+   * Takes audio and/or video tracks and sends them to other participants
+   * Returns stream IDs for tracking and toggling
+   * @param audioTrack - Optional audio MediaStreamTrack to produce
+   * @param videoTrack - Optional video MediaStreamTrack to produce
+   * @param type - Type of stream: "audio", "video", or "screenshare"
+   * @returns Object with streamIds for audio and video
    */
-  public async enableMedia(audio: boolean = true, video: boolean = true): Promise<MediaStream> {
+  public async produceMedia(
+    audioTrack?: MediaStreamTrack,
+    videoTrack?: MediaStreamTrack,
+    type: LocalStreamType = "video"
+  ): Promise<{ audioStreamId?: string; videoStreamId?: string }> {
     if (!this.isJoined || !this.sendTransport) {
-      throw new Error("Must join meeting before enabling media");
+      throw new Error("Must join meeting before producing media");
     }
 
-    if (this.isMediaEnabled) {
-      console.warn("Media already enabled");
-      return this.localStream!;
-    }
+    const result: { audioStreamId?: string; videoStreamId?: string } = {};
 
     try {
-      // Get user media
-      this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio,
-        video,
-      });
+      // Produce audio if provided
+      if (audioTrack) {
+        const audioProducer = await this.sendTransport.produce({
+          track: audioTrack,
+          codecOptions: {
+            opusStereo: true,
+            opusDtx: true,
+          },
+        });
 
-      // Create audio producer if audio enabled
-      if (audio) {
-        const audioTrack = this.localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          this.audioProducer = await this.sendTransport.produce({
-            track: audioTrack,
-            codecOptions: {
-              opusStereo: true,
-              opusDtx: true,
+        const audioStreamId = `audio-${Date.now()}`;
+        const audioStream = new MediaStream([audioTrack]);
+
+        const streamInfo: LocalStreamInfo = {
+          id: audioStreamId,
+          type: "audio",
+          track: audioTrack,
+          producer: audioProducer,
+          stream: audioStream,
+        };
+
+        this.localStreams.push(streamInfo);
+        result.audioStreamId = audioStreamId;
+
+        console.log(
+          "Audio producer created:",
+          audioProducer.id,
+          "StreamID:",
+          audioStreamId
+        );
+
+        // Emit event
+        this.dispatchEvent(
+          new CustomEvent("localStreamAdded", {
+            detail: {
+              streamId: audioStreamId,
+              type: "audio",
+              stream: audioStream,
             },
-          });
-          console.log("Audio producer created:", this.audioProducer.id);
-        }
+          })
+        );
       }
 
-      // Create video producer if video enabled
-      if (video) {
-        const videoTrack = this.localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          this.videoProducer = await this.sendTransport.produce({
-            track: videoTrack,
-            codecOptions: {
-              videoGoogleStartBitrate: 1000,
+      // Produce video if provided
+      if (videoTrack) {
+        const videoProducer = await this.sendTransport.produce({
+          track: videoTrack,
+          codecOptions: {
+            videoGoogleStartBitrate: 1000,
+          },
+        });
+
+        const videoStreamId = `${type}-${Date.now()}`;
+        const videoStream = new MediaStream([videoTrack]);
+
+        const streamInfo: LocalStreamInfo = {
+          id: videoStreamId,
+          type: type,
+          track: videoTrack,
+          producer: videoProducer,
+          stream: videoStream,
+        };
+
+        this.localStreams.push(streamInfo);
+        result.videoStreamId = videoStreamId;
+
+        console.log(
+          "Video producer created:",
+          videoProducer.id,
+          "StreamID:",
+          videoStreamId
+        );
+
+        // Emit event
+        this.dispatchEvent(
+          new CustomEvent("localStreamAdded", {
+            detail: {
+              streamId: videoStreamId,
+              type: type,
+              stream: videoStream,
             },
-          });
-          console.log("Video producer created:", this.videoProducer.id);
-        }
+          })
+        );
       }
 
-      this.isMediaEnabled = true;
-      return this.localStream;
+      return result;
     } catch (error) {
-      console.error("Error enabling media:", error);
+      console.error("Error producing media:", error);
       this.dispatchEvent(
         new CustomEvent("error", {
-          detail: { message: "Failed to enable media", error },
+          detail: { message: "Failed to produce media", error },
         })
       );
       throw error;
@@ -233,7 +322,10 @@ export class ConferenceClient extends EventTarget {
           continue; // Skip self
         }
 
-        await this.consumeParticipantMedia(participant.participantId, participant.participantName);
+        await this.consumeParticipantMedia(
+          participant.participantId,
+          participant.participantName
+        );
       }
     } catch (error) {
       console.error("Error consuming existing streams:", error);
@@ -248,17 +340,21 @@ export class ConferenceClient extends EventTarget {
   /**
    * Helper method to consume a specific participant's media
    */
-  private async consumeParticipantMedia(participantId: string, participantName: string): Promise<void> {
+  private async consumeParticipantMedia(
+    participantId: string,
+    participantName?: string
+  ): Promise<void> {
     if (!this.device || !this.recvTransport) {
       throw new Error("Device or receive transport not initialized");
     }
 
     try {
       // Get consumer parameters for this participant
-      const consumerParams = await this.socketController!.consumeParticipantMedia(
-        participantId,
-        this.device.rtpCapabilities
-      );
+      const consumerParams =
+        await this.socketController!.consumeParticipantMedia(
+          participantId,
+          this.device.rtpCapabilities
+        );
 
       if (!consumerParams || consumerParams.length === 0) {
         console.log(`No media to consume from participant ${participantId}`);
@@ -268,9 +364,12 @@ export class ConferenceClient extends EventTarget {
       // Create or get participant record
       let participant = this.remoteParticipants.get(participantId);
       if (!participant) {
+        // Use provided name or fallback to participantId
+        const name =
+          participantName || `Participant ${participantId.substring(0, 8)}`;
         participant = {
           participantId,
-          participantName,
+          participantName: name,
         };
         this.remoteParticipants.set(participantId, participant);
       }
@@ -304,17 +403,22 @@ export class ConferenceClient extends EventTarget {
           new CustomEvent("remoteStreamAdded", {
             detail: {
               participantId,
-              participantName,
+              participantName: participant.participantName,
               kind: params.kind,
               stream,
             },
           })
         );
 
-        console.log(`Consuming ${params.kind} from participant ${participantId}`);
+        console.log(
+          `Consuming ${params.kind} from participant ${participantId}`
+        );
       }
     } catch (error) {
-      console.error(`Error consuming media from participant ${participantId}:`, error);
+      console.error(
+        `Error consuming media from participant ${participantId}:`,
+        error
+      );
     }
   }
 
@@ -332,7 +436,9 @@ export class ConferenceClient extends EventTarget {
     try {
       // Close audio consumer
       if (participant.audioConsumer) {
-        await this.socketController!.closeConsumer(participant.audioConsumer.id);
+        await this.socketController!.closeConsumer(
+          participant.audioConsumer.id
+        );
         participant.audioConsumer.close();
         participant.audioConsumer = undefined;
         participant.audioStream = undefined;
@@ -346,7 +452,9 @@ export class ConferenceClient extends EventTarget {
 
       // Close video consumer
       if (participant.videoConsumer) {
-        await this.socketController!.closeConsumer(participant.videoConsumer.id);
+        await this.socketController!.closeConsumer(
+          participant.videoConsumer.id
+        );
         participant.videoConsumer.close();
         participant.videoConsumer = undefined;
         participant.videoStream = undefined;
@@ -362,7 +470,10 @@ export class ConferenceClient extends EventTarget {
       this.remoteParticipants.delete(participantId);
       console.log(`Stopped watching stream from participant ${participantId}`);
     } catch (error) {
-      console.error(`Error stopping stream from participant ${participantId}:`, error);
+      console.error(
+        `Error stopping stream from participant ${participantId}:`,
+        error
+      );
       this.dispatchEvent(
         new CustomEvent("error", {
           detail: { message: "Failed to stop watching stream", error },
@@ -373,35 +484,76 @@ export class ConferenceClient extends EventTarget {
 
   /**
    * 5a. Toggle local audio on/off
+   * Stops the audio track when muting (turns off microphone)
+   * Gets a new track when unmuting
+   * @param streamId - ID of the audio stream to toggle, or first audio stream if not provided
+   * @param mute - Explicit mute state (true = mute, false = unmute)
    */
-  public async toggleAudio(mute?: boolean): Promise<boolean> {
-    if (!this.audioProducer || !this.localStream) {
-      console.warn("Audio not available");
+  public async toggleAudio(
+    streamId?: string,
+    mute?: boolean
+  ): Promise<boolean> {
+    // Find the audio stream
+    let audioStream: LocalStreamInfo | undefined;
+
+    if (streamId) {
+      audioStream = this.localStreams.find((s) => s.id === streamId);
+      if (!audioStream || audioStream.type !== "audio") {
+        console.warn(`Audio stream ${streamId} not found`);
+        return false;
+      }
+    } else {
+      // Find first audio stream
+      audioStream = this.localStreams.find((s) => s.type === "audio");
+    }
+
+    if (!audioStream) {
+      console.warn("No audio stream available");
       return false;
     }
 
     try {
-      const shouldMute = mute !== undefined ? mute : !this.audioProducer.paused;
+      const shouldMute =
+        mute !== undefined ? mute : !audioStream.producer.paused;
 
       if (shouldMute) {
-        // Mute audio
-        this.audioProducer.pause();
-        this.localStream.getAudioTracks().forEach((track) => (track.enabled = false));
-        await this.socketController!.pauseProducer(this.audioProducer.id);
+        // Mute audio - stop the microphone track
+        audioStream.producer.pause();
+        audioStream.track.enabled = false;
+        audioStream.track.stop(); // Stop the microphone
+        await this.socketController!.pauseProducer(audioStream.producer.id);
       } else {
-        // Unmute audio
-        this.audioProducer.resume();
-        this.localStream.getAudioTracks().forEach((track) => (track.enabled = true));
-        await this.socketController!.resumeProducer(this.audioProducer.id);
+        // Unmute audio - get a new audio track
+        try {
+          const newAudioStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          const newAudioTrack = newAudioStream.getAudioTracks()[0];
+
+          // Replace the track in the producer
+          await audioStream.producer.replaceTrack({ track: newAudioTrack });
+
+          // Update stored track and stream
+          audioStream.track = newAudioTrack;
+          audioStream.stream = new MediaStream([newAudioTrack]);
+
+          audioStream.producer.resume();
+          await this.socketController!.resumeProducer(audioStream.producer.id);
+        } catch (err) {
+          console.error("Failed to get audio track:", err);
+          throw new Error("Could not access microphone");
+        }
       }
 
       this.dispatchEvent(
         new CustomEvent("localAudioToggled", {
-          detail: { enabled: !shouldMute },
+          detail: { streamId: audioStream.id, enabled: !shouldMute },
         })
       );
 
-      console.log(`Audio ${shouldMute ? "muted" : "unmuted"}`);
+      console.log(
+        `Audio ${shouldMute ? "muted" : "unmuted"} for stream ${audioStream.id}`
+      );
       return !shouldMute;
     } catch (error) {
       console.error("Error toggling audio:", error);
@@ -410,41 +562,87 @@ export class ConferenceClient extends EventTarget {
           detail: { message: "Failed to toggle audio", error },
         })
       );
-      return this.audioProducer.paused;
+      return audioStream.producer.paused;
     }
   }
 
   /**
    * 5b. Toggle local video on/off
+   * Stops the video track when muting (turns off camera)
+   * Gets a new track when unmuting
+   * @param streamId - ID of the video stream to toggle, or first video stream if not provided
+   * @param mute - Explicit mute state (true = mute, false = unmute)
    */
-  public async toggleVideo(mute?: boolean): Promise<boolean> {
-    if (!this.videoProducer || !this.localStream) {
-      console.warn("Video not available");
+  public async toggleVideo(
+    streamId?: string,
+    mute?: boolean
+  ): Promise<boolean> {
+    // Find the video stream
+    let videoStream: LocalStreamInfo | undefined;
+
+    if (streamId) {
+      videoStream = this.localStreams.find((s) => s.id === streamId);
+      if (
+        !videoStream ||
+        (videoStream.type !== "video" && videoStream.type !== "screenshare")
+      ) {
+        console.warn(`Video stream ${streamId} not found`);
+        return false;
+      }
+    } else {
+      // Find first video or screenshare stream
+      videoStream = this.localStreams.find(
+        (s) => s.type === "video" || s.type === "screenshare"
+      );
+    }
+
+    if (!videoStream) {
+      console.warn("No video stream available");
       return false;
     }
 
     try {
-      const shouldMute = mute !== undefined ? mute : !this.videoProducer.paused;
+      const shouldMute =
+        mute !== undefined ? mute : !videoStream.producer.paused;
 
       if (shouldMute) {
-        // Mute video
-        this.videoProducer.pause();
-        this.localStream.getVideoTracks().forEach((track) => (track.enabled = false));
-        await this.socketController!.pauseProducer(this.videoProducer.id);
+        // Mute video - stop the camera track
+        videoStream.producer.pause();
+        videoStream.track.enabled = false;
+        videoStream.track.stop(); // Stop the camera
+        await this.socketController!.pauseProducer(videoStream.producer.id);
       } else {
-        // Unmute video
-        this.videoProducer.resume();
-        this.localStream.getVideoTracks().forEach((track) => (track.enabled = true));
-        await this.socketController!.resumeProducer(this.videoProducer.id);
+        // Unmute video - get a new video track
+        try {
+          const newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          const newVideoTrack = newVideoStream.getVideoTracks()[0];
+
+          // Replace the track in the producer
+          await videoStream.producer.replaceTrack({ track: newVideoTrack });
+
+          // Update stored track and stream
+          videoStream.track = newVideoTrack;
+          videoStream.stream = new MediaStream([newVideoTrack]);
+
+          videoStream.producer.resume();
+          await this.socketController!.resumeProducer(videoStream.producer.id);
+        } catch (err) {
+          console.error("Failed to get video track:", err);
+          throw new Error("Could not access camera");
+        }
       }
 
       this.dispatchEvent(
         new CustomEvent("localVideoToggled", {
-          detail: { enabled: !shouldMute },
+          detail: { streamId: videoStream.id, enabled: !shouldMute },
         })
       );
 
-      console.log(`Video ${shouldMute ? "muted" : "unmuted"}`);
+      console.log(
+        `Video ${shouldMute ? "muted" : "unmuted"} for stream ${videoStream.id}`
+      );
       return !shouldMute;
     } catch (error) {
       console.error("Error toggling video:", error);
@@ -453,7 +651,53 @@ export class ConferenceClient extends EventTarget {
           detail: { message: "Failed to toggle video", error },
         })
       );
-      return this.videoProducer.paused;
+      return videoStream.producer.paused;
+    }
+  }
+
+  /**
+   * 5c. Stop a specific local stream
+   * Useful for stopping screen share or individual streams
+   * @param streamId - ID of the stream to stop
+   */
+  public async stopLocalStream(streamId: string): Promise<boolean> {
+    const streamIndex = this.localStreams.findIndex((s) => s.id === streamId);
+
+    if (streamIndex === -1) {
+      console.warn(`Stream ${streamId} not found`);
+      return false;
+    }
+
+    try {
+      const streamInfo = this.localStreams[streamIndex];
+
+      // Stop the track
+      streamInfo.track.stop();
+
+      // Close the producer
+      await this.socketController!.closeProducer(streamInfo.producer.id);
+      streamInfo.producer.close();
+
+      // Remove from array
+      this.localStreams.splice(streamIndex, 1);
+
+      // Emit event
+      this.dispatchEvent(
+        new CustomEvent("localStreamRemoved", {
+          detail: { streamId: streamInfo.id, type: streamInfo.type },
+        })
+      );
+
+      console.log(`Stopped local stream ${streamId}`);
+      return true;
+    } catch (error) {
+      console.error("Error stopping stream:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to stop stream", error },
+        })
+      );
+      return false;
     }
   }
 
@@ -468,33 +712,32 @@ export class ConferenceClient extends EventTarget {
     }
 
     try {
-      // Stop all local tracks
-      if (this.localStream) {
-        this.localStream.getTracks().forEach((track) => track.stop());
-        this.localStream = null;
-      }
+      // Stop and close all local streams
+      for (const streamInfo of this.localStreams) {
+        streamInfo.track.stop();
+        await this.socketController!.closeProducer(streamInfo.producer.id);
+        streamInfo.producer.close();
 
-      // Close all producers
-      if (this.audioProducer) {
-        await this.socketController!.closeProducer(this.audioProducer.id);
-        this.audioProducer.close();
-        this.audioProducer = null;
+        this.dispatchEvent(
+          new CustomEvent("localStreamRemoved", {
+            detail: { streamId: streamInfo.id, type: streamInfo.type },
+          })
+        );
       }
-
-      if (this.videoProducer) {
-        await this.socketController!.closeProducer(this.videoProducer.id);
-        this.videoProducer.close();
-        this.videoProducer = null;
-      }
+      this.localStreams = [];
 
       // Close all consumers
       for (const [participantId, participant] of this.remoteParticipants) {
         if (participant.audioConsumer) {
-          await this.socketController!.closeConsumer(participant.audioConsumer.id);
+          await this.socketController!.closeConsumer(
+            participant.audioConsumer.id
+          );
           participant.audioConsumer.close();
         }
         if (participant.videoConsumer) {
-          await this.socketController!.closeConsumer(participant.videoConsumer.id);
+          await this.socketController!.closeConsumer(
+            participant.videoConsumer.id
+          );
           participant.videoConsumer.close();
         }
       }
@@ -517,7 +760,6 @@ export class ConferenceClient extends EventTarget {
       // Reset state
       this.device = null;
       this.isJoined = false;
-      this.isMediaEnabled = false;
 
       console.log("Successfully left meeting");
     } catch (error) {
@@ -544,7 +786,9 @@ export class ConferenceClient extends EventTarget {
     this.socketController.setupEventListeners();
 
     // Participant joined
-    this.socketController.addEventListener("participantJoined", ((event: CustomEvent) => {
+    this.socketController.addEventListener("participantJoined", ((
+      event: CustomEvent
+    ) => {
       const { participantId, participantName } = event.detail;
       console.log("Participant joined:", participantName, participantId);
 
@@ -556,13 +800,17 @@ export class ConferenceClient extends EventTarget {
       );
 
       // Auto-consume new participant's media
-      this.consumeParticipantMedia(participantId, participantName).catch((error) => {
-        console.error("Error consuming new participant media:", error);
-      });
+      this.consumeParticipantMedia(participantId, participantName).catch(
+        (error) => {
+          console.error("Error consuming new participant media:", error);
+        }
+      );
     }) as EventListener);
 
     // Participant left
-    this.socketController.addEventListener("participantLeft", ((event: CustomEvent) => {
+    this.socketController.addEventListener("participantLeft", ((
+      event: CustomEvent
+    ) => {
       const { participantId } = event.detail;
       console.log("Participant left:", participantId);
 
@@ -578,33 +826,40 @@ export class ConferenceClient extends EventTarget {
     }) as EventListener);
 
     // New producer (media track) available
-    this.socketController.addEventListener("newProducer", ((event: CustomEvent) => {
-      const { producerId, participantId } = event.detail;
+    this.socketController.addEventListener("newProducer", ((
+      event: CustomEvent
+    ) => {
+      const { producerId, participantId, participantName } = event.detail;
       console.log("New producer available:", producerId, "from", participantId);
 
-      // If this is from an existing participant, consume the new media
-      const participant = this.remoteParticipants.get(participantId);
-      if (participant) {
-        this.consumeParticipantMedia(participantId, participant.participantName).catch((error) => {
+      // Consume the new media from this participant
+      this.consumeParticipantMedia(participantId, participantName).catch(
+        (error) => {
           console.error("Error consuming new producer:", error);
-        });
-      }
+        }
+      );
     }) as EventListener);
 
     // Producer closed
-    this.socketController.addEventListener("producerClosed", ((event: CustomEvent) => {
+    this.socketController.addEventListener("producerClosed", ((
+      event: CustomEvent
+    ) => {
       const { producerId, participantId } = event.detail;
       console.log("Producer closed:", producerId, "from", participantId);
     }) as EventListener);
 
     // Consumer closed
-    this.socketController.addEventListener("consumerClosed", ((event: CustomEvent) => {
+    this.socketController.addEventListener("consumerClosed", ((
+      event: CustomEvent
+    ) => {
       const { consumerId } = event.detail;
       console.log("Consumer closed:", consumerId);
     }) as EventListener);
 
     // Remote participant audio muted
-    this.socketController.addEventListener("audioMuted", ((event: CustomEvent) => {
+    this.socketController.addEventListener("audioMuted", ((
+      event: CustomEvent
+    ) => {
       const { participantId } = event.detail;
       this.dispatchEvent(
         new CustomEvent("remoteAudioToggled", {
@@ -614,7 +869,9 @@ export class ConferenceClient extends EventTarget {
     }) as EventListener);
 
     // Remote participant audio unmuted
-    this.socketController.addEventListener("audioUnmuted", ((event: CustomEvent) => {
+    this.socketController.addEventListener("audioUnmuted", ((
+      event: CustomEvent
+    ) => {
       const { participantId } = event.detail;
       this.dispatchEvent(
         new CustomEvent("remoteAudioToggled", {
@@ -624,7 +881,9 @@ export class ConferenceClient extends EventTarget {
     }) as EventListener);
 
     // Remote participant video muted
-    this.socketController.addEventListener("videoMuted", ((event: CustomEvent) => {
+    this.socketController.addEventListener("videoMuted", ((
+      event: CustomEvent
+    ) => {
       const { participantId } = event.detail;
       this.dispatchEvent(
         new CustomEvent("remoteVideoToggled", {
@@ -634,7 +893,9 @@ export class ConferenceClient extends EventTarget {
     }) as EventListener);
 
     // Remote participant video unmuted
-    this.socketController.addEventListener("videoUnmuted", ((event: CustomEvent) => {
+    this.socketController.addEventListener("videoUnmuted", ((
+      event: CustomEvent
+    ) => {
       const { participantId } = event.detail;
       this.dispatchEvent(
         new CustomEvent("remoteVideoToggled", {
@@ -667,7 +928,9 @@ export class ConferenceClient extends EventTarget {
   /**
    * Get remote participant by ID
    */
-  public getRemoteParticipant(participantId: string): RemoteParticipant | undefined {
+  public getRemoteParticipant(
+    participantId: string
+  ): RemoteParticipant | undefined {
     return this.remoteParticipants.get(participantId);
   }
 
@@ -689,13 +952,28 @@ export class ConferenceClient extends EventTarget {
    * Check if local media is enabled
    */
   public isLocalMediaEnabled(): boolean {
-    return this.isMediaEnabled;
+    return this.localStreams.length > 0;
   }
 
   /**
-   * Get local media stream
+   * Get all local streams
    */
-  public getLocalStream(): MediaStream | null {
-    return this.localStream;
+  public getLocalStreams(): LocalStreamInfo[] {
+    return this.localStreams;
+  }
+
+  /**
+   * Get a specific local stream by ID
+   */
+  public getLocalStream(streamId: string): MediaStream | null {
+    const streamInfo = this.localStreams.find((s) => s.id === streamId);
+    return streamInfo ? streamInfo.stream : null;
+  }
+
+  /**
+   * Get local streams by type
+   */
+  public getLocalStreamsByType(type: LocalStreamType): LocalStreamInfo[] {
+    return this.localStreams.filter((s) => s.type === type);
   }
 }

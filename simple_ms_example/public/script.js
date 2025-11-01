@@ -3,6 +3,9 @@ import { ConferenceClient } from "/simple_ms_client/dist/client.js";
 // Global state
 let client = null;
 let remoteParticipants = new Map(); // Track participant media elements
+let localAudioStreamId = null; // Track audio stream ID
+let localVideoStreamId = null; // Track video stream ID
+let localScreenShareId = null; // Track screen share stream ID
 
 // DOM elements
 let elements = {};
@@ -14,6 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
     leaveButton: document.getElementById("leaveButton"),
     toggleAudioButton: document.getElementById("toggleAudioButton"),
     toggleVideoButton: document.getElementById("toggleVideoButton"),
+    shareScreenButton: document.getElementById("shareScreenButton"),
     localVideo: document.getElementById("localVideo"),
     partList: document.getElementById("partList"),
     remoteStreams: document.getElementById("remoteStreams"),
@@ -24,6 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
   elements.leaveButton.addEventListener("click", handleLeaveConference);
   elements.toggleAudioButton.addEventListener("click", handleToggleAudio);
   elements.toggleVideoButton.addEventListener("click", handleToggleVideo);
+  elements.shareScreenButton.addEventListener("click", handleShareScreen);
 });
 
 // Main conference join handler
@@ -46,16 +51,25 @@ async function handleJoinConference() {
   setupEventListeners();
 
   try {
-    // 1. Join the meeting
+    // Join conference
     await client.joinMeeting();
-    console.log("✓ Joined meeting");
+    console.log("Joined conference successfully");
 
-    // 2. Enable local media
-    const localStream = await client.enableMedia(true, true);
-    elements.localVideo.srcObject = localStream;
-    console.log("✓ Local media enabled");
+    await produceMedia();
 
-    // 3. Consume existing participants' streams
+    // Get all local streams to display in UI
+    const localStreams = client.getLocalStreams();
+    for (const streamInfo of localStreams) {
+      // Prioritize screenshare, then video
+      if (streamInfo.type === "screenshare" && elements.localVideo) {
+        elements.localVideo.srcObject = streamInfo.stream;
+        break;
+      } else if (streamInfo.type === "video" && elements.localVideo) {
+        elements.localVideo.srcObject = streamInfo.stream;
+      }
+    }
+
+    // Consume existing participants' streams
     await client.consumeExistingStreams();
     console.log("✓ Consumed existing streams");
 
@@ -65,6 +79,7 @@ async function handleJoinConference() {
     elements.leaveButton.style.display = "inline-block";
     elements.toggleAudioButton.style.display = "inline-block";
     elements.toggleVideoButton.style.display = "inline-block";
+    elements.shareScreenButton.style.display = "inline-block";
 
     console.log("Successfully joined conference");
   } catch (error) {
@@ -72,6 +87,23 @@ async function handleJoinConference() {
     elements.joinButton.disabled = false;
     elements.details.innerText = `Error: ${error.message}`;
   }
+}
+async function produceMedia() {
+  // Get user media from navigator
+  const mediaStream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: true,
+  });
+
+  // Extract tracks and produce them
+  const audioTrack = mediaStream.getAudioTracks()[0];
+  const videoTrack = mediaStream.getVideoTracks()[0];
+
+  const streamIds = await client.produceMedia(audioTrack, videoTrack);
+  localAudioStreamId = streamIds.audioStreamId;
+  localVideoStreamId = streamIds.videoStreamId;
+
+  console.log("Media produced successfully", streamIds);
 }
 
 // Handle leave conference
@@ -89,8 +121,12 @@ async function handleLeaveConference() {
     elements.leaveButton.style.display = "none";
     elements.toggleAudioButton.style.display = "none";
     elements.toggleVideoButton.style.display = "none";
+    elements.shareScreenButton.style.display = "none";
     elements.details.innerText = "MediaSoup Conference Client";
     client = null;
+    localAudioStreamId = null;
+    localVideoStreamId = null;
+    localScreenShareId = null;
   }
 }
 
@@ -99,7 +135,7 @@ async function handleToggleAudio() {
   if (!client) return;
 
   try {
-    const enabled = await client.toggleAudio();
+    const enabled = await client.toggleAudio(localAudioStreamId);
     elements.toggleAudioButton.textContent = enabled
       ? "🔇 Mute Audio"
       : "🔊 Unmute Audio";
@@ -116,7 +152,7 @@ async function handleToggleVideo() {
   if (!client) return;
 
   try {
-    const enabled = await client.toggleVideo();
+    const enabled = await client.toggleVideo(localVideoStreamId);
     elements.toggleVideoButton.textContent = enabled
       ? "📹 Turn Off Video"
       : "📷 Turn On Video";
@@ -125,6 +161,54 @@ async function handleToggleVideo() {
       : "#28a745";
   } catch (error) {
     console.error("Error toggling video:", error);
+  }
+}
+
+// Handle share screen
+async function handleShareScreen() {
+  if (!client) return;
+
+  try {
+    // If already sharing, stop it
+    if (localScreenShareId) {
+      await client.stopLocalStream(localScreenShareId);
+      localScreenShareId = null;
+      elements.shareScreenButton.textContent = "🖥️ Share Screen";
+      elements.shareScreenButton.style.background = "#007bff";
+      return;
+    }
+
+    // Start screen share
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false,
+    });
+
+    const screenTrack = screenStream.getVideoTracks()[0];
+
+    // Handle when user stops sharing via browser UI
+    screenTrack.onended = () => {
+      localScreenShareId = null;
+      elements.shareScreenButton.textContent = "🖥️ Share Screen";
+      elements.shareScreenButton.style.background = "#007bff";
+    };
+
+    const { videoStreamId } = await client.produceMedia(
+      undefined,
+      screenTrack,
+      "screenshare"
+    );
+
+    localScreenShareId = videoStreamId;
+    elements.shareScreenButton.textContent = "⏹️ Stop Sharing";
+    elements.shareScreenButton.style.background = "#dc3545";
+
+    console.log("Screen share started:", videoStreamId);
+  } catch (error) {
+    console.error("Error sharing screen:", error);
+    if (error.name === "NotAllowedError") {
+      console.log("Screen share permission denied");
+    }
   }
 }
 
@@ -160,11 +244,52 @@ function setupEventListeners() {
 
   // Local media toggle events
   client.addEventListener("localAudioToggled", (event) => {
-    console.log("🎤 Local audio:", event.detail.enabled ? "ON" : "OFF");
+    const { streamId, enabled } = event.detail;
+    console.log(
+      "🎤 Local audio:",
+      enabled ? "ON" : "OFF",
+      "StreamID:",
+      streamId
+    );
+  });
+
+  // Local stream added - for displaying video/screenshare
+  client.addEventListener("localStreamAdded", (event) => {
+    const { streamId, type, stream } = event.detail;
+    console.log("➕ Local stream added:", type, "StreamID:", streamId);
+
+    // For video and screenshare, display in the local video element
+    if (type === "video" || type === "screenshare") {
+      if (elements.localVideo) {
+        elements.localVideo.srcObject = stream;
+      }
+    }
+    // For audio, it plays in background (no visual element needed)
+  });
+
+  // Local stream removed
+  client.addEventListener("localStreamRemoved", (event) => {
+    const { streamId, type } = event.detail;
+    console.log("➖ Local stream removed:", type, "StreamID:", streamId);
   });
 
   client.addEventListener("localVideoToggled", (event) => {
-    console.log("📹 Local video:", event.detail.enabled ? "ON" : "OFF");
+    const { streamId, enabled } = event.detail;
+    console.log(
+      "📹 Local video:",
+      enabled ? "ON" : "OFF",
+      "StreamID:",
+      streamId
+    );
+
+    // Update local video display with new stream when re-enabled
+    // Only if no screenshare is active
+    if (enabled && !localScreenShareId) {
+      const localStream = client.getLocalStream(streamId);
+      if (localStream && elements.localVideo) {
+        elements.localVideo.srcObject = localStream;
+      }
+    }
   });
 
   // Remote media toggle events

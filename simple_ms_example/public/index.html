@@ -59,7 +59,8 @@
       #joinButton,
       #leaveButton,
       #toggleAudioButton,
-      #toggleVideoButton {
+      #toggleVideoButton,
+      #shareScreenButton {
         color: white;
         border: none;
         padding: 12px 24px;
@@ -99,6 +100,14 @@
       #toggleAudioButton:hover,
       #toggleVideoButton:hover {
         opacity: 0.9;
+      }
+
+      #shareScreenButton {
+        background: #007bff;
+      }
+
+      #shareScreenButton:hover {
+        background: #0056b3;
       }
 
       #localVideo {
@@ -158,6 +167,12 @@
         style="display: none; background: #dc3545; margin-left: 10px"
       >
         📹 Turn Off Video
+      </button>
+      <button
+        id="shareScreenButton"
+        style="display: none; background: #007bff; margin-left: 10px"
+      >
+        🖥️ Share Screen
       </button>
     </div>
 

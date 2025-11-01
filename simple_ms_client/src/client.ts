@@ -24,10 +24,6 @@ export type {
   JoinResponse,
 } from "./controller/SocketClientController";
 
-// Mediasoup clients (for advanced usage)
-export { default as MediasoupClient } from "./mediasoup/MediasoupClient";
-export type { MediasoupClientConfig } from "./mediasoup/MediasoupClient";
-
 // Re-export commonly used types from dependencies
 export type {
   Transport,

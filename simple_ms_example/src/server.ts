@@ -299,7 +299,11 @@ class MediaSoupExpressServer {
         transportOptions: {
           listenIps: [
             {
-              ip: "127.0.0.1",
+              ip: "0.0.0.0",
+              announcedIp: "49.37.249.111", // public ip address
+            },
+            {
+              ip: "192.168.29.46", // local ip address
               announcedIp: null,
             },
           ],
