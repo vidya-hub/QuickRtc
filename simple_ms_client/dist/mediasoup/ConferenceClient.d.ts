@@ -1,231 +1,153 @@
-import { Device } from "mediasoup-client";
-import { SocketClientController } from "../controller/SocketClientController";
-import type { Consumer, MediaKind } from "mediasoup-client/types";
+import { Consumer } from "mediasoup-client/types";
 import { ClientSocket } from "@simple-mediasoup/types";
-import { WebRtcTransportOptions } from "mediasoup/types";
+/**
+ * Configuration for ConferenceClient
+ */
+export interface ConferenceClientConfig {
+    conferenceId: string;
+    conferenceName?: string;
+    participantId: string;
+    participantName: string;
+    socket: ClientSocket;
+}
+/**
+ * Remote participant information
+ */
+export interface RemoteParticipant {
+    participantId: string;
+    participantName: string;
+    videoStream?: MediaStream;
+    audioStream?: MediaStream;
+    videoConsumer?: Consumer;
+    audioConsumer?: Consumer;
+}
+/**
+ * Events emitted by ConferenceClient
+ */
 export interface ConferenceClientEvents {
-    joined: {
-        participantId: string;
-        conferenceId: string;
-    };
-    left: {
-        reason?: string;
-    };
-    error: {
-        error: Error;
-        context: string;
-    };
-    reconnecting: {};
-    reconnected: {};
     participantJoined: {
         participantId: string;
         participantName: string;
     };
     participantLeft: {
         participantId: string;
-        participantName: string;
-    };
-    localStreamReady: {
-        stream: MediaStream;
-        participantId: string;
     };
     remoteStreamAdded: {
-        stream: MediaStream;
         participantId: string;
-        consumerId: string;
-        producerId: string;
-        kind: MediaKind;
+        kind: "audio" | "video";
+        stream: MediaStream;
     };
     remoteStreamRemoved: {
         participantId: string;
-        consumerId: string;
-        producerId: string;
+        kind: "audio" | "video";
     };
-    participantStreamsReady: {
-        participantId: string;
-        participantName: string;
-        streams: RemoteStreamData[];
-    };
-    producerCreated: {
-        producerId: string;
-        kind: MediaKind;
-        participantId: string;
-    };
-    producerClosed: {
-        producerId: string;
-        kind: MediaKind;
-        participantId: string;
-    };
-    consumerCreated: {
-        consumerId: string;
-        producerId: string;
-        kind: MediaKind;
-        participantId: string;
-    };
-    consumerClosed: {
-        consumerId: string;
-        producerId: string;
-        participantId: string;
-    };
-    audioMuted: {
-        participantId: string;
-        isLocal: boolean;
-    };
-    audioUnmuted: {
-        participantId: string;
-        isLocal: boolean;
-    };
-    videoMuted: {
-        participantId: string;
-        isLocal: boolean;
-    };
-    videoUnmuted: {
-        participantId: string;
-        isLocal: boolean;
-    };
-    transportConnected: {
-        transportId: string;
-        direction: "send" | "recv";
-    };
-    transportClosed: {
-        transportId: string;
-        direction: "send" | "recv";
-    };
-    transportFailed: {
-        transportId: string;
-        direction: "send" | "recv";
-        error: Error;
-    };
-}
-export interface ConferenceClientConfig {
-    conferenceId: string;
-    participantId: string;
-    participantName: string;
-    socket: ClientSocket;
-    conferenceName?: string;
-    webRtcTransportOptions?: WebRtcTransportOptions;
-    enableAudio?: boolean;
-    enableVideo?: boolean;
-    iceServers?: RTCIceServer[];
-    videoConstraints?: MediaTrackConstraints;
-    audioConstraints?: MediaTrackConstraints;
-}
-export interface ParticipantInfo {
-    participantId: string;
-    participantName: string;
-    isLocal: boolean;
-    audioMuted: boolean;
-    videoMuted: boolean;
-}
-export interface ParticipantTrackInfo {
-    participantId: string;
-    participantName: string;
-    tracks: {
-        producerId: string;
-        kind: MediaKind;
+    localAudioToggled: {
         enabled: boolean;
-    }[];
-}
-export interface RemoteStreamData {
-    participantId: string;
-    participantName: string;
-    stream: MediaStream;
-    tracks: {
-        producerId: string;
-        consumerId: string;
-        kind: MediaKind;
-        track: MediaStreamTrack;
-    }[];
+    };
+    localVideoToggled: {
+        enabled: boolean;
+    };
+    remoteAudioToggled: {
+        participantId: string;
+        enabled: boolean;
+    };
+    remoteVideoToggled: {
+        participantId: string;
+        enabled: boolean;
+    };
+    error: {
+        message: string;
+        error?: any;
+    };
 }
 /**
- * ConferenceClient - Stateless MediaSoup client with server-side state management
+ * Simplified MediaSoup Conference Client
  *
- * This is a lightweight client that:
- * - Only holds current participant info
- * - Emits all operations to server
- * - Creates tracks on-demand when user wants to consume
- * - Handles all calls efficiently without local state storage
+ * Usage:
+ * 1. Create client with config
+ * 2. Call joinMeeting()
+ * 3. Call enableMedia(audio, video)
+ * 4. Listen to events for remote participants
+ * 5. Use toggleAudio/toggleVideo for media controls
+ * 6. Call leaveMeeting() when done
  */
 export declare class ConferenceClient extends EventTarget {
-    private config;
-    private socketController;
+    config: ConferenceClientConfig;
     private device;
-    private sendTransport?;
-    private recvTransport?;
-    private currentParticipant;
+    private sendTransport;
+    private recvTransport;
+    private socketController;
+    private localStream;
+    private audioProducer;
+    private videoProducer;
+    private remoteParticipants;
     private isJoined;
-    private logger;
-    private remoteStreams;
-    private consumers;
+    private isMediaEnabled;
     constructor(config: ConferenceClientConfig);
     /**
-     * Setup all socket event listeners - stateless event forwarding
+     * 1. Join the meeting
+     * Loads device, creates transports, and joins the conference
      */
-    private setupSocketEventListeners;
+    joinMeeting(): Promise<void>;
     /**
-     * Join the conference - stateless setup
+     * 2. Enable local media (audio/video)
+     * Gets user media and creates producers
      */
-    joinConference(): Promise<void>;
+    enableMedia(audio?: boolean, video?: boolean): Promise<MediaStream>;
     /**
-     * Setup transport event listeners - stateless
+     * 3. Consume existing participants' streams
+     * Fetches and consumes media from all participants already in the conference
      */
-    private setupTransportListeners;
+    consumeExistingStreams(): Promise<void>;
     /**
-     * Create consumer on demand when new producer is available
+     * Helper method to consume a specific participant's media
      */
-    private createConsumerOnDemand;
+    private consumeParticipantMedia;
     /**
-     * Enable local media (audio/video) - stateless version
+     * 4. Stop watching a specific participant's stream
+     * Closes consumers and removes streams for a participant
      */
-    enableMedia(audio?: boolean, video?: boolean): Promise<MediaStream | undefined>;
-    consumeParticipantMedia(participantId: string): Promise<any[]>;
+    stopWatchingStream(participantId: string): Promise<void>;
     /**
-     * Unpause a consumer after creating it
-     */
-    unpauseConsumer(consumerId: string): Promise<void>;
-    /**
-     * Consume a specific producer - stateless version (delegates to createConsumerOnDemand)
-     */
-    consumeProducer(producerId: string, participantInfo?: {
-        participantId: string;
-        participantName: string;
-    }): Promise<Consumer | undefined>;
-    /**
-     * Mute/unmute local audio - stateless version (delegates to server)
+     * 5a. Toggle local audio on/off
      */
     toggleAudio(mute?: boolean): Promise<boolean>;
     /**
-     * Mute/unmute local video - stateless version (delegates to server)
+     * 5b. Toggle local video on/off
      */
     toggleVideo(mute?: boolean): Promise<boolean>;
     /**
-     * Leave the conference - stateless version
+     * 6. Leave the meeting
+     * Cleans up all resources and disconnects
      */
-    leaveConference(): Promise<void>;
-    private emit;
+    leaveMeeting(): Promise<void>;
     /**
-     * Check if all expected streams for a participant are ready and emit event
+     * 7. Setup event listeners for socket events
+     * Handles participant joined/left and media state changes
      */
-    private checkAndEmitParticipantStreamsReady;
-    getParticipants(): Promise<ParticipantInfo[]>;
-    getProducersWithParticipantId(participantId: string): Promise<any>;
-    getCurrentParticipant(): ParticipantInfo;
-    isAudioMuted(): boolean;
-    isVideoMuted(): boolean;
-    isJoinedToConference(): boolean;
-    getDevice(): Device;
-    getSocketController(): SocketClientController;
+    private setupSocketEventListeners;
     /**
-     * Get all remote streams currently available
+     * Get list of all participants in the conference
      */
-    getRemoteStreams(): RemoteStreamData[];
+    getParticipants(): Promise<any[]>;
     /**
-     * Get remote stream for specific participant
+     * Get remote participant by ID
      */
-    getRemoteStreamForParticipant(participantId: string): MediaStream | undefined;
+    getRemoteParticipant(participantId: string): RemoteParticipant | undefined;
     /**
-     * Start screen sharing - stateless version
+     * Get all remote participants
      */
-    startScreenShare(): Promise<MediaStream | undefined>;
+    getAllRemoteParticipants(): RemoteParticipant[];
+    /**
+     * Check if currently in a meeting
+     */
+    isInMeeting(): boolean;
+    /**
+     * Check if local media is enabled
+     */
+    isLocalMediaEnabled(): boolean;
+    /**
+     * Get local media stream
+     */
+    getLocalStream(): MediaStream | null;
 }
-export default ConferenceClient;

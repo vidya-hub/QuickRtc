@@ -300,7 +300,7 @@ class MediaSoupExpressServer {
           listenIps: [
             {
               ip: "127.0.0.1",
-              announcedIp: "157.50.159.179",
+              announcedIp: null,
             },
           ],
           enableUdp: true,

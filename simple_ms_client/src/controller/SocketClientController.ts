@@ -1,4 +1,23 @@
-import { ClientSocket, ConsumeParams } from "@simple-mediasoup/types";
+import {
+  ClientSocket,
+  ConsumeParams,
+  SocketResponse,
+  JoinConferenceRequest,
+  JoinConferenceResponse,
+  CreateTransportParams,
+  CreateTransportResponse,
+  ConnectTransportParams,
+  ProduceParams,
+  ProduceResponse,
+  ConsumerParams,
+  ConsumeParticipantMediaRequest,
+  UnpauseConsumerRequest,
+  GetParticipantsRequest,
+  ParticipantInfo,
+  ProducerControlRequest,
+  CloseConsumerRequest,
+  LeaveConferenceRequest,
+} from "@simple-mediasoup/types";
 import {
   AppData,
   Transport,
@@ -28,56 +47,74 @@ export class SocketClientController extends EventTarget {
     this.socket = socket;
     this.joinParams = joinParams;
   }
-  public async joinConference() {
+  public async joinConference(): Promise<RtpCapabilities | undefined> {
     console.log("in socket client controller");
 
-    const response = await this.socket.emitWithAck("joinConference", {
+    const requestData: JoinConferenceRequest = {
       data: this.joinParams,
-    });
+    };
+
+    const response = await this.socket.emitWithAck(
+      "joinConference",
+      requestData
+    );
     console.log("join conference response received ", response);
 
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
       return undefined;
     }
-    return response.data.routerCapabilities;
+    return response.data!.routerCapabilities;
   }
+
   public async createTransports(): Promise<
-    { sendTransport: any; recvTransport: any } | undefined
+    | {
+        sendTransport: CreateTransportResponse;
+        recvTransport: CreateTransportResponse;
+      }
+    | undefined
   > {
+    const createSendTransportData: CreateTransportParams = {
+      conferenceId: this.joinParams.conferenceId,
+      direction: "producer",
+      participantId: this.joinParams.participantId,
+      options: this.joinParams.webRtcTransportOptions,
+    };
+
     const createSendTransportResponse = await this.socket.emitWithAck(
       "createTransport",
-      {
-        conferenceId: this.joinParams.conferenceId,
-        direction: "producer",
-        participantId: this.joinParams.participantId,
-        options: this.joinParams.webRtcTransportOptions,
-      }
+      createSendTransportData
     );
-    if (createSendTransportResponse.status == "error") {
+
+    if (createSendTransportResponse.status === "error") {
       this.dispatchEvent(
-        new CustomEvent("error", { detail: createSendTransportResponse.data })
+        new CustomEvent("error", { detail: createSendTransportResponse.error })
       );
       return;
     }
+
+    const createRecvTransportData: CreateTransportParams = {
+      conferenceId: this.joinParams.conferenceId,
+      direction: "consumer",
+      participantId: this.joinParams.participantId,
+      options: this.joinParams.webRtcTransportOptions,
+    };
+
     const createRecvTransportResponse = await this.socket.emitWithAck(
       "createTransport",
-      {
-        conferenceId: this.joinParams.conferenceId,
-        direction: "consumer",
-        participantId: this.joinParams.participantId,
-        options: this.joinParams.webRtcTransportOptions,
-      }
+      createRecvTransportData
     );
-    if (createRecvTransportResponse.status == "error") {
+
+    if (createRecvTransportResponse.status === "error") {
       this.dispatchEvent(
-        new CustomEvent("error", { detail: createRecvTransportResponse.data })
+        new CustomEvent("error", { detail: createRecvTransportResponse.error })
       );
       return;
     }
+
     return {
-      sendTransport: createSendTransportResponse.data,
-      recvTransport: createRecvTransportResponse.data,
+      sendTransport: createSendTransportResponse.data!,
+      recvTransport: createRecvTransportResponse.data!,
     };
   }
   public addSendTransportListener({
@@ -96,13 +133,17 @@ export class SocketClientController extends EventTarget {
       "connect",
       async ({ dtlsParameters }, callback, errback) => {
         try {
-          const response = await this.socket.emitWithAck("connectTransport", {
+          const connectData: ConnectTransportParams = {
             conferenceId: this.joinParams.conferenceId,
             participantId: this.joinParams.participantId,
-            transportId: sendTransport.id,
             direction: "producer",
             dtlsParameters,
-          });
+          };
+
+          const response = await this.socket.emitWithAck(
+            "connectTransport",
+            connectData
+          );
           if (response.status === "ok") {
             callback();
           } else {
@@ -117,21 +158,26 @@ export class SocketClientController extends EventTarget {
 
     sendTransport.on("produce", async (params, callback, errback) => {
       try {
-        const response = await this.socket.emitWithAck("produce", {
+        const produceData: ProduceParams = {
           conferenceId: this.joinParams.conferenceId,
           participantId: this.joinParams.participantId,
           transportId: sendTransport.id,
           kind: params.kind,
           rtpParameters: params.rtpParameters,
-          appData: params.appData,
-        });
+          producerOptions: {
+            kind: params.kind,
+            rtpParameters: params.rtpParameters,
+          },
+        };
+
+        const response = await this.socket.emitWithAck("produce", produceData);
         if (response.status === "ok") {
-          callback({ id: response.data.producerId });
+          callback({ id: response.data!.producerId });
           onProduce({
             kind: params.kind,
             rtpParameters: params.rtpParameters,
             appData: params.appData,
-            producerId: response.data.producerId,
+            producerId: response.data!.producerId,
           });
         } else {
           errback(new Error("Failed to produce"));
@@ -145,7 +191,7 @@ export class SocketClientController extends EventTarget {
     recvTransport,
     onConsume,
   }: {
-    recvTransport: any;
+    recvTransport: Transport<AppData>;
     onConsume: (params: {
       producerId: string;
       id: string;
@@ -162,13 +208,17 @@ export class SocketClientController extends EventTarget {
         errback: (error: Error) => void
       ) => {
         try {
-          const response = await this.socket.emitWithAck("connectTransport", {
+          const connectData: ConnectTransportParams = {
             conferenceId: this.joinParams.conferenceId,
             participantId: this.joinParams.participantId,
-            transportId: recvTransport.id,
             direction: "consumer",
             dtlsParameters,
-          });
+          };
+
+          const response = await this.socket.emitWithAck(
+            "connectTransport",
+            connectData
+          );
           if (response.status === "ok") {
             callback();
           } else {
@@ -180,62 +230,27 @@ export class SocketClientController extends EventTarget {
         }
       }
     );
-    recvTransport.on(
-      "consume",
-      async (
-        params: ConsumeParams,
-        callback: (data: any) => void,
-        errback: (error: Error) => void
-      ) => {
-        try {
-          const response = await this.socket.emitWithAck("consume", {
-            conferenceId: this.joinParams.conferenceId,
-            participantId: this.joinParams.participantId,
-            transportId: recvTransport.id,
-            producerId: params.consumeOptions.producerId,
-            rtpCapabilities: params.consumeOptions.rtpCapabilities,
-          });
-          if (response.status === "ok") {
-            const { id, kind, rtpParameters, appData } = response.data;
-            callback({ id, kind, rtpParameters, appData });
-            onConsume({
-              producerId: params.consumeOptions.producerId,
-              id,
-              kind,
-              rtpParameters,
-              appData,
-            });
-          } else {
-            errback(new Error("Failed to consume"));
-          }
-        } catch (error) {
-          errback(new Error("Failed to consume"));
-        }
-      }
-    );
+
+    // Note: The 'consume' event is no longer used.
+    // Consuming is now done manually via consumeParticipantMedia()
   }
-  async consumeMedia(producerId: string, rtpCapabilities: RtpCapabilities) {
-    const response = await this.socket.emitWithAck("consume", {
+
+  async consumeMedia(
+    producerId: string,
+    rtpCapabilities: RtpCapabilities
+  ): Promise<ConsumerParams | undefined> {
+    const consumeData: ConsumeParams = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
       consumeOptions: { producerId, rtpCapabilities },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+    };
+
+    const response = await this.socket.emitWithAck("consume", consumeData);
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
       return undefined;
     }
     return response.data;
-  }
-  async getProducers(): Promise<string[] | undefined> {
-    const response = await this.socket.emitWithAck("getProducers", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return undefined;
-    }
-    return response.data.producerIds as string[];
   }
 
   /**
@@ -245,16 +260,21 @@ export class SocketClientController extends EventTarget {
    */
   async consumeParticipantMedia(
     targetParticipantId: string,
-    rtpCapabilities: any
-  ): Promise<any[] | undefined> {
-    const response = await this.socket.emitWithAck("consumeParticipantMedia", {
+    rtpCapabilities: RtpCapabilities
+  ): Promise<ConsumerParams[] | undefined> {
+    const requestData: ConsumeParticipantMediaRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
-      targetParticipantId: targetParticipantId,
-      rtpCapabilities: rtpCapabilities,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
+      targetParticipantId,
+      rtpCapabilities,
+    };
+
+    const response = await this.socket.emitWithAck(
+      "consumeParticipantMedia",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
       return undefined;
     }
     return response.data;
@@ -264,189 +284,123 @@ export class SocketClientController extends EventTarget {
    * Unpause consumer
    */
   async unpauseConsumer(consumerId: string): Promise<void> {
-    const response = await this.socket.emitWithAck("unpauseConsumer", {
+    const requestData: UnpauseConsumerRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
-      consumerId: consumerId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      throw new Error(response.data);
+      consumerId,
+    };
+
+    const response = await this.socket.emitWithAck(
+      "unpauseConsumer",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
     }
-  }
-  async resumeProducer(producerId: string) {
-    const response = await this.socket.emitWithAck("resumeProducer", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-      producerId: producerId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return;
   }
 
-  async pauseProducer(producerId: string) {
-    const response = await this.socket.emitWithAck("pauseProducer", {
+  async resumeProducer(producerId: string): Promise<void> {
+    const requestData: ProducerControlRequest = {
+      conferenceId: this.joinParams.conferenceId,
+      participantId: this.joinParams.participantId,
+      extraData: {
+        producerId,
+      },
+    };
+
+    const response = await this.socket.emitWithAck(
+      "resumeProducer",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
+    }
+  }
+
+  async pauseProducer(producerId: string): Promise<void> {
+    const requestData: ProducerControlRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
       extraData: { producerId },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
+    };
+
+    const response = await this.socket.emitWithAck(
+      "pauseProducer",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
     }
-    return;
   }
 
-  async pauseConsumer(consumerId: string) {
-    const response = await this.socket.emitWithAck("pauseConsumer", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-      extraData: { consumerId },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return;
-  }
-
-  async resumeConsumer(consumerId: string) {
-    const response = await this.socket.emitWithAck("resumeConsumer", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-      extraData: { consumerId },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return;
-  }
-
-  async closeProducer(producerId: string) {
-    const response = await this.socket.emitWithAck("closeProducer", {
+  async closeProducer(producerId: string): Promise<void> {
+    const requestData: ProducerControlRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
       extraData: { producerId },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
+    };
+
+    const response = await this.socket.emitWithAck(
+      "closeProducer",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
     }
-    return;
   }
 
-  async closeConsumer(consumerId: string) {
-    const response = await this.socket.emitWithAck("closeConsumer", {
+  async closeConsumer(consumerId: string): Promise<void> {
+    const requestData: CloseConsumerRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
       extraData: { consumerId },
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
+    };
+
+    const response = await this.socket.emitWithAck(
+      "closeConsumer",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
     }
-    return;
   }
 
-  async muteAudio() {
-    const response = await this.socket.emitWithAck("muteAudio", {
+  async leaveConference(): Promise<void> {
+    const requestData: LeaveConferenceRequest = {
       conferenceId: this.joinParams.conferenceId,
       participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
+    };
+
+    const response = await this.socket.emitWithAck(
+      "leaveConference",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      throw new Error(response.error);
     }
-    return response.data;
   }
 
-  async unmuteAudio() {
-    const response = await this.socket.emitWithAck("unmuteAudio", {
+  async getParticipants(): Promise<ParticipantInfo[] | undefined> {
+    const requestData: GetParticipantsRequest = {
       conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return response.data;
-  }
+    };
 
-  async muteVideo() {
-    const response = await this.socket.emitWithAck("muteVideo", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return response.data;
-  }
-
-  async unmuteVideo() {
-    const response = await this.socket.emitWithAck("unmuteVideo", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return response.data;
-  }
-
-  async getMediaStates() {
-    const response = await this.socket.emitWithAck("getMediaStates", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return response.data;
-  }
-
-  async leaveConference() {
-    const response = await this.socket.emitWithAck("leaveConference", {
-      conferenceId: this.joinParams.conferenceId,
-      participantId: this.joinParams.participantId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
-    return;
-  }
-  async getParticipants() {
-    const response = await this.socket.emitWithAck("getParticipants", {
-      conferenceId: this.joinParams.conferenceId,
-    });
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
+    const response = await this.socket.emitWithAck(
+      "getParticipants",
+      requestData
+    );
+    if (response.status === "error") {
+      this.dispatchEvent(new CustomEvent("error", { detail: response.error }));
+      return undefined;
     }
     console.log("participants ", response.data);
 
-    return response.data;
-  }
-  async getProducersWithParticipantId(participantId: string) {
-    const response = await this.socket.emitWithAck(
-      "getProducersWithParticipantId",
-      {
-        conferenceId: this.joinParams.conferenceId,
-        participantId,
-      }
-    );
-    if (response.status == "error") {
-      this.dispatchEvent(new CustomEvent("error", { detail: response.data }));
-      return;
-    }
     return response.data;
   }
 

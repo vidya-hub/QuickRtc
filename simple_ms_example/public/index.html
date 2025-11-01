@@ -56,8 +56,10 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
 
-      #myButton,
-      #leaveButton {
+      #joinButton,
+      #leaveButton,
+      #toggleAudioButton,
+      #toggleVideoButton {
         color: white;
         border: none;
         padding: 12px 24px;
@@ -68,15 +70,15 @@
         margin: 0 5px;
       }
 
-      #myButton {
+      #joinButton {
         background: #007bff;
       }
 
-      #myButton:hover:not(:disabled) {
+      #joinButton:hover:not(:disabled) {
         background: #0056b3;
       }
 
-      #myButton:disabled {
+      #joinButton:disabled {
         background: #6c757d;
         cursor: not-allowed;
       }
@@ -87,6 +89,16 @@
 
       #leaveButton:hover {
         background: #c82333;
+      }
+
+      #toggleAudioButton,
+      #toggleVideoButton {
+        background: #dc3545;
+      }
+
+      #toggleAudioButton:hover,
+      #toggleVideoButton:hover {
+        opacity: 0.9;
       }
 
       #localVideo {
@@ -131,12 +143,21 @@
     </div>
 
     <div class="controls">
-      <button id="myButton">Join Conference</button>
+      <button id="joinButton">Join Conference</button>
+      <button id="leaveButton" style="display: none; background: #dc3545">
+        Leave Conference
+      </button>
       <button
-        id="leaveButton"
+        id="toggleAudioButton"
         style="display: none; background: #dc3545; margin-left: 10px"
       >
-        Leave Conference
+        🔇 Mute Audio
+      </button>
+      <button
+        id="toggleVideoButton"
+        style="display: none; background: #dc3545; margin-left: 10px"
+      >
+        📹 Turn Off Video
       </button>
     </div>
 

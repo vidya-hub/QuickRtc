@@ -1,1106 +1,701 @@
 import { Device } from "mediasoup-client";
+import { Transport, Producer, Consumer } from "mediasoup-client/types";
 import { SocketClientController } from "../controller/SocketClientController";
-import type {
-  RtpCapabilities,
-  Transport,
-  Producer,
-  Consumer,
-  MediaKind,
-} from "mediasoup-client/types";
 import { ClientSocket } from "@simple-mediasoup/types";
-import { WebRtcTransportOptions } from "mediasoup/types";
 
-// Event interfaces for type safety
-export interface ConferenceClientEvents {
-  // Connection events
-  joined: { participantId: string; conferenceId: string };
-  left: { reason?: string };
-  error: { error: Error; context: string };
-  reconnecting: {};
-  reconnected: {};
-
-  // Participant events
-  participantJoined: { participantId: string; participantName: string };
-  participantLeft: { participantId: string; participantName: string };
-
-  // Media events
-  localStreamReady: { stream: MediaStream; participantId: string };
-  remoteStreamAdded: {
-    stream: MediaStream;
-    participantId: string;
-    consumerId: string;
-    producerId: string;
-    kind: MediaKind;
-  };
-  remoteStreamRemoved: {
-    participantId: string;
-    consumerId: string;
-    producerId: string;
-  };
-  participantStreamsReady: {
-    participantId: string;
-    participantName: string;
-    streams: RemoteStreamData[];
-  };
-
-  // Producer/Consumer events
-  producerCreated: {
-    producerId: string;
-    kind: MediaKind;
-    participantId: string;
-  };
-  producerClosed: {
-    producerId: string;
-    kind: MediaKind;
-    participantId: string;
-  };
-  consumerCreated: {
-    consumerId: string;
-    producerId: string;
-    kind: MediaKind;
-    participantId: string;
-  };
-  consumerClosed: {
-    consumerId: string;
-    producerId: string;
-    participantId: string;
-  };
-
-  // Media state events
-  audioMuted: { participantId: string; isLocal: boolean };
-  audioUnmuted: { participantId: string; isLocal: boolean };
-  videoMuted: { participantId: string; isLocal: boolean };
-  videoUnmuted: { participantId: string; isLocal: boolean };
-
-  // Transport events
-  transportConnected: { transportId: string; direction: "send" | "recv" };
-  transportClosed: { transportId: string; direction: "send" | "recv" };
-  transportFailed: {
-    transportId: string;
-    direction: "send" | "recv";
-    error: Error;
-  };
-}
-
+/**
+ * Configuration for ConferenceClient
+ */
 export interface ConferenceClientConfig {
   conferenceId: string;
+  conferenceName?: string;
   participantId: string;
   participantName: string;
   socket: ClientSocket;
-  conferenceName?: string;
-  webRtcTransportOptions?: WebRtcTransportOptions;
-  enableAudio?: boolean;
-  enableVideo?: boolean;
-  iceServers?: RTCIceServer[];
-  videoConstraints?: MediaTrackConstraints;
-  audioConstraints?: MediaTrackConstraints;
-}
-
-export interface ParticipantInfo {
-  participantId: string;
-  participantName: string;
-  isLocal: boolean;
-  audioMuted: boolean;
-  videoMuted: boolean;
-}
-
-export interface ParticipantTrackInfo {
-  participantId: string;
-  participantName: string;
-  tracks: {
-    producerId: string;
-    kind: MediaKind;
-    enabled: boolean;
-  }[];
-}
-
-export interface RemoteStreamData {
-  participantId: string;
-  participantName: string;
-  stream: MediaStream;
-  tracks: {
-    producerId: string;
-    consumerId: string;
-    kind: MediaKind;
-    track: MediaStreamTrack;
-  }[];
 }
 
 /**
- * ConferenceClient - Stateless MediaSoup client with server-side state management
- *
- * This is a lightweight client that:
- * - Only holds current participant info
- * - Emits all operations to server
- * - Creates tracks on-demand when user wants to consume
- * - Handles all calls efficiently without local state storage
+ * Remote participant information
+ */
+export interface RemoteParticipant {
+  participantId: string;
+  participantName: string;
+  videoStream?: MediaStream;
+  audioStream?: MediaStream;
+  videoConsumer?: Consumer;
+  audioConsumer?: Consumer;
+}
+
+/**
+ * Events emitted by ConferenceClient
+ */
+export interface ConferenceClientEvents {
+  participantJoined: { participantId: string; participantName: string };
+  participantLeft: { participantId: string };
+  remoteStreamAdded: { participantId: string; kind: "audio" | "video"; stream: MediaStream };
+  remoteStreamRemoved: { participantId: string; kind: "audio" | "video" };
+  localAudioToggled: { enabled: boolean };
+  localVideoToggled: { enabled: boolean };
+  remoteAudioToggled: { participantId: string; enabled: boolean };
+  remoteVideoToggled: { participantId: string; enabled: boolean };
+  error: { message: string; error?: any };
+}
+
+/**
+ * Simplified MediaSoup Conference Client
+ * 
+ * Usage:
+ * 1. Create client with config
+ * 2. Call joinMeeting()
+ * 3. Call enableMedia(audio, video)
+ * 4. Listen to events for remote participants
+ * 5. Use toggleAudio/toggleVideo for media controls
+ * 6. Call leaveMeeting() when done
  */
 export class ConferenceClient extends EventTarget {
-  private config: ConferenceClientConfig;
-  private socketController: SocketClientController;
-  private device: Device;
-  private sendTransport?: Transport;
-  private recvTransport?: Transport;
-
-  // Only store current participant info
-  private currentParticipant: ParticipantInfo;
-  private isJoined = false;
-  private logger: (message: string, level?: "info" | "warn" | "error") => void;
-
-  // Map to track remote streams by participant
-  private remoteStreams = new Map<string, MediaStream>();
-  private consumers = new Map<string, Consumer>();
+  public config: ConferenceClientConfig;
+  private device: Device | null = null;
+  private sendTransport: Transport | null = null;
+  private recvTransport: Transport | null = null;
+  private socketController: SocketClientController | null = null;
+  
+  // Local media state
+  private localStream: MediaStream | null = null;
+  private audioProducer: Producer | null = null;
+  private videoProducer: Producer | null = null;
+  
+  // Remote participants tracking
+  private remoteParticipants: Map<string, RemoteParticipant> = new Map();
+  
+  // State flags
+  private isJoined: boolean = false;
+  private isMediaEnabled: boolean = false;
 
   constructor(config: ConferenceClientConfig) {
     super();
-    this.config = {
-      enableAudio: true,
-      enableVideo: true,
-      ...config,
-    };
-
-    // Initialize logger
-    this.logger = (
-      message: string,
-      level: "info" | "warn" | "error" = "info"
-    ) => {
-      const timestamp = new Date().toISOString();
-      const prefix = `[ConferenceClient:${this.config.participantId}]`;
-      console[level](`${timestamp} ${prefix} ${message}`);
-    };
-
-    // Initialize device
-    this.device = new Device();
-
-    // Only store current participant info
-    this.currentParticipant = {
-      participantId: config.participantId,
-      participantName: config.participantName,
-      isLocal: true,
-      audioMuted: false,
-      videoMuted: false,
-    };
-
-    // Initialize socket controller
-    this.socketController = new SocketClientController(config.socket, {
-      conferenceId: config.conferenceId,
-      participantId: config.participantId,
-      participantName: config.participantName,
-      conferenceName: config.conferenceName,
-      socketId: config.socket.id || "",
-      webRtcTransportOptions: config.webRtcTransportOptions,
-    });
-
-    this.setupSocketEventListeners();
-    this.logger("ConferenceClient initialized (stateless mode)");
+    this.config = config;
   }
 
   /**
-   * Setup all socket event listeners - stateless event forwarding
+   * 1. Join the meeting
+   * Loads device, creates transports, and joins the conference
    */
-  private setupSocketEventListeners(): void {
-    this.logger("Setting up socket event listeners (stateless mode)");
-
-    // Setup socket controller event listeners first
-    this.socketController.setupEventListeners();
-
-    // Participant events - just forward to application
-    this.socketController.addEventListener(
-      "participantJoined",
-      (event: any) => {
-        const { participantId, participantName } = event.detail;
-        this.logger(
-          `Participant joined: ${participantName} (${participantId})`
-        );
-        this.emit("participantJoined", { participantId, participantName });
-      }
-    );
-
-    this.socketController.addEventListener("participantLeft", (event: any) => {
-      const { participantId, participantName } = event.detail;
-      this.logger(`Participant left: ${participantName} (${participantId})`);
-      this.emit("participantLeft", { participantId, participantName });
-    });
-
-    // Producer events - handle new producer by creating consumer on demand
-    this.socketController.addEventListener("newProducer", (event: any) => {
-      const { producerId, participantId, kind, participantName } = event.detail;
-      this.logger(
-        `New producer available: ${producerId} (${kind}) from ${participantId}`
-      );
-      this.emit("producerCreated", { producerId, kind, participantId });
-
-      // Auto-consume new producers immediately with participant info
-      this.createConsumerOnDemand(producerId, {
-        participantId,
-        participantName,
-      });
-    });
-
-    this.socketController.addEventListener("producerClosed", (event: any) => {
-      const { producerId, participantId, kind } = event.detail;
-      this.logger(
-        `Producer closed: ${producerId} (${kind}) from ${participantId}`
-      );
-      this.emit("producerClosed", { producerId, kind, participantId });
-    });
-
-    // Consumer events - forward to application
-    this.socketController.addEventListener("consumerClosed", (event: any) => {
-      const { consumerId, producerId, participantId } = event.detail;
-      this.logger(
-        `Consumer closed: ${consumerId} for producer ${producerId} from ${participantId}`
-      );
-      this.emit("consumerClosed", { consumerId, producerId, participantId });
-      this.emit("remoteStreamRemoved", {
-        participantId,
-        consumerId,
-        producerId,
-      });
-    });
-
-    // Media state events - update current participant and forward
-    this.socketController.addEventListener("audioMuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.logger(`Audio muted by participant: ${participantId}`);
-
-      // Update current participant state if it's local
-      if (participantId === this.currentParticipant.participantId) {
-        this.currentParticipant.audioMuted = true;
-        this.emit("audioMuted", { participantId, isLocal: true });
-      } else {
-        this.emit("audioMuted", { participantId, isLocal: false });
-      }
-    });
-
-    this.socketController.addEventListener("audioUnmuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.logger(`Audio unmuted by participant: ${participantId}`);
-
-      // Update current participant state if it's local
-      if (participantId === this.currentParticipant.participantId) {
-        this.currentParticipant.audioMuted = false;
-        this.emit("audioUnmuted", { participantId, isLocal: true });
-      } else {
-        this.emit("audioUnmuted", { participantId, isLocal: false });
-      }
-    });
-
-    this.socketController.addEventListener("videoMuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.logger(`Video muted by participant: ${participantId}`);
-
-      // Update current participant state if it's local
-      if (participantId === this.currentParticipant.participantId) {
-        this.currentParticipant.videoMuted = true;
-        this.emit("videoMuted", { participantId, isLocal: true });
-      } else {
-        this.emit("videoMuted", { participantId, isLocal: false });
-      }
-    });
-
-    this.socketController.addEventListener("videoUnmuted", (event: any) => {
-      const { participantId } = event.detail;
-      this.logger(`Video unmuted by participant: ${participantId}`);
-
-      // Update current participant state if it's local
-      if (participantId === this.currentParticipant.participantId) {
-        this.currentParticipant.videoMuted = false;
-        this.emit("videoUnmuted", { participantId, isLocal: true });
-      } else {
-        this.emit("videoUnmuted", { participantId, isLocal: false });
-      }
-    });
-
-    // Error events
-    this.socketController.addEventListener("error", (event: any) => {
-      this.logger(`Socket controller error: ${event.detail.message}`, "error");
-      this.emit("error", {
-        error: event.detail,
-        context: "socket-controller",
-      });
-    });
-  }
-
-  /**
-   * Join the conference - stateless setup
-   */
-  public async joinConference(): Promise<void> {
+  public async joinMeeting(): Promise<void> {
     if (this.isJoined) {
-      this.logger("Already joined conference", "warn");
-      return;
+      throw new Error("Already joined the meeting");
     }
 
     try {
-      this.logger("Joining conference...");
+      // Initialize socket controller
+      this.socketController = new SocketClientController(this.config.socket, {
+        conferenceId: this.config.conferenceId,
+        participantId: this.config.participantId,
+        participantName: this.config.participantName,
+        conferenceName: this.config.conferenceName,
+        socketId: this.config.socket.id,
+      });
 
-      // Join and get router capabilities
+      // Setup socket event listeners
+      this.setupSocketEventListeners();
+
+      // Join conference and get router capabilities
       const routerCapabilities = await this.socketController.joinConference();
       if (!routerCapabilities) {
         throw new Error("Failed to get router capabilities");
       }
 
-      this.logger("Router capabilities received");
-
       // Load device with router capabilities
+      this.device = new Device();
       await this.device.load({ routerRtpCapabilities: routerCapabilities });
-      this.logger("Device loaded with router capabilities");
 
-      // Create transports
+      // Create send and receive transports
       const transports = await this.socketController.createTransports();
       if (!transports) {
         throw new Error("Failed to create transports");
       }
 
-      this.logger("Transports created on server");
-
-      // Create send transport
-      const {
-        sendTransport: sendTransportData,
-        recvTransport: recvTransportData,
-      } = transports;
-
-      this.sendTransport = this.device.createSendTransport({
-        id: sendTransportData.id,
-        iceParameters: sendTransportData.iceParameters,
-        iceCandidates: sendTransportData.iceCandidates,
-        dtlsParameters: sendTransportData.dtlsParameters,
+      // Setup send transport
+      this.sendTransport = this.device.createSendTransport(transports.sendTransport);
+      this.socketController.addSendTransportListener({
+        sendTransport: this.sendTransport,
+        onProduce: (params) => {
+          console.log("Producer created:", params.kind, params.producerId);
+        },
       });
 
-      this.recvTransport = this.device.createRecvTransport({
-        id: recvTransportData.id,
-        iceParameters: recvTransportData.iceParameters,
-        iceCandidates: recvTransportData.iceCandidates,
-        dtlsParameters: recvTransportData.dtlsParameters,
+      // Setup receive transport
+      this.recvTransport = this.device.createRecvTransport(transports.recvTransport);
+      this.socketController.addConsumeTransportListener({
+        recvTransport: this.recvTransport,
+        onConsume: (params) => {
+          console.log("Consumer created:", params.kind, params.id);
+        },
       });
-
-      this.logger("Local transports created");
-
-      // Setup transport event listeners
-      this.setupTransportListeners();
 
       this.isJoined = true;
-      this.logger("Successfully joined conference (stateless mode)");
-
-      this.emit("joined", {
-        participantId: this.config.participantId,
-        conferenceId: this.config.conferenceId,
-      });
+      console.log("Successfully joined meeting");
     } catch (error) {
-      this.logger(
-        `Failed to join conference: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
+      console.error("Error joining meeting:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to join meeting", error },
+        })
       );
-      this.emit("error", {
-        error: error instanceof Error ? error : new Error("Unknown join error"),
-        context: "join-conference",
-      });
       throw error;
     }
   }
 
   /**
-   * Setup transport event listeners - stateless
+   * 2. Enable local media (audio/video)
+   * Gets user media and creates producers
    */
-  private setupTransportListeners(): void {
-    if (!this.sendTransport || !this.recvTransport) {
-      throw new Error("Transports not initialized");
+  public async enableMedia(audio: boolean = true, video: boolean = true): Promise<MediaStream> {
+    if (!this.isJoined || !this.sendTransport) {
+      throw new Error("Must join meeting before enabling media");
     }
 
-    this.logger("Setting up transport listeners (stateless mode)");
-
-    // Setup send transport listeners
-    this.socketController.addSendTransportListener({
-      sendTransport: this.sendTransport,
-      onProduce: (params) => {
-        this.logger(`Producer created: ${params.producerId} (${params.kind})`);
-        // Just emit the event, don't store anything
-        this.emit("producerCreated", {
-          producerId: params.producerId,
-          kind: params.kind,
-          participantId: this.config.participantId,
-        });
-      },
-    });
-
-    // Setup receive transport listeners
-    this.socketController.addConsumeTransportListener({
-      recvTransport: this.recvTransport,
-      onConsume: (params) => {
-        this.logger(
-          `Consumer created: ${params.id} for producer ${params.producerId}`
-        );
-
-        // Note: params here is from the transport listener, which should have track
-        // The actual consumer creation with track will be handled in createConsumerOnDemand
-        const participantId =
-          (params.appData?.participantId as string) || "unknown";
-
-        this.emit("consumerCreated", {
-          consumerId: params.id,
-          producerId: params.producerId,
-          kind: params.kind,
-          participantId: participantId,
-        });
-
-        // Stream will be created when consumer is actually consumed with track
-      },
-    });
-
-    // Transport connection events
-    this.sendTransport.on("connect", () => {
-      this.logger("Send transport connected");
-      this.emit("transportConnected", {
-        transportId: this.sendTransport!.id,
-        direction: "send",
-      });
-    });
-
-    this.recvTransport.on("connect", () => {
-      this.logger("Receive transport connected");
-      this.emit("transportConnected", {
-        transportId: this.recvTransport!.id,
-        direction: "recv",
-      });
-    });
-
-    // Transport error events
-    this.sendTransport.on("connectionstatechange", (state) => {
-      this.logger(`Send transport connection state: ${state}`);
-      if (state === "failed" || state === "closed") {
-        this.emit("transportFailed", {
-          transportId: this.sendTransport!.id,
-          direction: "send",
-          error: new Error(`Transport ${state}`),
-        });
-      }
-    });
-
-    this.recvTransport.on("connectionstatechange", (state) => {
-      this.logger(`Receive transport connection state: ${state}`);
-      if (state === "failed" || state === "closed") {
-        this.emit("transportFailed", {
-          transportId: this.recvTransport!.id,
-          direction: "recv",
-          error: new Error(`Transport ${state}`),
-        });
-      }
-    });
-  }
-
-  /**
-   * Create consumer on demand when new producer is available
-   */
-  private async createConsumerOnDemand(
-    producerId: string,
-    participantInfo?: { participantId: string; participantName: string }
-  ): Promise<Consumer | undefined> {
-    if (!this.recvTransport) {
-      this.logger("Receive transport not available", "warn");
-      return;
+    if (this.isMediaEnabled) {
+      console.warn("Media already enabled");
+      return this.localStream!;
     }
 
     try {
-      this.logger(`Creating consumer on demand for producer: ${producerId}`);
+      // Get user media
+      this.localStream = await navigator.mediaDevices.getUserMedia({
+        audio,
+        video,
+      });
 
-      const consumerData = await this.socketController.consumeMedia(
-        producerId,
+      // Create audio producer if audio enabled
+      if (audio) {
+        const audioTrack = this.localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          this.audioProducer = await this.sendTransport.produce({
+            track: audioTrack,
+            codecOptions: {
+              opusStereo: true,
+              opusDtx: true,
+            },
+          });
+          console.log("Audio producer created:", this.audioProducer.id);
+        }
+      }
+
+      // Create video producer if video enabled
+      if (video) {
+        const videoTrack = this.localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          this.videoProducer = await this.sendTransport.produce({
+            track: videoTrack,
+            codecOptions: {
+              videoGoogleStartBitrate: 1000,
+            },
+          });
+          console.log("Video producer created:", this.videoProducer.id);
+        }
+      }
+
+      this.isMediaEnabled = true;
+      return this.localStream;
+    } catch (error) {
+      console.error("Error enabling media:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to enable media", error },
+        })
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 3. Consume existing participants' streams
+   * Fetches and consumes media from all participants already in the conference
+   */
+  public async consumeExistingStreams(): Promise<void> {
+    if (!this.isJoined || !this.device || !this.recvTransport) {
+      throw new Error("Must join meeting before consuming streams");
+    }
+
+    try {
+      // Get list of participants
+      const participants = await this.socketController!.getParticipants();
+      if (!participants || participants.length === 0) {
+        console.log("No existing participants to consume");
+        return;
+      }
+
+      console.log("Found existing participants:", participants);
+
+      // Consume media from each participant (except self)
+      for (const participant of participants) {
+        if (participant.participantId === this.config.participantId) {
+          continue; // Skip self
+        }
+
+        await this.consumeParticipantMedia(participant.participantId, participant.participantName);
+      }
+    } catch (error) {
+      console.error("Error consuming existing streams:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to consume existing streams", error },
+        })
+      );
+    }
+  }
+
+  /**
+   * Helper method to consume a specific participant's media
+   */
+  private async consumeParticipantMedia(participantId: string, participantName: string): Promise<void> {
+    if (!this.device || !this.recvTransport) {
+      throw new Error("Device or receive transport not initialized");
+    }
+
+    try {
+      // Get consumer parameters for this participant
+      const consumerParams = await this.socketController!.consumeParticipantMedia(
+        participantId,
         this.device.rtpCapabilities
       );
 
-      if (!consumerData) {
-        throw new Error("Failed to get consumer data from server");
-      }
-
-      const consumer = await this.recvTransport.consume(consumerData);
-
-      // Store consumer for later reference
-      this.consumers.set(consumer.id, consumer);
-
-      // Get participant info from appData or provided parameter
-      const participantId =
-        participantInfo?.participantId ||
-        (consumerData.appData?.participantId as string) ||
-        "unknown";
-      const participantName =
-        participantInfo?.participantName ||
-        (consumerData.appData?.participantName as string) ||
-        "Unknown Participant";
-
-      this.logger(
-        `Consumer created: ${consumer.id} for producer ${producerId} from participant ${participantId}`
-      );
-
-      // Create or get existing stream for this participant
-      let stream = this.remoteStreams.get(participantId);
-      if (!stream) {
-        stream = new MediaStream();
-        this.remoteStreams.set(participantId, stream);
-        this.logger(
-          `Created new remote stream for participant: ${participantId}`
-        );
-      }
-
-      // Add track to stream
-      stream.addTrack(consumer.track);
-      this.logger(
-        `Added ${consumer.track} ${consumer.kind} track to stream for participant: ${participantId}`
-      );
-
-      // Listen for various track events
-      consumer.track.addEventListener("ended", () => {
-        this.logger(
-          `Track ended for consumer ${consumer.id} from participant ${participantId}`
-        );
-      });
-
-      consumer.track.onmute = () => {
-        this.logger(
-          `Track muted for consumer ${consumer.id} from participant ${participantId}`
-        );
-      };
-
-      consumer.track.onunmute = () => {
-        this.logger(
-          `Track unmuted for consumer ${consumer.id} from participant ${participantId}`
-        );
-      };
-
-      // Unpause consumer after setting up all event handlers and stream
-      await this.unpauseConsumer(consumer.id);
-
-      this.logger(
-        `Consumer resumed: ${consumer.id} for producer ${producerId} from participant ${participantId}`
-      );
-
-      // Wait a brief moment for the track to be fully ready
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Emit remote stream event
-      this.emit("remoteStreamAdded", {
-        stream: stream,
-        participantId: participantId,
-        consumerId: consumer.id,
-        producerId: producerId,
-        kind: consumer.kind,
-      });
-
-      // Check if we should emit participant streams ready event
-      this.checkAndEmitParticipantStreamsReady(participantId, participantName);
-
-      // Handle consumer close
-      consumer.on("@close", () => {
-        this.logger(
-          `Consumer closed: ${consumer.id} for producer ${producerId}`
-        );
-
-        // Remove track from stream
-        const track = consumer.track;
-        if (track && stream && stream.getTracks().includes(track)) {
-          stream.removeTrack(track);
-          this.logger(
-            `Removed ${consumer.kind} track from stream for participant: ${participantId}`
-          );
-        }
-
-        // Clean up consumer reference
-        this.consumers.delete(consumer.id);
-
-        // If stream has no more tracks, remove it
-        if (stream && stream.getTracks().length === 0) {
-          this.remoteStreams.delete(participantId);
-          this.logger(`Removed empty stream for participant: ${participantId}`);
-        }
-
-        // Emit stream removed event
-        this.emit("remoteStreamRemoved", {
-          participantId: participantId,
-          consumerId: consumer.id,
-          producerId: producerId,
-        });
-      });
-
-      return consumer;
-    } catch (error) {
-      this.logger(
-        `Failed to create consumer on demand for producer ${producerId}: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      return undefined;
-    }
-  }
-
-  /**
-   * Enable local media (audio/video) - stateless version
-   */
-  public async enableMedia(
-    audio = true,
-    video = true
-  ): Promise<MediaStream | undefined> {
-    if (!this.sendTransport) {
-      throw new Error("Send transport not available");
-    }
-
-    try {
-      this.logger(`Enabling media - audio: ${audio}, video: ${video}`);
-
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio:
-          audio && this.config.enableAudio
-            ? this.config.audioConstraints || true
-            : false,
-        video:
-          video && this.config.enableVideo
-            ? this.config.videoConstraints || true
-            : false,
-      });
-
-      this.logger(
-        `Got local media stream with ${stream.getTracks().length} tracks`
-      );
-
-      // Produce audio if enabled - don't store producer locally
-      if (audio && stream.getAudioTracks().length > 0) {
-        const audioTrack = stream.getAudioTracks()[0];
-        const audioProducer = await this.sendTransport.produce({
-          track: audioTrack,
-          codecOptions: {
-            opusStereo: true,
-            opusDtx: true,
-          },
-        });
-
-        this.logger(`Audio producer created: ${audioProducer.id}`);
-        // Producer creation event will be emitted by transport listener
-      }
-
-      // Produce video if enabled - don't store producer locally
-      if (video && stream.getVideoTracks().length > 0) {
-        const videoTrack = stream.getVideoTracks()[0];
-        const videoProducer = await this.sendTransport.produce({
-          track: videoTrack,
-          codecOptions: {
-            videoGoogleStartBitrate: 1000,
-          },
-        });
-
-        this.logger(`Video producer created: ${videoProducer.id}`);
-        // Producer creation event will be emitted by transport listener
-      }
-
-      // Emit local stream ready
-      this.emit("localStreamReady", {
-        stream: stream,
-        participantId: this.config.participantId,
-      });
-
-      return stream;
-    } catch (error) {
-      this.logger(
-        `Failed to enable media: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      this.emit("error", {
-        error:
-          error instanceof Error ? error : new Error("Failed to enable media"),
-        context: "enable-media",
-      });
-      throw error;
-    }
-  }
-
-  public async consumeParticipantMedia(participantId: string): Promise<any[]> {
-    if (!this.recvTransport) {
-      throw new Error("Receive transport not available");
-    }
-
-    try {
-      this.logger(`Consuming media from participant: ${participantId}`);
-
-      const consumerParams =
-        await this.socketController.consumeParticipantMedia(
-          participantId,
-          this.device.rtpCapabilities
-        );
-
       if (!consumerParams || consumerParams.length === 0) {
-        this.logger(`No media available from participant: ${participantId}`);
-        return [];
+        console.log(`No media to consume from participant ${participantId}`);
+        return;
       }
 
-      this.logger(
-        `Got ${consumerParams.length} consumer params from participant: ${participantId}`
-      );
-      return consumerParams;
-    } catch (error) {
-      this.logger(
-        `Failed to consume media from participant ${participantId}: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Unpause a consumer after creating it
-   */
-  public async unpauseConsumer(consumerId: string): Promise<void> {
-    try {
-      await this.socketController.unpauseConsumer(consumerId);
-      this.logger(`Consumer unpaused: ${consumerId}`);
-    } catch (error) {
-      this.logger(
-        `Failed to unpause consumer ${consumerId}: ${error}`,
-        "error"
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Consume a specific producer - stateless version (delegates to createConsumerOnDemand)
-   */
-  public async consumeProducer(
-    producerId: string,
-    participantInfo?: { participantId: string; participantName: string }
-  ): Promise<Consumer | undefined> {
-    return await this.createConsumerOnDemand(producerId, participantInfo);
-  }
-
-  /**
-   * Mute/unmute local audio - stateless version (delegates to server)
-   */
-  public async toggleAudio(mute?: boolean): Promise<boolean> {
-    const shouldMute =
-      mute !== undefined ? mute : !this.currentParticipant.audioMuted;
-
-    try {
-      if (shouldMute && !this.currentParticipant.audioMuted) {
-        await this.socketController.muteAudio();
-        this.currentParticipant.audioMuted = true;
-        this.logger("Audio muted");
-      } else if (!shouldMute && this.currentParticipant.audioMuted) {
-        await this.socketController.unmuteAudio();
-        this.currentParticipant.audioMuted = false;
-        this.logger("Audio unmuted");
+      // Create or get participant record
+      let participant = this.remoteParticipants.get(participantId);
+      if (!participant) {
+        participant = {
+          participantId,
+          participantName,
+        };
+        this.remoteParticipants.set(participantId, participant);
       }
 
-      return this.currentParticipant.audioMuted;
-    } catch (error) {
-      this.logger(
-        `Failed to toggle audio: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      throw error;
-    }
-  }
+      // Create consumers for each media type
+      for (const params of consumerParams) {
+        const consumer = await this.recvTransport.consume({
+          id: params.id,
+          producerId: params.producerId,
+          kind: params.kind,
+          rtpParameters: params.rtpParameters,
+        });
 
-  /**
-   * Mute/unmute local video - stateless version (delegates to server)
-   */
-  public async toggleVideo(mute?: boolean): Promise<boolean> {
-    const shouldMute =
-      mute !== undefined ? mute : !this.currentParticipant.videoMuted;
+        // Resume consumer to start receiving media
+        await this.socketController!.unpauseConsumer(consumer.id);
 
-    try {
-      if (shouldMute && !this.currentParticipant.videoMuted) {
-        await this.socketController.muteVideo();
-        this.currentParticipant.videoMuted = true;
-        this.logger("Video muted");
-      } else if (!shouldMute && this.currentParticipant.videoMuted) {
-        await this.socketController.unmuteVideo();
-        this.currentParticipant.videoMuted = false;
-        this.logger("Video unmuted");
+        // Create media stream from consumer track
+        const stream = new MediaStream([consumer.track]);
+
+        // Store consumer and stream
+        if (params.kind === "audio") {
+          participant.audioConsumer = consumer;
+          participant.audioStream = stream;
+        } else if (params.kind === "video") {
+          participant.videoConsumer = consumer;
+          participant.videoStream = stream;
+        }
+
+        // Emit event for UI to handle
+        this.dispatchEvent(
+          new CustomEvent("remoteStreamAdded", {
+            detail: {
+              participantId,
+              participantName,
+              kind: params.kind,
+              stream,
+            },
+          })
+        );
+
+        console.log(`Consuming ${params.kind} from participant ${participantId}`);
       }
-
-      return this.currentParticipant.videoMuted;
     } catch (error) {
-      this.logger(
-        `Failed to toggle video: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
-      );
-      throw error;
+      console.error(`Error consuming media from participant ${participantId}:`, error);
     }
   }
 
   /**
-   * Leave the conference - stateless version
+   * 4. Stop watching a specific participant's stream
+   * Closes consumers and removes streams for a participant
    */
-  public async leaveConference(): Promise<void> {
-    if (!this.isJoined) {
-      this.logger("Not joined to any conference", "warn");
+  public async stopWatchingStream(participantId: string): Promise<void> {
+    const participant = this.remoteParticipants.get(participantId);
+    if (!participant) {
+      console.warn(`Participant ${participantId} not found`);
       return;
     }
 
     try {
-      this.logger("Leaving conference (stateless mode)...");
+      // Close audio consumer
+      if (participant.audioConsumer) {
+        await this.socketController!.closeConsumer(participant.audioConsumer.id);
+        participant.audioConsumer.close();
+        participant.audioConsumer = undefined;
+        participant.audioStream = undefined;
 
-      // Close all consumers
-      for (const consumer of this.consumers.values()) {
-        consumer.close();
+        this.dispatchEvent(
+          new CustomEvent("remoteStreamRemoved", {
+            detail: { participantId, kind: "audio" },
+          })
+        );
       }
-      this.consumers.clear();
 
-      // Clear remote streams
-      this.remoteStreams.clear();
+      // Close video consumer
+      if (participant.videoConsumer) {
+        await this.socketController!.closeConsumer(participant.videoConsumer.id);
+        participant.videoConsumer.close();
+        participant.videoConsumer = undefined;
+        participant.videoStream = undefined;
 
-      // Close transports (mediasoup client objects)
-      this.sendTransport?.close();
-      this.recvTransport?.close();
+        this.dispatchEvent(
+          new CustomEvent("remoteStreamRemoved", {
+            detail: { participantId, kind: "video" },
+          })
+        );
+      }
 
-      // Leave conference on server (server will handle all cleanup)
-      await this.socketController.leaveConference();
-
-      // Reset only minimal local state
-      this.sendTransport = undefined;
-      this.recvTransport = undefined;
-      this.isJoined = false;
-
-      // Reset current participant state
-      this.currentParticipant.audioMuted = false;
-      this.currentParticipant.videoMuted = false;
-
-      this.logger("Successfully left conference (stateless mode)");
-      this.emit("left", {});
+      // Remove participant from map
+      this.remoteParticipants.delete(participantId);
+      console.log(`Stopped watching stream from participant ${participantId}`);
     } catch (error) {
-      this.logger(
-        `Error leaving conference: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
+      console.error(`Error stopping stream from participant ${participantId}:`, error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to stop watching stream", error },
+        })
       );
-      this.emit("error", {
-        error:
-          error instanceof Error
-            ? error
-            : new Error("Failed to leave conference"),
-        context: "leave-conference",
-      });
     }
   }
 
-  // All event handling is now done in setupSocketEventListeners
-  // No local state management needed
-
-  // Type-safe event emitter
-  private emit<K extends keyof ConferenceClientEvents>(
-    type: K,
-    detail: ConferenceClientEvents[K]
-  ): void {
-    this.dispatchEvent(new CustomEvent(type, { detail }));
-  }
-
   /**
-   * Check if all expected streams for a participant are ready and emit event
+   * 5a. Toggle local audio on/off
    */
-  private checkAndEmitParticipantStreamsReady(
-    participantId: string,
-    participantName: string
-  ): void {
-    const stream = this.remoteStreams.get(participantId);
-    if (!stream) return;
-
-    // Get all remote stream data for this participant
-    const participantStreams = this.getRemoteStreams().filter(
-      (streamData) => streamData.participantId === participantId
-    );
-
-    if (participantStreams.length > 0) {
-      this.emit("participantStreamsReady", {
-        participantId,
-        participantName,
-        streams: participantStreams,
-      });
-    }
-  }
-
-  // Public getters - stateless versions
-  public async getParticipants(): Promise<ParticipantInfo[]> {
-    // Delegate to server for all participant data
-    return this.socketController.getParticipants();
-  }
-  public async getProducersWithParticipantId(participantId: string) {
-    return await this.socketController.getProducersWithParticipantId(
-      participantId
-    );
-  }
-  public getCurrentParticipant(): ParticipantInfo {
-    return { ...this.currentParticipant };
-  }
-
-  public isAudioMuted(): boolean {
-    return this.currentParticipant.audioMuted;
-  }
-
-  public isVideoMuted(): boolean {
-    return this.currentParticipant.videoMuted;
-  }
-
-  public isJoinedToConference(): boolean {
-    return this.isJoined;
-  }
-
-  public getDevice(): Device {
-    return this.device;
-  }
-
-  public getSocketController(): SocketClientController {
-    return this.socketController;
-  }
-
-  /**
-   * Get all remote streams currently available
-   */
-  public getRemoteStreams(): RemoteStreamData[] {
-    const streamData: RemoteStreamData[] = [];
-
-    for (const [participantId, stream] of this.remoteStreams.entries()) {
-      const tracks: RemoteStreamData["tracks"] = [];
-
-      // Find consumers for this participant's tracks
-      for (const [consumerId, consumer] of this.consumers.entries()) {
-        const consumerParticipantId =
-          (consumer.appData?.participantId as string) || participantId;
-
-        if (
-          consumerParticipantId === participantId &&
-          stream.getTracks().includes(consumer.track)
-        ) {
-          tracks.push({
-            producerId: (consumer.appData?.producerId as string) || "unknown",
-            consumerId: consumerId,
-            kind: consumer.kind,
-            track: consumer.track,
-          });
-        }
-      }
-
-      if (tracks.length > 0) {
-        streamData.push({
-          participantId,
-          participantName:
-            (this.consumers.values().next().value?.appData
-              ?.participantName as string) || "Unknown Participant",
-          stream,
-          tracks,
-        });
-      }
-    }
-
-    return streamData;
-  }
-
-  /**
-   * Get remote stream for specific participant
-   */
-  public getRemoteStreamForParticipant(
-    participantId: string
-  ): MediaStream | undefined {
-    return this.remoteStreams.get(participantId);
-  }
-
-  // No state validation needed in stateless mode
-  // All state is managed by the server
-
-  /**
-   * Start screen sharing - stateless version
-   */
-  public async startScreenShare(): Promise<MediaStream | undefined> {
-    if (!this.sendTransport) {
-      throw new Error("Send transport not available");
+  public async toggleAudio(mute?: boolean): Promise<boolean> {
+    if (!this.audioProducer || !this.localStream) {
+      console.warn("Audio not available");
+      return false;
     }
 
     try {
-      this.logger("Starting screen share (stateless mode)...");
+      const shouldMute = mute !== undefined ? mute : !this.audioProducer.paused;
 
-      // Get screen media
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true, // Include system audio if possible
-      });
+      if (shouldMute) {
+        // Mute audio
+        this.audioProducer.pause();
+        this.localStream.getAudioTracks().forEach((track) => (track.enabled = false));
+        await this.socketController!.pauseProducer(this.audioProducer.id);
+      } else {
+        // Unmute audio
+        this.audioProducer.resume();
+        this.localStream.getAudioTracks().forEach((track) => (track.enabled = true));
+        await this.socketController!.resumeProducer(this.audioProducer.id);
+      }
 
-      this.logger(
-        `Got screen share stream with ${stream.getTracks().length} tracks`
+      this.dispatchEvent(
+        new CustomEvent("localAudioToggled", {
+          detail: { enabled: !shouldMute },
+        })
       );
 
-      // Produce screen share video - don't store producer locally
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        const screenProducer = await this.sendTransport.produce({
-          track: videoTrack,
-          codecOptions: {
-            videoGoogleStartBitrate: 1000,
-          },
-          appData: {
-            screenShare: true,
-          },
-        });
-
-        this.logger(`Screen share producer created: ${screenProducer.id}`);
-
-        // Handle screen share end - just close producer, server will handle cleanup
-        videoTrack.onended = () => {
-          this.logger("Screen share ended");
-          screenProducer.close();
-        };
-      }
-
-      // Produce screen share audio if available - don't store producer locally
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        const screenAudioProducer = await this.sendTransport.produce({
-          track: audioTrack,
-          codecOptions: {
-            opusStereo: true,
-            opusDtx: true,
-          },
-          appData: {
-            screenShare: true,
-          },
-        });
-
-        this.logger(
-          `Screen share audio producer created: ${screenAudioProducer.id}`
-        );
-
-        // Handle screen share end - just close producer, server will handle cleanup
-        audioTrack.onended = () => {
-          this.logger("Screen share audio ended");
-          screenAudioProducer.close();
-        };
-      }
-
-      return stream;
+      console.log(`Audio ${shouldMute ? "muted" : "unmuted"}`);
+      return !shouldMute;
     } catch (error) {
-      this.logger(
-        `Failed to start screen share: ${
-          error instanceof Error ? error.message : error
-        }`,
-        "error"
+      console.error("Error toggling audio:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to toggle audio", error },
+        })
       );
-      this.emit("error", {
-        error:
-          error instanceof Error
-            ? error
-            : new Error("Failed to start screen share"),
-        context: "start-screen-share",
-      });
+      return this.audioProducer.paused;
+    }
+  }
+
+  /**
+   * 5b. Toggle local video on/off
+   */
+  public async toggleVideo(mute?: boolean): Promise<boolean> {
+    if (!this.videoProducer || !this.localStream) {
+      console.warn("Video not available");
+      return false;
+    }
+
+    try {
+      const shouldMute = mute !== undefined ? mute : !this.videoProducer.paused;
+
+      if (shouldMute) {
+        // Mute video
+        this.videoProducer.pause();
+        this.localStream.getVideoTracks().forEach((track) => (track.enabled = false));
+        await this.socketController!.pauseProducer(this.videoProducer.id);
+      } else {
+        // Unmute video
+        this.videoProducer.resume();
+        this.localStream.getVideoTracks().forEach((track) => (track.enabled = true));
+        await this.socketController!.resumeProducer(this.videoProducer.id);
+      }
+
+      this.dispatchEvent(
+        new CustomEvent("localVideoToggled", {
+          detail: { enabled: !shouldMute },
+        })
+      );
+
+      console.log(`Video ${shouldMute ? "muted" : "unmuted"}`);
+      return !shouldMute;
+    } catch (error) {
+      console.error("Error toggling video:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to toggle video", error },
+        })
+      );
+      return this.videoProducer.paused;
+    }
+  }
+
+  /**
+   * 6. Leave the meeting
+   * Cleans up all resources and disconnects
+   */
+  public async leaveMeeting(): Promise<void> {
+    if (!this.isJoined) {
+      console.warn("Not currently in a meeting");
+      return;
+    }
+
+    try {
+      // Stop all local tracks
+      if (this.localStream) {
+        this.localStream.getTracks().forEach((track) => track.stop());
+        this.localStream = null;
+      }
+
+      // Close all producers
+      if (this.audioProducer) {
+        await this.socketController!.closeProducer(this.audioProducer.id);
+        this.audioProducer.close();
+        this.audioProducer = null;
+      }
+
+      if (this.videoProducer) {
+        await this.socketController!.closeProducer(this.videoProducer.id);
+        this.videoProducer.close();
+        this.videoProducer = null;
+      }
+
+      // Close all consumers
+      for (const [participantId, participant] of this.remoteParticipants) {
+        if (participant.audioConsumer) {
+          await this.socketController!.closeConsumer(participant.audioConsumer.id);
+          participant.audioConsumer.close();
+        }
+        if (participant.videoConsumer) {
+          await this.socketController!.closeConsumer(participant.videoConsumer.id);
+          participant.videoConsumer.close();
+        }
+      }
+      this.remoteParticipants.clear();
+
+      // Close transports
+      if (this.sendTransport) {
+        this.sendTransport.close();
+        this.sendTransport = null;
+      }
+
+      if (this.recvTransport) {
+        this.recvTransport.close();
+        this.recvTransport = null;
+      }
+
+      // Leave conference on server
+      await this.socketController!.leaveConference();
+
+      // Reset state
+      this.device = null;
+      this.isJoined = false;
+      this.isMediaEnabled = false;
+
+      console.log("Successfully left meeting");
+    } catch (error) {
+      console.error("Error leaving meeting:", error);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Failed to leave meeting", error },
+        })
+      );
       throw error;
     }
   }
-}
 
-export default ConferenceClient;
+  /**
+   * 7. Setup event listeners for socket events
+   * Handles participant joined/left and media state changes
+   */
+  private setupSocketEventListeners(): void {
+    if (!this.socketController) {
+      return;
+    }
+
+    // Setup event listeners from socket controller
+    this.socketController.setupEventListeners();
+
+    // Participant joined
+    this.socketController.addEventListener("participantJoined", ((event: CustomEvent) => {
+      const { participantId, participantName } = event.detail;
+      console.log("Participant joined:", participantName, participantId);
+
+      // Dispatch event for UI
+      this.dispatchEvent(
+        new CustomEvent("participantJoined", {
+          detail: { participantId, participantName },
+        })
+      );
+
+      // Auto-consume new participant's media
+      this.consumeParticipantMedia(participantId, participantName).catch((error) => {
+        console.error("Error consuming new participant media:", error);
+      });
+    }) as EventListener);
+
+    // Participant left
+    this.socketController.addEventListener("participantLeft", ((event: CustomEvent) => {
+      const { participantId } = event.detail;
+      console.log("Participant left:", participantId);
+
+      // Clean up participant
+      this.stopWatchingStream(participantId);
+
+      // Dispatch event for UI
+      this.dispatchEvent(
+        new CustomEvent("participantLeft", {
+          detail: { participantId },
+        })
+      );
+    }) as EventListener);
+
+    // New producer (media track) available
+    this.socketController.addEventListener("newProducer", ((event: CustomEvent) => {
+      const { producerId, participantId } = event.detail;
+      console.log("New producer available:", producerId, "from", participantId);
+
+      // If this is from an existing participant, consume the new media
+      const participant = this.remoteParticipants.get(participantId);
+      if (participant) {
+        this.consumeParticipantMedia(participantId, participant.participantName).catch((error) => {
+          console.error("Error consuming new producer:", error);
+        });
+      }
+    }) as EventListener);
+
+    // Producer closed
+    this.socketController.addEventListener("producerClosed", ((event: CustomEvent) => {
+      const { producerId, participantId } = event.detail;
+      console.log("Producer closed:", producerId, "from", participantId);
+    }) as EventListener);
+
+    // Consumer closed
+    this.socketController.addEventListener("consumerClosed", ((event: CustomEvent) => {
+      const { consumerId } = event.detail;
+      console.log("Consumer closed:", consumerId);
+    }) as EventListener);
+
+    // Remote participant audio muted
+    this.socketController.addEventListener("audioMuted", ((event: CustomEvent) => {
+      const { participantId } = event.detail;
+      this.dispatchEvent(
+        new CustomEvent("remoteAudioToggled", {
+          detail: { participantId, enabled: false },
+        })
+      );
+    }) as EventListener);
+
+    // Remote participant audio unmuted
+    this.socketController.addEventListener("audioUnmuted", ((event: CustomEvent) => {
+      const { participantId } = event.detail;
+      this.dispatchEvent(
+        new CustomEvent("remoteAudioToggled", {
+          detail: { participantId, enabled: true },
+        })
+      );
+    }) as EventListener);
+
+    // Remote participant video muted
+    this.socketController.addEventListener("videoMuted", ((event: CustomEvent) => {
+      const { participantId } = event.detail;
+      this.dispatchEvent(
+        new CustomEvent("remoteVideoToggled", {
+          detail: { participantId, enabled: false },
+        })
+      );
+    }) as EventListener);
+
+    // Remote participant video unmuted
+    this.socketController.addEventListener("videoUnmuted", ((event: CustomEvent) => {
+      const { participantId } = event.detail;
+      this.dispatchEvent(
+        new CustomEvent("remoteVideoToggled", {
+          detail: { participantId, enabled: true },
+        })
+      );
+    }) as EventListener);
+
+    // Socket errors
+    this.socketController.addEventListener("error", ((event: CustomEvent) => {
+      console.error("Socket error:", event.detail);
+      this.dispatchEvent(
+        new CustomEvent("error", {
+          detail: { message: "Socket error", error: event.detail },
+        })
+      );
+    }) as EventListener);
+  }
+
+  /**
+   * Get list of all participants in the conference
+   */
+  public async getParticipants(): Promise<any[]> {
+    if (!this.socketController) {
+      throw new Error("Not connected to conference");
+    }
+    return await this.socketController.getParticipants();
+  }
+
+  /**
+   * Get remote participant by ID
+   */
+  public getRemoteParticipant(participantId: string): RemoteParticipant | undefined {
+    return this.remoteParticipants.get(participantId);
+  }
+
+  /**
+   * Get all remote participants
+   */
+  public getAllRemoteParticipants(): RemoteParticipant[] {
+    return Array.from(this.remoteParticipants.values());
+  }
+
+  /**
+   * Check if currently in a meeting
+   */
+  public isInMeeting(): boolean {
+    return this.isJoined;
+  }
+
+  /**
+   * Check if local media is enabled
+   */
+  public isLocalMediaEnabled(): boolean {
+    return this.isMediaEnabled;
+  }
+
+  /**
+   * Get local media stream
+   */
+  public getLocalStream(): MediaStream | null {
+    return this.localStream;
+  }
+}

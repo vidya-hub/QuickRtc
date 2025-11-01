@@ -599,6 +599,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
         participantId: participant.id,
         participantName: participant.name,
         socketId: participant.socketId,
+        producers: participant.getProducerIds(),
       };
     });
   }

@@ -1,4 +1,4 @@
-import { ClientSocket } from "@simple-mediasoup/types";
+import { ClientSocket, CreateTransportResponse, ConsumerParams, ParticipantInfo } from "@simple-mediasoup/types";
 import { AppData, Transport, RtpCapabilities } from "mediasoup-client/types";
 import { WebRtcTransportOptions } from "mediasoup/types";
 export type JoinParams = {
@@ -16,10 +16,10 @@ export declare class SocketClientController extends EventTarget {
     private socket;
     private joinParams;
     constructor(socket: ClientSocket, joinParams: JoinParams);
-    joinConference(): Promise<any>;
+    joinConference(): Promise<RtpCapabilities | undefined>;
     createTransports(): Promise<{
-        sendTransport: any;
-        recvTransport: any;
+        sendTransport: CreateTransportResponse;
+        recvTransport: CreateTransportResponse;
     } | undefined>;
     addSendTransportListener({ sendTransport, onProduce, }: {
         sendTransport: Transport<AppData>;
@@ -31,7 +31,7 @@ export declare class SocketClientController extends EventTarget {
         }) => void;
     }): void;
     addConsumeTransportListener({ recvTransport, onConsume, }: {
-        recvTransport: any;
+        recvTransport: Transport<AppData>;
         onConsume: (params: {
             producerId: string;
             id: string;
@@ -40,31 +40,22 @@ export declare class SocketClientController extends EventTarget {
             appData: AppData;
         }) => void;
     }): Promise<void>;
-    consumeMedia(producerId: string, rtpCapabilities: RtpCapabilities): Promise<any>;
-    getProducers(): Promise<string[] | undefined>;
+    consumeMedia(producerId: string, rtpCapabilities: RtpCapabilities): Promise<ConsumerParams | undefined>;
     /**
      * SIMPLIFIED: Consume media by participant ID
      * Send participant ID + RTP capabilities → Get consumer parameters
      * Client can then create tracks directly with the consumer parameters
      */
-    consumeParticipantMedia(targetParticipantId: string, rtpCapabilities: any): Promise<any[] | undefined>;
+    consumeParticipantMedia(targetParticipantId: string, rtpCapabilities: RtpCapabilities): Promise<ConsumerParams[] | undefined>;
     /**
      * Unpause consumer
      */
     unpauseConsumer(consumerId: string): Promise<void>;
     resumeProducer(producerId: string): Promise<void>;
     pauseProducer(producerId: string): Promise<void>;
-    pauseConsumer(consumerId: string): Promise<void>;
-    resumeConsumer(consumerId: string): Promise<void>;
     closeProducer(producerId: string): Promise<void>;
     closeConsumer(consumerId: string): Promise<void>;
-    muteAudio(): Promise<any>;
-    unmuteAudio(): Promise<any>;
-    muteVideo(): Promise<any>;
-    unmuteVideo(): Promise<any>;
-    getMediaStates(): Promise<any>;
     leaveConference(): Promise<void>;
-    getParticipants(): Promise<any>;
-    getProducersWithParticipantId(participantId: string): Promise<any>;
+    getParticipants(): Promise<ParticipantInfo[] | undefined>;
     setupEventListeners(): void;
 }

@@ -397,6 +397,7 @@ class MediasoupController extends extras_1.EnhancedEventEmitter {
                 participantId: participant.id,
                 participantName: participant.name,
                 socketId: participant.socketId,
+                producers: participant.getProducerIds(),
             };
         });
     }

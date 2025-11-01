@@ -1,11 +1,11 @@
 // Main client entry point - exports all client-side components
 
 // Primary MediaSoup Client (RECOMMENDED)
-export { default as ConferenceClient } from "./mediasoup/ConferenceClient";
+export { ConferenceClient } from "./mediasoup/ConferenceClient";
 export type {
   ConferenceClientConfig,
   ConferenceClientEvents,
-  ParticipantInfo,
+  RemoteParticipant,
 } from "./mediasoup/ConferenceClient";
 
 // Event orchestrator for advanced usage

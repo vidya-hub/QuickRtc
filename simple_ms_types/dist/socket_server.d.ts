@@ -1,7 +1,7 @@
 /**
  * Socket event types supported by the application
  */
-export type SocketEventType = "getRtpCapabilities" | "joinConference" | "createTransport" | "connectTransport" | "produce" | "consume" | "resumeConsumer" | "pauseProducer" | "resumeProducer" | "pauseConsumer" | "closeProducer" | "closeConsumer" | "muteAudio" | "unmuteAudio" | "muteVideo" | "unmuteVideo" | "getMediaStates" | "leaveConference" | "getProducers" | "getProducersWithParticipants" | "consumeParticipantMedia" | "getProducersWithParticipantId" | "unpauseConsumer";
+export type SocketEventType = "joinConference" | "createTransport" | "connectTransport" | "produce" | "consume" | "pauseProducer" | "resumeProducer" | "closeProducer" | "closeConsumer" | "leaveConference" | "consumeParticipantMedia" | "unpauseConsumer" | "getParticipants";
 /**
  * Base meeting parameters used in socket events
  */
@@ -16,14 +16,6 @@ export type MeetingParams = {
 export type SocketEventData = {
     eventType: SocketEventType;
     data: MeetingParams | any;
-};
-/**
- * Standard socket response structure
- */
-export type SocketResponse<T = any> = {
-    status: "ok" | "error";
-    data?: T;
-    error?: string;
 };
 /**
  * Socket event handlers type

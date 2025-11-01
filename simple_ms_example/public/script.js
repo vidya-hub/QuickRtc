@@ -1,9 +1,7 @@
 import { ConferenceClient } from "/simple_ms_client/dist/client.js";
 
 // Global state
-let currentParticipant = null;
 let client = null;
-let remoteTracks = {};
 let remoteParticipants = new Map(); // Track participant media elements
 
 // DOM elements
@@ -12,16 +10,20 @@ let elements = {};
 document.addEventListener("DOMContentLoaded", function () {
   // Cache DOM elements
   elements = {
-    button: document.getElementById("myButton"),
+    joinButton: document.getElementById("joinButton"),
     leaveButton: document.getElementById("leaveButton"),
+    toggleAudioButton: document.getElementById("toggleAudioButton"),
+    toggleVideoButton: document.getElementById("toggleVideoButton"),
     localVideo: document.getElementById("localVideo"),
     partList: document.getElementById("partList"),
     remoteStreams: document.getElementById("remoteStreams"),
     details: document.getElementById("details"),
   };
 
-  elements.button.addEventListener("click", handleJoinConference);
+  elements.joinButton.addEventListener("click", handleJoinConference);
   elements.leaveButton.addEventListener("click", handleLeaveConference);
+  elements.toggleAudioButton.addEventListener("click", handleToggleAudio);
+  elements.toggleVideoButton.addEventListener("click", handleToggleVideo);
 });
 
 // Main conference join handler
@@ -35,34 +37,39 @@ async function handleJoinConference() {
     participantId: generateId(),
     participantName: generateId(),
     socket,
-    enableAudio: true,
-    enableVideo: true,
   });
 
   // Update UI with participant details
   elements.details.innerText = `Participant Name: ${client.config.participantName}\nParticipant ID: ${client.config.participantId}`;
-  currentParticipant = client.config;
 
-  // Set up event listeners
+  // Set up event listeners BEFORE joining
   setupEventListeners();
 
   try {
-    // Join conference and enable media
-    await client.joinConference();
-    elements.button.disabled = true;
-    elements.button.style.display = "none";
-    elements.leaveButton.style.display = "inline-block";
+    // 1. Join the meeting
+    await client.joinMeeting();
+    console.log("✓ Joined meeting");
 
+    // 2. Enable local media
     const localStream = await client.enableMedia(true, true);
     elements.localVideo.srcObject = localStream;
+    console.log("✓ Local media enabled");
 
-    // Handle existing participants
-    await handleExistingParticipants();
+    // 3. Consume existing participants' streams
+    await client.consumeExistingStreams();
+    console.log("✓ Consumed existing streams");
+
+    // Update UI
+    elements.joinButton.disabled = true;
+    elements.joinButton.style.display = "none";
+    elements.leaveButton.style.display = "inline-block";
+    elements.toggleAudioButton.style.display = "inline-block";
+    elements.toggleVideoButton.style.display = "inline-block";
 
     console.log("Successfully joined conference");
   } catch (error) {
     console.error("Error joining conference:", error);
-    elements.button.disabled = false;
+    elements.joinButton.disabled = false;
     elements.details.innerText = `Error: ${error.message}`;
   }
 }
@@ -71,88 +78,147 @@ async function handleJoinConference() {
 async function handleLeaveConference() {
   try {
     if (client) {
-      await client.leaveConference();
+      await client.leaveMeeting();
       console.log("Left conference successfully");
     }
   } catch (error) {
     console.error("Error leaving conference:", error);
   } finally {
     cleanup();
-    elements.button.style.display = "inline-block";
+    elements.joinButton.style.display = "inline-block";
     elements.leaveButton.style.display = "none";
+    elements.toggleAudioButton.style.display = "none";
+    elements.toggleVideoButton.style.display = "none";
     elements.details.innerText = "MediaSoup Conference Client";
     client = null;
-    currentParticipant = null;
+  }
+}
+
+// Handle toggle audio
+async function handleToggleAudio() {
+  if (!client) return;
+
+  try {
+    const enabled = await client.toggleAudio();
+    elements.toggleAudioButton.textContent = enabled
+      ? "🔇 Mute Audio"
+      : "🔊 Unmute Audio";
+    elements.toggleAudioButton.style.background = enabled
+      ? "#dc3545"
+      : "#28a745";
+  } catch (error) {
+    console.error("Error toggling audio:", error);
+  }
+}
+
+// Handle toggle video
+async function handleToggleVideo() {
+  if (!client) return;
+
+  try {
+    const enabled = await client.toggleVideo();
+    elements.toggleVideoButton.textContent = enabled
+      ? "📹 Turn Off Video"
+      : "📷 Turn On Video";
+    elements.toggleVideoButton.style.background = enabled
+      ? "#dc3545"
+      : "#28a745";
+  } catch (error) {
+    console.error("Error toggling video:", error);
   }
 }
 
 // Set up event listeners for client events
 function setupEventListeners() {
-  client.addEventListener("participantJoined", handleParticipantJoined);
-  client.addEventListener("remoteStreamAdded", handleRemoteStreamAdded);
-  client.addEventListener("participantLeft", handleParticipantLeft);
-  client.addEventListener("remoteStreamRemoved", handleRemoteStreamRemoved);
-}
+  // 7. Participant joined event listener
+  client.addEventListener("participantJoined", (event) => {
+    const { participantId, participantName } = event.detail;
+    console.log("🎉 New participant joined:", participantName, participantId);
+    addParticipantToList(participantName, participantId);
+  });
 
-// Handle participant joined event
-function handleParticipantJoined(event) {
-  const participantName = event.detail.participantName;
-  addParticipantToList(participantName);
-}
+  // Remote stream added (automatically triggered when consuming)
+  client.addEventListener("remoteStreamAdded", (event) => {
+    const { participantId, participantName, kind, stream } = event.detail;
+    console.log("📺 Remote stream added:", participantName, kind);
+    handleRemoteStream(participantId, participantName, kind, stream);
+  });
 
-// Handle remote stream added event
-function handleRemoteStreamAdded(event) {
-  const { participantId, kind, stream } = event.detail;
-  remoteTracks[`${participantId}-${kind}`] = stream;
+  // Participant left
+  client.addEventListener("participantLeft", (event) => {
+    const { participantId } = event.detail;
+    console.log("👋 Participant left:", participantId);
+    removeParticipant(participantId);
+  });
 
-  if (kind === "video") {
-    handleVideoStream(participantId, stream);
-  } else if (kind === "audio") {
-    handleAudioStream(participantId, stream);
-  }
-}
+  // Remote stream removed
+  client.addEventListener("remoteStreamRemoved", (event) => {
+    const { participantId, kind } = event.detail;
+    console.log("❌ Remote stream removed:", participantId, kind);
+    removeParticipantStream(participantId, kind);
+  });
 
-// Handle existing participants when joining
-async function handleExistingParticipants() {
-  const existingParticipants = await client.getParticipants();
-  console.log("Existing participants:", existingParticipants);
+  // Local media toggle events
+  client.addEventListener("localAudioToggled", (event) => {
+    console.log("🎤 Local audio:", event.detail.enabled ? "ON" : "OFF");
+  });
 
-  existingParticipants.forEach((participant) => {
-    const displayName = `${participant.participantName} ${
-      participant.participantId === currentParticipant.participantId
-        ? "(You)"
-        : ""
-    }`;
-    addParticipantToList(displayName);
+  client.addEventListener("localVideoToggled", (event) => {
+    console.log("📹 Local video:", event.detail.enabled ? "ON" : "OFF");
+  });
+
+  // Remote media toggle events
+  client.addEventListener("remoteAudioToggled", (event) => {
+    const { participantId, enabled } = event.detail;
+    console.log(
+      `🎤 Remote audio from ${participantId}:`,
+      enabled ? "ON" : "OFF"
+    );
+    updateRemoteMediaIndicator(participantId, "audio", enabled);
+  });
+
+  client.addEventListener("remoteVideoToggled", (event) => {
+    const { participantId, enabled } = event.detail;
+    console.log(
+      `📹 Remote video from ${participantId}:`,
+      enabled ? "ON" : "OFF"
+    );
+    updateRemoteMediaIndicator(participantId, "video", enabled);
+  });
+
+  // Error events
+  client.addEventListener("error", (event) => {
+    console.error("❌ Client error:", event.detail.message);
+    alert(`Error: ${event.detail.message}`);
   });
 }
-// Media handling functions
-function handleVideoStream(participantId, stream) {
-  const participantContainer = getOrCreateParticipantContainer(participantId);
-  let videoEl = participantContainer.querySelector(".video-element");
 
-  if (!videoEl) {
-    videoEl = createVideoElement(participantId);
-    participantContainer.appendChild(videoEl);
+// Handle remote stream (video or audio)
+function handleRemoteStream(participantId, participantName, kind, stream) {
+  const participantContainer = getOrCreateParticipantContainer(
+    participantId,
+    participantName
+  );
+
+  if (kind === "video") {
+    let videoEl = participantContainer.querySelector(".video-element");
+    if (!videoEl) {
+      videoEl = createVideoElement(participantId);
+      participantContainer.appendChild(videoEl);
+    }
+    videoEl.srcObject = stream;
+  } else if (kind === "audio") {
+    let audioEl = participantContainer.querySelector(".audio-element");
+    if (!audioEl) {
+      audioEl = createAudioElement(participantId);
+      participantContainer.appendChild(audioEl);
+    }
+    audioEl.srcObject = stream;
   }
-
-  videoEl.srcObject = stream;
-}
-
-function handleAudioStream(participantId, stream) {
-  const participantContainer = getOrCreateParticipantContainer(participantId);
-  let audioEl = participantContainer.querySelector(".audio-element");
-
-  if (!audioEl) {
-    audioEl = createAudioElement(participantId);
-    participantContainer.appendChild(audioEl);
-  }
-
-  audioEl.srcObject = stream;
 }
 
 // Create or get participant container
-function getOrCreateParticipantContainer(participantId) {
+function getOrCreateParticipantContainer(participantId, participantName) {
   let container = document.getElementById(`participant-${participantId}`);
 
   if (!container) {
@@ -172,7 +238,8 @@ function getOrCreateParticipantContainer(participantId) {
     // Add participant label
     const label = document.createElement("div");
     label.className = "participant-label";
-    label.textContent = `Participant ${participantId.substring(0, 8)}...`;
+    label.textContent =
+      participantName || `Participant ${participantId.substring(0, 8)}...`;
     label.style.cssText = `
       position: absolute;
       top: -10px;
@@ -186,6 +253,31 @@ function getOrCreateParticipantContainer(participantId) {
       border: 1px solid #ccc;
     `;
     container.appendChild(label);
+
+    // Add stop watching button (4. can be able to not watch the stream)
+    const stopButton = document.createElement("button");
+    stopButton.className = "stop-watching-btn";
+    stopButton.textContent = "👁️ Stop Watching";
+    stopButton.style.cssText = `
+      position: absolute;
+      top: -10px;
+      right: 5px;
+      background: #dc3545;
+      color: white;
+      border: none;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      z-index: 10;
+    `;
+    stopButton.addEventListener("click", async () => {
+      if (client) {
+        await client.stopWatchingStream(participantId);
+        console.log("Stopped watching", participantId);
+      }
+    });
+    container.appendChild(stopButton);
 
     elements.remoteStreams.appendChild(container);
     remoteParticipants.set(participantId, container);
@@ -212,7 +304,7 @@ function createVideoElement(participantId) {
   return videoEl;
 }
 
-// Create hidden audio element positioned near video
+// Create audio element
 function createAudioElement(participantId) {
   const audioEl = document.createElement("audio");
   audioEl.id = `remoteAudio-${participantId}`;
@@ -231,7 +323,6 @@ function createAudioElement(participantId) {
     border: 1px solid rgba(255, 255, 255, 0.3);
   `;
 
-  // Add audio controls and volume indicator
   audioEl.addEventListener("loadeddata", () => {
     console.log(`Audio stream loaded for participant ${participantId}`);
   });
@@ -240,7 +331,7 @@ function createAudioElement(participantId) {
     console.error(`Audio error for participant ${participantId}:`, e);
   });
 
-  // Add a visual indicator for audio with interactive controls
+  // Add audio indicator
   const audioIndicator = document.createElement("div");
   audioIndicator.className = "audio-indicator";
   audioIndicator.innerHTML = "🔊";
@@ -263,7 +354,6 @@ function createAudioElement(participantId) {
     transition: background-color 0.3s;
   `;
 
-  // Add click handler for muting/unmuting
   let isMuted = false;
   audioIndicator.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -278,7 +368,6 @@ function createAudioElement(participantId) {
     );
   });
 
-  // Add hover effect
   audioIndicator.addEventListener("mouseenter", () => {
     audioIndicator.style.backgroundColor = "rgba(0, 123, 255, 0.7)";
   });
@@ -289,7 +378,6 @@ function createAudioElement(participantId) {
       : "rgba(0, 0, 0, 0.7)";
   });
 
-  // Add audio indicator to the container
   setTimeout(() => {
     const container = audioEl.closest(".participant-container");
     if (container) {
@@ -300,41 +388,25 @@ function createAudioElement(participantId) {
   return audioEl;
 }
 
-// Handle participant left event
-function handleParticipantLeft(event) {
-  const participantId = event.detail.participantId;
-  console.log("Participant left:", participantId);
-
-  // Remove participant container
+// Remove participant from UI
+function removeParticipant(participantId) {
   const container = document.getElementById(`participant-${participantId}`);
   if (container) {
     container.remove();
     remoteParticipants.delete(participantId);
   }
 
-  // Clean up tracks
-  const videoTrackKey = `${participantId}-video`;
-  const audioTrackKey = `${participantId}-audio`;
-
-  if (remoteTracks[videoTrackKey]) {
-    delete remoteTracks[videoTrackKey];
-  }
-  if (remoteTracks[audioTrackKey]) {
-    delete remoteTracks[audioTrackKey];
-  }
+  // Remove from participant list
+  const listItems = elements.partList.querySelectorAll("li");
+  listItems.forEach((item) => {
+    if (item.dataset.participantId === participantId) {
+      item.remove();
+    }
+  });
 }
 
-// Handle remote stream removed event
-function handleRemoteStreamRemoved(event) {
-  const { participantId, kind } = event.detail;
-  console.log("Remote stream removed:", participantId, kind);
-
-  const trackKey = `${participantId}-${kind}`;
-  if (remoteTracks[trackKey]) {
-    delete remoteTracks[trackKey];
-  }
-
-  // Remove specific media element
+// Remove specific stream from participant
+function removeParticipantStream(participantId, kind) {
   const container = document.getElementById(`participant-${participantId}`);
   if (container) {
     const mediaElement = container.querySelector(
@@ -355,10 +427,30 @@ function handleRemoteStreamRemoved(event) {
   }
 }
 
+// Update remote media indicator (for remote mute/unmute events)
+function updateRemoteMediaIndicator(participantId, kind, enabled) {
+  const container = document.getElementById(`participant-${participantId}`);
+  if (!container) return;
+
+  if (kind === "audio") {
+    const indicator = container.querySelector(".audio-indicator");
+    if (indicator) {
+      indicator.innerHTML = enabled ? "🔊" : "🔇";
+      indicator.style.opacity = enabled ? "1" : "0.5";
+    }
+  } else if (kind === "video") {
+    const videoEl = container.querySelector(".video-element");
+    if (videoEl) {
+      videoEl.style.opacity = enabled ? "1" : "0.3";
+    }
+  }
+}
+
 // Add participant to list
-function addParticipantToList(participantName) {
+function addParticipantToList(participantName, participantId) {
   const li = document.createElement("li");
   li.textContent = participantName;
+  li.dataset.participantId = participantId;
   li.style.cssText = `
     padding: 5px;
     margin: 2px 0;
@@ -370,11 +462,6 @@ function addParticipantToList(participantName) {
 
 // Clean up function for when leaving conference
 function cleanup() {
-  // Clear remote tracks
-  Object.keys(remoteTracks).forEach((key) => {
-    delete remoteTracks[key];
-  });
-
   // Clear remote participants
   remoteParticipants.clear();
 
@@ -390,8 +477,14 @@ function cleanup() {
   }
 
   // Reset UI state
-  elements.button.disabled = false;
+  elements.joinButton.disabled = false;
   elements.details.innerText = "MediaSoup Conference Client";
+
+  // Reset button states
+  elements.toggleAudioButton.textContent = "🔇 Mute Audio";
+  elements.toggleAudioButton.style.background = "#dc3545";
+  elements.toggleVideoButton.textContent = "📹 Turn Off Video";
+  elements.toggleVideoButton.style.background = "#dc3545";
 }
 
 // Utility function to generate random ID
