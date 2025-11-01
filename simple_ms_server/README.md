@@ -1,397 +1,820 @@
-# 🚀 Simple MediaSoup Server
+# 🏠 Simple MediaSoup Server
 
-A simplified, event-driven MediaSoup server that abstracts away complexity and provides an easy-to-use API for WebRTC server applications.
+A powerful yet simple MediaSoup server with dependency injection support. Bring your own HTTP server and Socket.IO instance for maximum flexibility.
+
+---
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [Architecture Flow](#-architecture-flow)
+- [API Reference](#-api-reference)
+- [Configuration](#-configuration)
+- [Events](#-events)
+- [Integration Examples](#-integration-examples)
+- [TypeScript Support](#-typescript-support)
+
+---
 
 ## ✨ Features
 
-- **🎯 Simple Setup**: Just a few lines of code to get started
-- **🏠 Automatic Conference Management**: Create and manage conferences automatically
-- **👥 Participant Tracking**: Real-time participant management and monitoring
-- **🔔 Event-Driven Architecture**: Comprehensive event system for all server activities
-- **📊 Built-in Statistics**: Server performance and usage monitoring
-- **🛡️ Error Handling**: Robust error handling and logging
-- **⚡ Auto-Cleanup**: Automatic cleanup of closed conferences and participants
-- **🔧 Admin Tools**: Built-in admin functions for server management
-- **📱 TypeScript Support**: Full type safety and IntelliSense
-- **🌐 CORS Support**: Built-in CORS configuration
+- **🔌 Dependency Injection**: Inject your own HTTP/HTTPS and Socket.IO servers
+- **🏠 Auto Conference Management**: Automatically handle conference lifecycle
+- **👥 Participant Tracking**: Real-time participant management
+- **🔔 Event-Driven Architecture**: Comprehensive event system
+- **📊 Built-in Statistics**: Monitor server performance
+- **🛡️ Error Handling**: Robust error management
+- **⚡ Auto-Cleanup**: Automatic resource cleanup
+- **🔧 Admin Tools**: Conference and participant management APIs
+- **📱 TypeScript**: Full type safety and IntelliSense
+- **🌐 Multi-Framework**: Works with Express, Fastify, or any Node.js HTTP server
+
+---
+
+## 📦 Installation
+
+```bash
+npm install simple_ms_server
+# or
+yarn add simple_ms_server
+# or
+pnpm add simple_ms_server
+```
+
+---
 
 ## 🚀 Quick Start
 
-### 1. Basic Setup
+### Basic Setup with Express
 
 ```typescript
+import express from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import { SimpleServer } from "simple_ms_server";
 
-// Create server with minimal configuration
-const server = new SimpleServer({
-  port: 3000,
-  host: "0.0.0.0",
+// 1. Create your Express app
+const app = express();
+
+// 2. Create HTTP server
+const httpServer = http.createServer(app);
+
+// 3. Create Socket.IO server
+const socketServer = new SocketIOServer(httpServer, {
   cors: { origin: "*" },
 });
 
-// Start the server
-await server.start();
-console.log("🚀 Server is running!");
-```
-
-### 2. Event Handling
-
-```typescript
-// Connection events
-server.on("clientConnected", (event) => {
-  console.log("New client:", event.detail.socketId);
-});
-
-server.on("clientDisconnected", (event) => {
-  console.log("Client left:", event.detail.socketId);
-});
-
-// Conference events
-server.on("conferenceCreated", (event) => {
-  console.log("Conference created:", event.detail.conference);
-});
-
-server.on("participantJoined", (event) => {
-  const { participant } = event.detail;
-  console.log(`${participant.name} joined ${participant.conferenceId}`);
-});
-
-server.on("participantLeft", (event) => {
-  const { participant } = event.detail;
-  console.log(`${participant.name} left ${participant.conferenceId}`);
-});
-
-// Media events
-server.on("producerCreated", (event) => {
-  const { participantId, producerId, kind } = event.detail;
-  console.log(`${kind} producer created for ${participantId}`);
-});
-```
-
-### 3. Server Management
-
-```typescript
-// Get server statistics
-const stats = server.getStats();
-console.log("Server stats:", stats);
-
-// Get all conferences
-const conferences = server.getConferences();
-
-// Get participants in a conference
-const participants = server.getConferenceParticipants("conference-123");
-
-// Kick a participant
-await server.kickParticipant("participant-456", "Violated rules");
-
-// Close a conference
-await server.closeConference("conference-123", "Maintenance");
-
-// Broadcast to conference
-server.broadcastToConference("conference-123", "announcement", {
-  message: "Meeting will end in 5 minutes",
-});
-```
-
-### 4. Complete Example
-
-```typescript
-import { SimpleServer } from "simple_ms_server";
-
-const server = new SimpleServer({
-  port: 3000,
-  cors: { origin: "*" },
+// 4. Create SimpleServer with dependency injection
+const mediaServer = new SimpleServer({
+  httpServer,
+  socketServer,
   mediasoup: {
+    // MediaSoup configuration
     workerSettings: {
+      logLevel: "warn",
       rtcMinPort: 40000,
       rtcMaxPort: 49999,
     },
   },
 });
 
-// Setup event handlers
-function setupEvents() {
-  server.on("serverStarted", (event) => {
-    console.log(`✅ Server started on port ${event.detail.port}`);
-  });
+// 5. Start the server
+await mediaServer.start();
 
-  server.on("participantJoined", (event) => {
-    const { participant } = event.detail;
-    console.log(
-      `👋 ${participant.name} joined conference ${participant.conferenceId}`
-    );
-
-    // Broadcast to other participants
-    server.broadcastToConference(
-      participant.conferenceId,
-      "participantJoined",
-      {
-        participant: participant.name,
-      }
-    );
-  });
-
-  server.on("producerCreated", (event) => {
-    console.log(`📹 Media stream started: ${event.detail.kind}`);
-  });
-}
-
-// Start server
-async function start() {
-  setupEvents();
-  await server.start();
-
-  // Start monitoring
-  setInterval(() => {
-    const stats = server.getStats();
-    console.log(
-      `📊 Stats: ${stats.participantCount} participants, ${stats.conferenceCount} conferences`
-    );
-  }, 30000);
-}
-
-start();
+// 6. Start listening
+httpServer.listen(3000, () => {
+  console.log("🚀 Server running on port 3000");
+});
 ```
 
-## 📋 API Reference
+---
 
-### Configuration
+## 🔄 Architecture Flow
+
+### Server Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    HTTP/HTTPS SERVER                             │
+│                   (User-provided Express/etc)                    │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Socket.IO SERVER                              │
+│                    (User-provided)                               │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    SimpleServer                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │   Worker     │  │  Conference  │  │   Socket     │          │
+│  │   Service    │→ │  Management  │→ │  Controller  │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    MediaSoup Core                                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │   Workers    │  │   Routers    │  │  Transports  │          │
+│  │              │→ │              │→ │              │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Conference Lifecycle Flow
+
+```
+Client Request                  SimpleServer                 MediaSoup
+      │                              │                           │
+      │──1. Join Conference─────────→│                           │
+      │                              │                           │
+      │                              │  Check if conference      │
+      │                              │  exists                   │
+      │                              │                           │
+      │                              │  If not exists:           │
+      │                              │──Create Router───────────→│
+      │                              │←─Router Created───────────│
+      │                              │  Create Conference        │
+      │                              │  Add to Map               │
+      │                              │                           │
+      │                              │  Add Participant          │
+      │                              │  to Conference            │
+      │                              │                           │
+      │←─2. Router Capabilities──────│                           │
+      │                              │                           │
+      │──3. Create Transports───────→│                           │
+      │                              │──Create WebRTC Transport─→│
+      │                              │←─Transport Params─────────│
+      │←─4. Transport Params─────────│                           │
+      │                              │                           │
+      │──5. Produce Media───────────→│                           │
+      │                              │──Create Producer─────────→│
+      │                              │←─Producer Created─────────│
+      │                              │                           │
+      │                              │  Notify other participants│
+      │                              │  (newProducer event)      │
+      │                              │                           │
+      │──6. Consume Media───────────→│                           │
+      │                              │──Create Consumer─────────→│
+      │                              │←─Consumer Created─────────│
+      │←─7. Consumer Params──────────│                           │
+      │                              │                           │
+      │──8. Disconnect──────────────→│                           │
+      │                              │  Remove Participant       │
+      │                              │  Close Transports         │
+      │                              │  Close Producers/Consumers│
+      │                              │                           │
+      │                              │  If last participant:     │
+      │                              │  Destroy Conference       │
+      │                              │──Close Router────────────→│
+      │                              │                           │
+```
+
+---
+
+## 📚 API Reference
+
+### Constructor
+
+```typescript
+new SimpleServer(config: SimpleServerConfig)
+```
+
+**Parameters:**
 
 ```typescript
 interface SimpleServerConfig {
-  port?: number; // Server port (default: 3000)
-  host?: string; // Server host (default: '0.0.0.0')
-  cors?: {
-    // CORS configuration
-    origin: string | string[];
-    credentials?: boolean;
-  };
+  // Required: Inject your servers
+  httpServer: http.Server | https.Server;
+  socketServer: SocketIOServer;
+
+  // Optional: MediaSoup configuration
   mediasoup?: {
-    // MediaSoup configuration
     workerSettings?: WorkerSettings;
-    routerOptions?: any;
-    transportOptions?: any;
+    routerOptions?: RouterOptions;
+    transportOptions?: WebRtcTransportOptions;
   };
 }
 ```
 
 ### Methods
 
-| Method                                    | Description                    | Returns                        |
-| ----------------------------------------- | ------------------------------ | ------------------------------ |
-| `start()`                                 | Start the server               | `Promise<void>`                |
-| `stop()`                                  | Stop the server                | `Promise<void>`                |
-| `getConferences()`                        | Get all active conferences     | `ConferenceInfo[]`             |
-| `getConference(id)`                       | Get specific conference        | `ConferenceInfo \| undefined`  |
-| `getParticipants()`                       | Get all participants           | `ParticipantInfo[]`            |
-| `getConferenceParticipants(conferenceId)` | Get participants in conference | `ParticipantInfo[]`            |
-| `getParticipant(id)`                      | Get specific participant       | `ParticipantInfo \| undefined` |
-| `kickParticipant(id, reason?)`            | Kick participant               | `Promise<void>`                |
-| `closeConference(id, reason?)`            | Close conference               | `Promise<void>`                |
-| `broadcastToConference(id, event, data)`  | Broadcast to conference        | `void`                         |
-| `sendToParticipant(id, event, data)`      | Send to participant            | `void`                         |
-| `getStats()`                              | Get server statistics          | `ServerStats`                  |
+#### `start(): Promise<void>`
 
-### Events
-
-| Event                 | When Triggered                | Data                                                                      |
-| --------------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| `serverStarted`       | Server successfully started   | `{ port: number, host: string }`                                          |
-| `serverError`         | Server error occurred         | `{ error: Error }`                                                        |
-| `clientConnected`     | New WebSocket connection      | `{ socketId: string }`                                                    |
-| `clientDisconnected`  | WebSocket disconnection       | `{ socketId: string }`                                                    |
-| `conferenceCreated`   | New conference created        | `{ conference: ConferenceInfo }`                                          |
-| `conferenceDestroyed` | Conference ended              | `{ conferenceId: string }`                                                |
-| `participantJoined`   | Participant joined conference | `{ participant: ParticipantInfo }`                                        |
-| `participantLeft`     | Participant left conference   | `{ participant: ParticipantInfo }`                                        |
-| `producerCreated`     | Media stream started          | `{ participantId: string, producerId: string, kind: 'audio' \| 'video' }` |
-| `producerClosed`      | Media stream ended            | `{ participantId: string, producerId: string }`                           |
-| `consumerCreated`     | Started receiving stream      | `{ participantId: string, consumerId: string, producerId: string }`       |
-| `consumerClosed`      | Stopped receiving stream      | `{ participantId: string, consumerId: string }`                           |
-| `audioMuted`          | Audio muted                   | `{ participantId: string, conferenceId: string }`                         |
-| `audioUnmuted`        | Audio unmuted                 | `{ participantId: string, conferenceId: string }`                         |
-| `videoMuted`          | Video muted                   | `{ participantId: string, conferenceId: string }`                         |
-| `videoUnmuted`        | Video unmuted                 | `{ participantId: string, conferenceId: string }`                         |
-
-## 🎯 Use Cases
-
-### Video Conferencing Platform
+Initialize and start the MediaSoup server.
 
 ```typescript
-const server = new SimpleServer({
-  port: 3000,
-  cors: { origin: "https://yourapp.com" },
-});
+await mediaServer.start();
+```
 
-server.on("participantJoined", (event) => {
-  // Log user activity
-  logUserActivity(event.detail.participant);
+---
 
-  // Send welcome message
-  server.sendToParticipant(event.detail.participant.id, "welcome", {
-    message: "Welcome to the conference!",
-  });
+#### `stop(): Promise<void>`
+
+Stop the server and clean up all resources.
+
+```typescript
+await mediaServer.stop();
+```
+
+---
+
+#### `getConferences(): Conference[]`
+
+Get all active conferences.
+
+```typescript
+const conferences = mediaServer.getConferences();
+console.log(`Active conferences: ${conferences.length}`);
+```
+
+---
+
+#### `getParticipants(): Participant[]`
+
+Get all participants across all conferences.
+
+```typescript
+const participants = mediaServer.getParticipants();
+console.log(`Total participants: ${participants.length}`);
+```
+
+---
+
+#### `getConferenceParticipants(conferenceId: string): Participant[]`
+
+Get participants in a specific conference.
+
+```typescript
+const participants = mediaServer.getConferenceParticipants("room-123");
+```
+
+---
+
+#### `getStats(): ServerStats`
+
+Get server statistics.
+
+```typescript
+const stats = mediaServer.getStats();
+console.log(`Conferences: ${stats.conferences}`);
+console.log(`Participants: ${stats.participants}`);
+console.log(`Producers: ${stats.producers}`);
+console.log(`Consumers: ${stats.consumers}`);
+```
+
+---
+
+#### `closeConference(conferenceId: string, reason?: string): Promise<void>`
+
+Close a conference and remove all participants.
+
+```typescript
+await mediaServer.closeConference("room-123", "Maintenance");
+```
+
+---
+
+#### `kickParticipant(participantId: string, reason?: string): Promise<void>`
+
+Remove a participant from their conference.
+
+```typescript
+await mediaServer.kickParticipant("user-456", "Violated rules");
+```
+
+---
+
+#### `broadcastToConference(conferenceId: string, event: string, data: any): void`
+
+Send a message to all participants in a conference.
+
+```typescript
+mediaServer.broadcastToConference("room-123", "announcement", {
+  message: "Meeting will end in 5 minutes",
 });
 ```
 
-### Webinar Platform
+---
+
+## ⚙️ Configuration
+
+### MediaSoup Worker Settings
 
 ```typescript
-const server = new SimpleServer({ port: 3000 });
+{
+  mediasoup: {
+    workerSettings: {
+      logLevel: "warn",              // Log level: "debug" | "warn" | "error" | "none"
+      logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+      rtcMinPort: 40000,             // Minimum RTC port
+      rtcMaxPort: 49999,             // Maximum RTC port
+    }
+  }
+}
+```
 
-server.on("conferenceCreated", (event) => {
+### Router Options
+
+```typescript
+{
+  mediasoup: {
+    routerOptions: {
+      mediaCodecs: [
+        {
+          kind: "audio",
+          mimeType: "audio/opus",
+          clockRate: 48000,
+          channels: 2,
+        },
+        {
+          kind: "video",
+          mimeType: "video/H264",
+          clockRate: 90000,
+          parameters: {
+            "packetization-mode": 1,
+            "profile-level-id": "42e01f",
+          },
+        },
+        {
+          kind: "video",
+          mimeType: "video/VP8",
+          clockRate: 90000,
+        },
+      ],
+    }
+  }
+}
+```
+
+### Transport Options
+
+```typescript
+{
+  mediasoup: {
+    transportOptions: {
+      listenIps: [
+        {
+          ip: "0.0.0.0",              // Listen on all interfaces
+          announcedIp: "YOUR_PUBLIC_IP", // Your public IP (for remote clients)
+        },
+      ],
+      enableUdp: true,                // Enable UDP
+      enableTcp: true,                // Enable TCP
+      preferUdp: true,                // Prefer UDP over TCP
+      enableSctp: false,              // Enable SCTP for data channels
+    }
+  }
+}
+```
+
+---
+
+## 🔔 Events
+
+The server uses Node.js EventEmitter. Listen to events using `on()` or `addEventListener()`.
+
+### `serverStarted`
+
+Fired when the server initializes successfully.
+
+```typescript
+mediaServer.on("serverStarted", (event) => {
+  console.log("🚀 MediaSoup server started");
+});
+```
+
+---
+
+### `serverError`
+
+Fired when a server error occurs.
+
+```typescript
+mediaServer.on("serverError", (event) => {
+  console.error("Server error:", event.detail.error);
+});
+```
+
+---
+
+### `clientConnected`
+
+Fired when a client connects via Socket.IO.
+
+```typescript
+mediaServer.on("clientConnected", (event) => {
+  console.log("Client connected:", event.detail.socketId);
+});
+```
+
+---
+
+### `clientDisconnected`
+
+Fired when a client disconnects.
+
+```typescript
+mediaServer.on("clientDisconnected", (event) => {
+  console.log("Client disconnected:", event.detail.socketId);
+});
+```
+
+---
+
+### `conferenceCreated`
+
+Fired when a conference is created.
+
+```typescript
+mediaServer.on("conferenceCreated", (event) => {
   const { conference } = event.detail;
-
-  // Set up webinar-specific settings
-  if (conference.name?.includes("webinar")) {
-    // Configure for one-to-many streaming
-    console.log(`📡 Webinar started: ${conference.id}`);
-  }
+  console.log(`Conference created: ${conference.id}`);
 });
 ```
 
-### Live Streaming
+---
+
+### `conferenceDestroyed`
+
+Fired when a conference is destroyed.
 
 ```typescript
-const server = new SimpleServer({ port: 3000 });
-
-server.on("producerCreated", (event) => {
-  const { participantId, kind } = event.detail;
-
-  // Start recording or relay to CDN
-  if (kind === "video") {
-    startStreamRecording(participantId);
-  }
+mediaServer.on("conferenceDestroyed", (event) => {
+  console.log(`Conference destroyed: ${event.detail.conferenceId}`);
 });
 ```
 
-### Educational Platform
+---
+
+### `participantJoined`
+
+Fired when a participant joins a conference.
 
 ```typescript
-const server = new SimpleServer({ port: 3000 });
-
-server.on("participantJoined", (event) => {
+mediaServer.on("participantJoined", (event) => {
   const { participant } = event.detail;
+  console.log(`${participant.name} joined ${participant.conferenceId}`);
+});
+```
 
-  // Check if participant is teacher
-  if (participant.name.includes("Teacher")) {
-    // Give special permissions
-    server.sendToParticipant(participant.id, "permissions", {
-      canMuteOthers: true,
-      canShareScreen: true,
-    });
+---
+
+### `participantLeft`
+
+Fired when a participant leaves.
+
+```typescript
+mediaServer.on("participantLeft", (event) => {
+  const { participant } = event.detail;
+  console.log(`${participant.name} left`);
+});
+```
+
+---
+
+### `producerCreated`
+
+Fired when a producer is created.
+
+```typescript
+mediaServer.on("producerCreated", (event) => {
+  const { producerId, participantId, kind } = event.detail;
+  console.log(`Producer created: ${kind} for ${participantId}`);
+});
+```
+
+---
+
+### `producerClosed`
+
+Fired when a producer is closed.
+
+```typescript
+mediaServer.on("producerClosed", (event) => {
+  const { producerId, participantId } = event.detail;
+  console.log(`Producer closed for ${participantId}`);
+});
+```
+
+---
+
+### `consumerCreated`
+
+Fired when a consumer is created.
+
+```typescript
+mediaServer.on("consumerCreated", (event) => {
+  const { consumerId, participantId, producerId } = event.detail;
+  console.log(`Consumer created for ${participantId}`);
+});
+```
+
+---
+
+### `consumerClosed`
+
+Fired when a consumer is closed.
+
+```typescript
+mediaServer.on("consumerClosed", (event) => {
+  const { consumerId, participantId } = event.detail;
+  console.log(`Consumer closed for ${participantId}`);
+});
+```
+
+---
+
+## 💡 Integration Examples
+
+### Express + HTTPS
+
+```typescript
+import express from "express";
+import https from "https";
+import fs from "fs";
+import { Server as SocketIOServer } from "socket.io";
+import { SimpleServer } from "simple_ms_server";
+
+const app = express();
+
+// Load SSL certificates
+const httpsOptions = {
+  key: fs.readFileSync("./certs/key.pem"),
+  cert: fs.readFileSync("./certs/cert.pem"),
+};
+
+// Create HTTPS server
+const httpsServer = https.createServer(httpsOptions, app);
+
+// Create Socket.IO server
+const socketServer = new SocketIOServer(httpsServer, {
+  cors: { origin: "*" },
+});
+
+// Create MediaSoup server
+const mediaServer = new SimpleServer({
+  httpServer: httpsServer,
+  socketServer,
+  mediasoup: {
+    workerSettings: {
+      logLevel: "warn",
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999,
+    },
+    transportOptions: {
+      listenIps: [
+        {
+          ip: "0.0.0.0",
+          announcedIp: "YOUR_PUBLIC_IP",
+        },
+      ],
+    },
+  },
+});
+
+// Start server
+await mediaServer.start();
+
+httpsServer.listen(3443, () => {
+  console.log("🚀 HTTPS Server running on port 3443");
+});
+```
+
+---
+
+### Fastify Integration
+
+```typescript
+import Fastify from "fastify";
+import { Server as SocketIOServer } from "socket.io";
+import { SimpleServer } from "simple_ms_server";
+
+const fastify = Fastify();
+
+// Get underlying HTTP server
+await fastify.listen({ port: 3000 });
+const httpServer = fastify.server;
+
+// Create Socket.IO server
+const socketServer = new SocketIOServer(httpServer, {
+  cors: { origin: "*" },
+});
+
+// Create MediaSoup server
+const mediaServer = new SimpleServer({
+  httpServer,
+  socketServer,
+});
+
+await mediaServer.start();
+console.log("🚀 Fastify + MediaSoup running");
+```
+
+---
+
+### Complete Express Example with API Routes
+
+```typescript
+import express from "express";
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
+import { SimpleServer } from "simple_ms_server";
+import cors from "cors";
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Create servers
+const httpServer = http.createServer(app);
+const socketServer = new SocketIOServer(httpServer, {
+  cors: { origin: "*" },
+});
+
+const mediaServer = new SimpleServer({
+  httpServer,
+  socketServer,
+});
+
+// API Routes
+app.get("/api/conferences", (req, res) => {
+  const conferences = mediaServer.getConferences();
+  res.json(conferences);
+});
+
+app.get("/api/conferences/:id/participants", (req, res) => {
+  const participants = mediaServer.getConferenceParticipants(req.params.id);
+  res.json(participants);
+});
+
+app.get("/api/stats", (req, res) => {
+  const stats = mediaServer.getStats();
+  res.json(stats);
+});
+
+app.post("/api/conferences/:id/close", async (req, res) => {
+  try {
+    await mediaServer.closeConference(req.params.id, "Admin closed");
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
-```
 
-## 🔧 Admin & Monitoring
+app.post("/api/participants/:id/kick", async (req, res) => {
+  try {
+    await mediaServer.kickParticipant(req.params.id, req.body.reason);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
-### Server Statistics
+// Start server
+await mediaServer.start();
 
-```typescript
-const stats = server.getStats();
-console.log({
-  uptime: stats.uptime,
-  conferences: stats.conferenceCount,
-  participants: stats.participantCount,
-  connections: stats.totalConnections,
+httpServer.listen(3000, () => {
+  console.log("🚀 Server running on port 3000");
 });
 ```
 
-### Conference Management
+---
 
-```typescript
-// List all conferences
-server.getConferences().forEach((conf) => {
-  console.log(`Conference ${conf.id}: ${conf.participantCount} participants`);
-});
-
-// Close empty conferences
-server
-  .getConferences()
-  .filter((conf) => conf.participantCount === 0)
-  .forEach((conf) => server.closeConference(conf.id, "Cleanup"));
-```
-
-### Participant Management
-
-```typescript
-// Find and kick disruptive participants
-server
-  .getParticipants()
-  .filter((p) => p.name.includes("spam"))
-  .forEach((p) => server.kickParticipant(p.id, "Spam detected"));
-
-// Broadcast announcement
-server.getConferences().forEach((conf) => {
-  server.broadcastToConference(conf.id, "announcement", {
-    message: "Server maintenance in 10 minutes",
-  });
-});
-```
-
-## 🚀 Deployment
-
-### Basic Deployment
+### Event Monitoring
 
 ```typescript
 import { SimpleServer } from "simple_ms_server";
 
-const server = new SimpleServer({
-  port: process.env.PORT || 3000,
-  host: "0.0.0.0",
-  cors: {
-    origin: process.env.ALLOWED_ORIGINS?.split(",") || "*",
-  },
+const mediaServer = new SimpleServer({
+  httpServer,
+  socketServer,
 });
 
-await server.start();
+// Monitor all server events
+mediaServer.on("serverStarted", () => {
+  console.log("✅ Server started");
+});
+
+mediaServer.on("conferenceCreated", (event) => {
+  const { conference } = event.detail;
+  console.log(`🏠 Conference created: ${conference.id}`);
+
+  // Log to database, analytics, etc.
+  logToDatabase("conference_created", conference);
+});
+
+mediaServer.on("participantJoined", (event) => {
+  const { participant } = event.detail;
+  console.log(`👋 ${participant.name} joined ${participant.conferenceId}`);
+
+  // Update participant count
+  updateAnalytics("participant_joined", participant);
+});
+
+mediaServer.on("producerCreated", (event) => {
+  const { kind, participantId } = event.detail;
+  console.log(`📹 ${kind} producer created for ${participantId}`);
+});
+
+mediaServer.on("serverError", (event) => {
+  console.error("❌ Server error:", event.detail.error);
+
+  // Alert admins
+  alertAdmins("server_error", event.detail.error);
+});
+
+await mediaServer.start();
 ```
 
-### Docker Deployment
+---
 
-```dockerfile
-FROM node:18-alpine
+### Graceful Shutdown
 
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
+```typescript
+const mediaServer = new SimpleServer({
+  httpServer,
+  socketServer,
+});
 
-COPY . .
-RUN npm run build
+await mediaServer.start();
 
-EXPOSE 3000
-EXPOSE 40000-49999/udp
+// Graceful shutdown
+const shutdown = async (signal) => {
+  console.log(`\n📡 Received ${signal}, shutting down gracefully...`);
 
-CMD ["npm", "start"]
+  try {
+    // Stop accepting new connections
+    await mediaServer.stop();
+
+    // Close HTTP server
+    httpServer.close(() => {
+      console.log("✅ Server shut down successfully");
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 ```
 
-### Environment Variables
+---
 
-```bash
-PORT=3000
-ALLOWED_ORIGINS=https://yourapp.com,https://www.yourapp.com
-RTC_MIN_PORT=40000
-RTC_MAX_PORT=49999
+## 📘 TypeScript Support
+
+Full TypeScript definitions are included.
+
+```typescript
+import {
+  SimpleServer,
+  SimpleServerConfig,
+  Conference,
+  Participant,
+  ServerStats,
+  SimpleServerEvents,
+} from "simple_ms_server";
+
+// Type-safe configuration
+const config: SimpleServerConfig = {
+  httpServer,
+  socketServer,
+  mediasoup: {
+    workerSettings: {
+      logLevel: "warn",
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999,
+    },
+  },
+};
+
+const server = new SimpleServer(config);
+
+// Type-safe event handling
+server.on(
+  "participantJoined",
+  (event: CustomEvent<SimpleServerEvents["participantJoined"]>) => {
+    const { participant } = event.detail;
+    // TypeScript knows the event structure
+  }
+);
 ```
 
-## 🔍 Comparison with Raw MediaSoup
-
-| Feature                   | SimpleServer | Raw MediaSoup         |
-| ------------------------- | ------------ | --------------------- |
-| **Setup Complexity**      | 5 lines      | 100+ lines            |
-| **Conference Management** | Automatic    | Manual                |
-| **Event Handling**        | Built-in     | Custom implementation |
-| **Error Handling**        | Automatic    | Manual                |
-| **Admin Tools**           | Built-in     | Custom development    |
-| **Statistics**            | Built-in     | Custom tracking       |
-| **TypeScript Support**    | Complete     | Partial               |
-| **Documentation**         | Simple       | Technical             |
-| **Learning Curve**        | Easy         | Steep                 |
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read the contributing guidelines and submit pull requests.
+Contributions are welcome! Please see the main project README for guidelines.
+
+---
 
 ## 📄 License
 
@@ -399,4 +822,8 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Made with ❤️ for developers who want simple WebRTC servers**
+## 🔗 Related
+
+- [Simple MediaSoup Client](../simple_ms_client/README.md)
+- [Example Application](../simple_ms_example/README.md)
+- [Main Project](../README.md)
