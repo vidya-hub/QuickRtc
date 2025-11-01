@@ -104,15 +104,26 @@ await mediaServer.start();
 The web interface uses Simple MediaSoup Client:
 
 ```javascript
-import { SimpleClient } from "simple_ms_client";
+import { ConferenceClient } from "simple_ms_client";
+import { io } from "socket.io-client";
 
-const client = new SimpleClient({
-  serverUrl: window.location.origin,
+// Connect to server
+const socket = io(window.location.origin);
+
+// Create conference client
+const client = new ConferenceClient({
+  conferenceId: "my-room",
+  participantId: "participant-123",
+  participantName: "John Doe",
+  socket,
+  conferenceName: "My Conference",
   enableAudio: true,
   enableVideo: true,
 });
 
-await client.connect("my-room", "John Doe");
+// Join and enable media
+await client.joinConference();
+await client.enableMedia(true, true);
 ```
 
 ## API Endpoints

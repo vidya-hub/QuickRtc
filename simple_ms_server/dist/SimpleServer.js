@@ -308,7 +308,7 @@ class SimpleServer extends EventTarget {
         // Conference events
         this.socketController.on("conferenceJoined", (data) => {
             console.log("conference event came here ", data);
-            const { conferenceId, participantId, conferenceName, participantName } = data.data;
+            const { conferenceId, participantId, conferenceName, participantName } = data;
             const socketId = data.socketId || "unknown";
             // Create or update conference
             if (!this.conferences.has(conferenceId)) {
@@ -387,9 +387,14 @@ class SimpleServer extends EventTarget {
             this.emit("producerClosed", { participantId, producerId });
         });
         this.socketController.on("consumerCreated", (data) => {
-            const { consumerId, participantId, producerId } = data;
-            console.log(`📺 Consumer created: ${consumerId} for participant ${participantId}`);
-            this.emit("consumerCreated", { participantId, consumerId, producerId });
+            console.log("consume created data ", data);
+            const { id, participantId, producerId } = data;
+            console.log(`📺 Consumer created: ${id} for participant ${participantId}`);
+            this.emit("consumerCreated", {
+                participantId,
+                consumerId: id,
+                producerId,
+            });
         });
         this.socketController.on("consumerClosed", (data) => {
             const { consumerId, participantId } = data;

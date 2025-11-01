@@ -78,10 +78,10 @@ npm run setup && npm run start:https
 simple_mediasoup/
 ├── simple_ms_client/          # 🖥️ Client-side package
 │   ├── src/
-│   │   ├── SimpleClient.ts    # 🎯 Main easy-to-use client
 │   │   ├── client.ts          # 📤 Package exports
 │   │   ├── controller/        # 🎮 Socket & MediaSoup controllers
-│   │   └── mediasoup/         # 🔧 Advanced MediaSoup clients
+│   │   └── mediasoup/         # 🔧 MediaSoup clients
+│   │       └── ConferenceClient.ts  # 🎯 Main comprehensive client
 │   └── README.md              # 📖 Client documentation
 ├── simple_ms_server/          # 🏠 Server-side package
 │   ├── src/
@@ -159,14 +159,27 @@ await server.start();
 #### Client Setup (3 lines of code!)
 
 ```typescript
-import { SimpleClient } from "simple_ms_client";
+import { ConferenceClient } from "simple_ms_client";
+import { io } from "socket.io-client";
 
-const client = new SimpleClient({
-  serverUrl: "http://localhost:3000",
+// Connect to server
+const socket = io("http://localhost:3000");
+
+// Create conference client
+const client = new ConferenceClient({
+  conferenceId: "demo-room",
+  participantId: "participant-123",
+  participantName: "Your Name",
+  socket,
+  conferenceName: "Demo Conference",
+  enableAudio: true,
+  enableVideo: true,
 });
 
-await client.connect("demo-room", "Your Name");
-// Done! You're now in a video call with automatic media handling.
+// Join and enable media
+await client.joinConference();
+await client.enableMedia(true, true);
+// Done! You're now in a video call with comprehensive event handling.
 ```
 
 ## 📱 Complete Working Example

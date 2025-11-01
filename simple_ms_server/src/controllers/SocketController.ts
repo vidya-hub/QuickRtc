@@ -1,16 +1,30 @@
 import { EnhancedEventEmitter } from "mediasoup/extras";
 import { Server, Socket } from "socket.io";
 import MediasoupController from "./MediasoupController";
-import MediasoupConference from "../models/conference";
-import { ConsumerOptions } from "mediasoup/types";
 import {
-  Conference,
   ConnectTransportParams,
   ConsumeParams,
   CreateTransportParams,
   ProduceParams,
-  ResumeConsumerParams,
-  SocketEventData,
+  SocketResponse,
+  JoinConferenceRequest,
+  JoinConferenceResponse,
+  LeaveConferenceRequest,
+  GetParticipantsRequest,
+  ParticipantInfo,
+  ProducerControlRequest,
+  CloseConsumerRequest,
+  ConsumeParticipantMediaRequest,
+  UnpauseConsumerRequest,
+  ConsumerParams as ConsumerParamsResponse,
+  CreateTransportResponse,
+  ProduceResponse,
+  ParticipantJoinedData,
+  ParticipantLeftData,
+  NewProducerData,
+  ProducerClosedData,
+  ConsumerClosedData,
+  MediaMutedData,
 } from "@simple-mediasoup/types";
 
 class SocketEventController extends EnhancedEventEmitter {
@@ -36,138 +50,295 @@ class SocketEventController extends EnhancedEventEmitter {
         this.emit("clientDisconnected", socket);
         this.onUserDisconnected(socket);
       });
+
       socket.on(
         "joinConference",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.handleJoinConference(socketEventData, socket, callback);
+        async (
+          socketEventData: JoinConferenceRequest,
+          callback: (response: SocketResponse<JoinConferenceResponse>) => void
+        ) => {
+          await this.handleJoinConference(
+            socketEventData.data,
+            socket,
+            callback
+          );
         }
       );
 
       socket.on(
         "createTransport",
-        async (socketEventData: CreateTransportParams, callback) => {
+        async (
+          socketEventData: CreateTransportParams,
+          callback: (response: SocketResponse<CreateTransportResponse>) => void
+        ) => {
           await this.createTransport(socketEventData, callback);
         }
       );
 
       socket.on(
         "connectTransport",
-        async (socketEventData: ConnectTransportParams, callback) => {
+        async (
+          socketEventData: ConnectTransportParams,
+          callback: (response: SocketResponse) => void
+        ) => {
           await this.connectTransport(socketEventData, callback);
         }
       );
 
-      socket.on("produce", async (socketEventData: ProduceParams, callback) => {
-        await this.produce(socketEventData, socket, callback);
-      });
-
-      socket.on("consume", async (socketEventData: ConsumeParams, callback) => {
-        await this.consume(socketEventData, callback);
-      });
-
       socket.on(
-        "resumeConsumer",
-        async (socketEventData: ResumeConsumerParams, callback) => {
-          await this.resumeConsumer(socketEventData, callback);
+        "produce",
+        async (
+          socketEventData: ProduceParams,
+          callback: (response: SocketResponse<ProduceResponse>) => void
+        ) => {
+          await this.produce(socketEventData, socket, callback);
         }
       );
 
       socket.on(
-        "leaveConference",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.handleLeaveConference(socket, socketEventData, callback);
-        }
-      );
-
-      socket.on(
-        "resumeProducer",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.resumeProducer(socketEventData, callback);
-        }
-      );
-
-      socket.on(
-        "getProducers",
-        (socketEventData: SocketEventData, callback) => {
-          this.getProducers(socketEventData, callback);
+        "consume",
+        async (
+          socketEventData: ConsumeParams,
+          callback: (response: SocketResponse<ConsumerParamsResponse>) => void
+        ) => {
+          await this.consume(socketEventData, callback);
         }
       );
 
       socket.on(
         "pauseProducer",
-        async (socketEventData: SocketEventData, callback) => {
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
           await this.pauseProducerHandler(socketEventData, callback);
         }
       );
 
       socket.on(
-        "pauseConsumer",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.pauseConsumer(socketEventData, callback);
+        "resumeProducer",
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.resumeProducer(socketEventData, callback);
         }
       );
 
       socket.on(
         "closeProducer",
-        async (socketEventData: SocketEventData, callback) => {
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
           await this.closeProducer(socketEventData, callback);
         }
       );
 
       socket.on(
         "closeConsumer",
-        async (socketEventData: SocketEventData, callback) => {
+        async (
+          socketEventData: CloseConsumerRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
           await this.closeConsumer(socketEventData, callback);
         }
       );
 
       socket.on(
-        "muteAudio",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.muteAudio(socketEventData, callback);
+        "consumeParticipantMedia",
+        async (
+          socketEventData: ConsumeParticipantMediaRequest,
+          callback: (response: SocketResponse<ConsumerParamsResponse[]>) => void
+        ) => {
+          await this.consumeParticipantMedia(socketEventData, callback);
         }
       );
 
       socket.on(
-        "unmuteAudio",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.unmuteAudio(socketEventData, callback);
+        "unpauseConsumer",
+        async (
+          socketEventData: UnpauseConsumerRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.unpauseConsumer(socketEventData, callback);
         }
       );
 
       socket.on(
-        "muteVideo",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.muteVideo(socketEventData, callback);
+        "getParticipants",
+        async (
+          socketEventData: GetParticipantsRequest,
+          callback: (response: SocketResponse<ParticipantInfo[]>) => void
+        ) => {
+          await this.getParticipants(socketEventData, callback);
         }
       );
 
       socket.on(
-        "unmuteVideo",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.unmuteVideo(socketEventData, callback);
+        "leaveConference",
+        async (
+          socketEventData: LeaveConferenceRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.handleLeaveConference(socket, socketEventData, callback);
         }
       );
 
-      socket.on(
-        "getMediaStates",
-        async (socketEventData: SocketEventData, callback) => {
-          await this.getMediaStates(socketEventData, callback);
-        }
-      );
+      socket.onAny((eventName, ...args) => {
+        console.log(
+          `[Socket Event] ${eventName}`,
+          JSON.stringify(args, null, 2)
+        );
+      });
     });
+  }
+  private async getParticipants(
+    socketEventData: GetParticipantsRequest,
+    callback: (response: SocketResponse<ParticipantInfo[]>) => void
+  ) {
+    const { conferenceId } = socketEventData;
+
+    try {
+      const participants =
+        this.mediasoupController?.getParticipants(conferenceId);
+
+      callback({ status: "ok", data: participants });
+    } catch (error) {
+      console.error("Error getting participants:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  /**
+   * Simplified method to consume media by participant ID
+   * Client sends participant ID and gets consumer parameters for all their producers
+   */
+  private async consumeParticipantMedia(
+    socketEventData: ConsumeParticipantMediaRequest,
+    callback: (response: SocketResponse<ConsumerParamsResponse[]>) => void
+  ) {
+    const {
+      conferenceId,
+      participantId,
+      targetParticipantId,
+      rtpCapabilities,
+    } = socketEventData;
+
+    try {
+      if (
+        !conferenceId ||
+        !participantId ||
+        !targetParticipantId ||
+        !rtpCapabilities
+      ) {
+        callback({
+          status: "error",
+          error:
+            "Missing required parameters: conferenceId, participantId, targetParticipantId, rtpCapabilities",
+        });
+        return;
+      }
+
+      // Get producer IDs for the target participant
+      const producerData = this.mediasoupController?.getExistingProducerIds(
+        participantId, // requesting participant (to exclude from results)
+        conferenceId
+      );
+
+      if (!producerData || producerData.length === 0) {
+        callback({ status: "ok", data: [] });
+        return;
+      }
+
+      // Find the target participant's producers
+      const targetParticipantData = producerData.find(
+        (item) => item.participantId === targetParticipantId
+      );
+
+      if (
+        !targetParticipantData ||
+        targetParticipantData.producerIds.length === 0
+      ) {
+        callback({ status: "ok", data: [] });
+        return;
+      }
+
+      // Create consumers for each producer
+      const consumerParams = [];
+
+      for (const producerId of targetParticipantData.producerIds) {
+        try {
+          const consumerResponse = await this.mediasoupController?.consume({
+            conferenceId,
+            participantId,
+            consumeOptions: {
+              producerId,
+              rtpCapabilities,
+            },
+          });
+
+          if (consumerResponse) {
+            consumerParams.push({
+              ...consumerResponse,
+              targetParticipantId,
+            });
+          }
+        } catch (error) {
+          console.error(
+            `Error creating consumer for producer ${producerId}:`,
+            error
+          );
+          // Continue with other producers
+        }
+      }
+
+      callback({ status: "ok", data: consumerParams });
+    } catch (error) {
+      console.error("Error consuming participant media:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  /**
+   * Unpause consumer - simplified version
+   */
+  private async unpauseConsumer(
+    socketEventData: UnpauseConsumerRequest,
+    callback: (response: SocketResponse) => void
+  ) {
+    const { conferenceId, participantId, consumerId } = socketEventData;
+
+    try {
+      if (!consumerId) {
+        callback({ status: "error", error: "Missing consumerId" });
+        return;
+      }
+
+      await this.mediasoupController?.resumeConsumer({
+        conferenceId,
+        participantId,
+        consumerId,
+      });
+
+      callback({ status: "ok" });
+    } catch (error) {
+      console.error("Error unpausing consumer:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
   }
 
   private async pauseProducerHandler(
-    socketEventData: SocketEventData,
-    callback: Function
+    socketEventData: ProducerControlRequest,
+    callback: (response: SocketResponse) => void
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
+    console.log("pause producer ", socketEventData);
+
+    const { extraData, conferenceId, participantId } = socketEventData;
     const { producerId } = extraData || {};
 
     if (!producerId) {
-      callback({ status: "error", data: "Missing producerId" });
+      callback({ status: "error", error: "Missing producerId" });
       return;
     }
 
@@ -178,60 +349,30 @@ class SocketEventController extends EnhancedEventEmitter {
         producerId,
       });
       callback({ status: "ok" });
-      this.mediasoupSocket.to(conferenceId).emit("producerPaused", {
+
+      const producerClosedData: ProducerClosedData = {
         participantId,
         producerId,
-      });
-      this.emit("producerPaused", { participantId, producerId });
+      };
+      this.mediasoupSocket
+        .to(conferenceId)
+        .emit("producerPaused", producerClosedData);
+      this.emit("producerPaused", producerClosedData);
     } catch (error) {
       console.error("Error pausing producer:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async pauseConsumer(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    console.log("pause consumer data ", socketEventData);
-
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
-    const { consumerId } = extraData || {};
-
-    if (!consumerId) {
-      callback({ status: "error", data: "Missing consumerId" });
-      return;
-    }
-
-    try {
-      await this.mediasoupController?.pauseConsumer({
-        conferenceId,
-        participantId,
-        consumerId,
-      });
-      callback({ status: "ok" });
-      this.mediasoupSocket.to(conferenceId).emit("consumerPaused", {
-        participantId,
-        consumerId,
-      });
-      this.emit("consumerPaused", { participantId, consumerId });
-    } catch (error) {
-      console.error("Error pausing consumer:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
   private async closeProducer(
-    socketEventData: SocketEventData,
-    callback: Function
+    socketEventData: ProducerControlRequest,
+    callback: (response: SocketResponse) => void
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
+    const { extraData, conferenceId, participantId } = socketEventData;
     const { producerId } = extraData || {};
 
     if (!producerId) {
-      callback({ status: "error", data: "Missing producerId" });
+      callback({ status: "error", error: "Missing producerId" });
       return;
     }
 
@@ -242,27 +383,30 @@ class SocketEventController extends EnhancedEventEmitter {
         producerId,
       });
       callback({ status: "ok" });
-      this.mediasoupSocket.to(conferenceId).emit("producerClosed", {
+
+      const producerClosedData: ProducerClosedData = {
         participantId,
         producerId,
-      });
-      this.emit("producerClosed", { participantId, producerId });
+      };
+      this.mediasoupSocket
+        .to(conferenceId)
+        .emit("producerClosed", producerClosedData);
+      this.emit("producerClosed", producerClosedData);
     } catch (error) {
       console.error("Error closing producer:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
   private async closeConsumer(
-    socketEventData: SocketEventData,
-    callback: Function
+    socketEventData: CloseConsumerRequest,
+    callback: (response: SocketResponse) => void
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
+    const { extraData, conferenceId, participantId } = socketEventData;
     const { consumerId } = extraData || {};
 
     if (!consumerId) {
-      callback({ status: "error", data: "Missing consumerId" });
+      callback({ status: "error", error: "Missing consumerId" });
       return;
     }
 
@@ -273,56 +417,71 @@ class SocketEventController extends EnhancedEventEmitter {
         consumerId,
       });
       callback({ status: "ok" });
-      this.mediasoupSocket.to(conferenceId).emit("consumerClosed", {
+
+      const consumerClosedData: ConsumerClosedData = {
         participantId,
         consumerId,
-      });
-      this.emit("consumerClosed", { participantId, consumerId });
+      };
+      this.mediasoupSocket
+        .to(conferenceId)
+        .emit("consumerClosed", consumerClosedData);
+      this.emit("consumerClosed", consumerClosedData);
     } catch (error) {
       console.error("Error closing consumer:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
   private async handleJoinConference(
-    socketEventData: SocketEventData,
+    socketEventData: JoinConferenceRequest["data"],
     socket: Socket,
-    callback: Function
+    callback: (response: SocketResponse<JoinConferenceResponse>) => void
   ) {
     console.log("received data socket ", socketEventData);
 
     try {
-      const { conferenceId, participantId, extraData } = socketEventData.data;
-      const conferenceName = extraData?.conferenceName;
-      const participantName = extraData?.participantName || "Guest";
-      const socketId = socket.id;
-      const conference: Conference | undefined =
-        await this.mediasoupController?.joinConference({
-          conferenceId: conferenceId,
-          participantId: participantId,
-          conferenceName: conferenceName,
-          participantName: participantName,
-          socketId: socketId,
-        });
+      const { conferenceId, participantId, conferenceName, participantName } =
+        socketEventData;
+      const conference = await this.mediasoupController?.joinConference({
+        conferenceId: conferenceId,
+        participantId: participantId,
+        conferenceName: conferenceName || conferenceId,
+        participantName: participantName,
+        socketId: socket.id,
+      });
       console.log("mediasoup con response ", conference);
 
       socket.join(conferenceId);
-      this.emit("conferenceJoined", { ...socketEventData, socketId });
+
+      const participantJoinedData: ParticipantJoinedData = {
+        participantId,
+        participantName,
+        conferenceId,
+      };
+      socket.to(conferenceId).emit("participantJoined", participantJoinedData);
+
+      this.emit("conferenceJoined", {
+        ...socketEventData,
+        socketId: socket.id,
+      });
+
       if (conference) {
         callback({
           status: "ok",
           data: { routerCapabilities: conference.getRouterRtpsCapabilities() },
         });
+      } else {
+        callback({ status: "error", error: "Failed to join conference" });
       }
     } catch (error) {
       console.error("Error joining conference:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
   private async createTransport(
     socketEventData: CreateTransportParams,
-    callback: Function
+    callback: (response: SocketResponse<CreateTransportResponse>) => void
   ) {
     console.log("create transport data ", socketEventData);
 
@@ -340,29 +499,29 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({
         status: "ok",
         data: {
-          id: transport?.id,
-          iceParameters: transport?.iceParameters,
-          iceCandidates: transport?.iceCandidates,
-          dtlsParameters: transport?.dtlsParameters,
+          id: transport?.id!,
+          iceParameters: transport?.iceParameters!,
+          iceCandidates: transport?.iceCandidates!,
+          dtlsParameters: transport?.dtlsParameters!,
           sctpParameters: transport?.sctpParameters,
         },
       });
     } catch (error) {
       console.error("Error creating transport:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
   private async connectTransport(
     socketEventData: ConnectTransportParams,
-    callback: Function
+    callback: (response: SocketResponse) => void
   ) {
     console.log("connect data ", socketEventData);
 
     const { conferenceId, participantId } = socketEventData;
     const { direction, dtlsParameters } = socketEventData;
     if (!direction || !dtlsParameters) {
-      callback({ status: "error", data: "Missing required parameters" });
+      callback({ status: "error", error: "Missing required parameters" });
       return;
     }
     try {
@@ -377,16 +536,17 @@ class SocketEventController extends EnhancedEventEmitter {
         participantId,
         direction,
       });
-      callback({ status: "ok", data: {} });
+      callback({ status: "ok" });
     } catch (error) {
       console.error("Error connecting transport:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
+
   private async produce(
     socketEventData: ProduceParams,
     socket: Socket,
-    callback: Function
+    callback: (response: SocketResponse<ProduceResponse>) => void
   ) {
     const { conferenceId, participantId } = socketEventData;
     const { transportId, kind, rtpParameters } = socketEventData;
@@ -395,7 +555,7 @@ class SocketEventController extends EnhancedEventEmitter {
       if (!transportId || !kind || !rtpParameters) {
         callback({
           status: "error",
-          data: "Missing required parameters for producing",
+          error: "Missing required parameters for producing",
         });
         return;
       }
@@ -407,18 +567,36 @@ class SocketEventController extends EnhancedEventEmitter {
         kind,
         rtpParameters,
       });
-      socket.to(conferenceId).emit("newProducer", {
-        producerId,
+
+      // Get participant name for the event
+      const participants =
+        this.mediasoupController?.getParticipants(conferenceId);
+      const participant = participants?.find(
+        (p) => p.participantId === participantId
+      );
+      const participantName =
+        participant?.participantName || "Unknown Participant";
+
+      const newProducerData: NewProducerData = {
+        producerId: producerId!,
         participantId,
-      });
-      callback({ status: "ok", data: { producerId } });
+        participantName,
+        kind,
+      };
+      socket.to(conferenceId).emit("newProducer", newProducerData);
+
+      callback({ status: "ok", data: { producerId: producerId! } });
       this.emit("producerCreated", { producerId, participantId });
     } catch (error) {
       console.error("Error producing:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
-  private async consume(socketEventData: ConsumeParams, callback: Function) {
+
+  private async consume(
+    socketEventData: ConsumeParams,
+    callback: (response: SocketResponse<ConsumerParamsResponse>) => void
+  ) {
     console.log("consume params came ", socketEventData);
 
     const { conferenceId, participantId, consumeOptions } = socketEventData;
@@ -432,7 +610,7 @@ class SocketEventController extends EnhancedEventEmitter {
       if (!producerId || !rtpCapabilities) {
         callback({
           status: "error",
-          data: "Missing required parameters for consuming",
+          error: "Missing required parameters for consuming",
         });
         return;
       }
@@ -440,64 +618,48 @@ class SocketEventController extends EnhancedEventEmitter {
       const consumerResponse = await this.mediasoupController?.consume(
         consumerParams
       );
-      callback({ status: "ok", data: consumerResponse });
+      console.log("consumer response ", consumerResponse);
+
+      callback({ status: "ok", data: consumerResponse! });
       this.emit("consumerCreated", { ...consumerResponse, participantId });
     } catch (error) {
       console.error("Error consuming:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 
-  private async resumeConsumer(
-    socketEventData: ResumeConsumerParams,
-    callback: Function
-  ) {
-    const { conferenceId, participantId, consumerId } = socketEventData;
-    const resumeConsumerParams = {
-      conferenceId,
-      participantId,
-      consumerId,
-    };
-    if (!consumerId) {
-      callback({ status: "error", data: "Missing consumerId" });
-      return;
-    }
-    try {
-      await this.mediasoupController?.resumeConsumer(resumeConsumerParams);
-      callback({ status: "ok" });
-      this.emit("consumerResumed", { consumerId, participantId });
-    } catch (error) {
-      console.error("Error resuming consumer:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-  private async onUserDisconnected(socket: any) {
+  private async onUserDisconnected(socket: Socket) {
     console.log("Client disconnected:", socket.id);
     try {
       const cleanup = await this.mediasoupController?.userRemoveWithSocketId(
         socket.id
       );
       if (cleanup?.conferenceId && cleanup?.participantId) {
+        const conferenceId = cleanup.conferenceId;
+
         // Notify other participants about the disconnection
-        socket.to(cleanup.conferenceId).emit("participantLeft", {
+        const participantLeftData: ParticipantLeftData = {
           participantId: cleanup.participantId,
           closedProducerIds: cleanup.closedProducerIds,
           closedConsumerIds: cleanup.closedConsumerIds,
-        });
+        };
+        socket.to(conferenceId).emit("participantLeft", participantLeftData);
 
         // Emit cleanup events for each closed producer and consumer
         cleanup.closedProducerIds.forEach((producerId) => {
-          socket.to(cleanup.conferenceId).emit("producerClosed", {
-            participantId: cleanup.participantId,
+          const producerClosedData: ProducerClosedData = {
+            participantId: cleanup.participantId!,
             producerId,
-          });
+          };
+          socket.to(conferenceId).emit("producerClosed", producerClosedData);
         });
 
         cleanup.closedConsumerIds.forEach((consumerId) => {
-          socket.to(cleanup.conferenceId).emit("consumerClosed", {
-            participantId: cleanup.participantId,
+          const consumerClosedData: ConsumerClosedData = {
+            participantId: cleanup.participantId!,
             consumerId,
-          });
+          };
+          socket.to(conferenceId).emit("consumerClosed", consumerClosedData);
         });
       }
 
@@ -510,17 +672,17 @@ class SocketEventController extends EnhancedEventEmitter {
       this.emit("userQuit", socket.id);
     }
   }
-  private onNewConnection(socket: any) {
+  private onNewConnection(socket: Socket) {
     console.log("New client connected with socket id:", socket.id);
     this.emit("connected", socket);
   }
+
   private async handleLeaveConference(
-    socket: any,
-    socketEventData: SocketEventData,
-    callback: Function
+    socket: Socket,
+    socketEventData: LeaveConferenceRequest,
+    callback: (response: SocketResponse) => void
   ) {
-    const { data } = socketEventData;
-    const { participantId, conferenceId } = data;
+    const { participantId, conferenceId } = socketEventData;
 
     try {
       const cleanup = await this.mediasoupController?.removeFromConference(
@@ -530,25 +692,28 @@ class SocketEventController extends EnhancedEventEmitter {
 
       if (cleanup) {
         // Notify other participants about the participant leaving
-        socket.to(conferenceId).emit("participantLeft", {
+        const participantLeftData: ParticipantLeftData = {
           participantId,
           closedProducerIds: cleanup.closedProducerIds,
           closedConsumerIds: cleanup.closedConsumerIds,
-        });
+        };
+        socket.to(conferenceId).emit("participantLeft", participantLeftData);
 
         // Emit cleanup events for each closed producer and consumer
         cleanup.closedProducerIds.forEach((producerId) => {
-          socket.to(conferenceId).emit("producerClosed", {
+          const producerClosedData: ProducerClosedData = {
             participantId,
             producerId,
-          });
+          };
+          socket.to(conferenceId).emit("producerClosed", producerClosedData);
         });
 
         cleanup.closedConsumerIds.forEach((consumerId) => {
-          socket.to(conferenceId).emit("consumerClosed", {
+          const consumerClosedData: ConsumerClosedData = {
             participantId,
             consumerId,
-          });
+          };
+          socket.to(conferenceId).emit("consumerClosed", consumerClosedData);
         });
       }
 
@@ -563,33 +728,22 @@ class SocketEventController extends EnhancedEventEmitter {
       });
     } catch (error) {
       console.error("Error handling leave conference:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
-  private getProducers(socketEventData: any, callback: Function) {
-    const { conferenceId, participantId } = socketEventData;
-    try {
-      const producerIds = this.mediasoupController?.getExistingProducerIds(
-        conferenceId,
-        participantId
-      );
-      callback({ status: "ok", data: producerIds });
-    } catch (error) {
-      console.error("Error getting producers:", error);
-      callback({ status: "error", data: error });
-    }
-  }
+
   public async resumeProducer(
-    socketEventData: SocketEventData,
-    callback: Function
+    socketEventData: ProducerControlRequest,
+    callback: (response: SocketResponse) => void
   ) {
-    const { data } = socketEventData;
-    const { extraData, conferenceId, participantId } = data;
+    const { extraData, conferenceId, participantId } = socketEventData;
     const { producerId } = extraData || {};
+
     if (!producerId) {
-      callback({ status: "error", data: "Missing producerId" });
+      callback({ status: "error", error: "Missing producerId" });
       return;
     }
+
     try {
       await this.mediasoupController?.resumeProducer({
         conferenceId,
@@ -600,127 +754,7 @@ class SocketEventController extends EnhancedEventEmitter {
       this.emit("producerResumed", { producerId, participantId });
     } catch (error) {
       console.error("Error resuming producer:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async muteAudio(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
-
-    try {
-      const mutedProducerIds = await this.mediasoupController?.muteAudio({
-        conferenceId,
-        participantId,
-      });
-
-      callback({ status: "ok", data: { mutedProducerIds } });
-      this.mediasoupSocket.to(conferenceId).emit("audioMuted", {
-        participantId,
-        mutedProducerIds,
-      });
-      this.emit("audioMuted", { participantId, mutedProducerIds });
-    } catch (error) {
-      console.error("Error muting audio:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async unmuteAudio(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
-
-    try {
-      const unmutedProducerIds = await this.mediasoupController?.unmuteAudio({
-        conferenceId,
-        participantId,
-      });
-
-      callback({ status: "ok", data: { unmutedProducerIds } });
-      this.mediasoupSocket.to(conferenceId).emit("audioUnmuted", {
-        participantId,
-        unmutedProducerIds,
-      });
-      this.emit("audioUnmuted", { participantId, unmutedProducerIds });
-    } catch (error) {
-      console.error("Error unmuting audio:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async muteVideo(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
-
-    try {
-      const mutedProducerIds = await this.mediasoupController?.muteVideo({
-        conferenceId,
-        participantId,
-      });
-
-      callback({ status: "ok", data: { mutedProducerIds } });
-      this.mediasoupSocket.to(conferenceId).emit("videoMuted", {
-        participantId,
-        mutedProducerIds,
-      });
-      this.emit("videoMuted", { participantId, mutedProducerIds });
-    } catch (error) {
-      console.error("Error muting video:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async unmuteVideo(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
-
-    try {
-      const unmutedProducerIds = await this.mediasoupController?.unmuteVideo({
-        conferenceId,
-        participantId,
-      });
-
-      callback({ status: "ok", data: { unmutedProducerIds } });
-      this.mediasoupSocket.to(conferenceId).emit("videoUnmuted", {
-        participantId,
-        unmutedProducerIds,
-      });
-      this.emit("videoUnmuted", { participantId, unmutedProducerIds });
-    } catch (error) {
-      console.error("Error unmuting video:", error);
-      callback({ status: "error", data: error });
-    }
-  }
-
-  private async getMediaStates(
-    socketEventData: SocketEventData,
-    callback: Function
-  ) {
-    const { data } = socketEventData;
-    const { conferenceId, participantId } = data;
-
-    try {
-      const mediaStates = this.mediasoupController?.getParticipantMediaStates(
-        conferenceId,
-        participantId
-      );
-
-      callback({ status: "ok", data: mediaStates });
-    } catch (error) {
-      console.error("Error getting media states:", error);
-      callback({ status: "error", data: error });
+      callback({ status: "error", error: (error as Error).message });
     }
   }
 }
