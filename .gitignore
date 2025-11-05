@@ -1,7 +1,7 @@
-simple_ms_server/node_modules/
-simple_ms_client/node_modules/
-simple_ms_types/node_modules/
-simple_ms_client/dist/
-simple_ms_server/dist/
-simple_ms_types/dist/
-simple_ms_server/dist/
+quickrtc_server/node_modules/
+quickrtc_client/node_modules/
+quickrtc_types/node_modules/
+quickrtc_client/dist/
+quickrtc_server/dist/
+quickrtc_types/dist/
+quickrtc_server/dist/
