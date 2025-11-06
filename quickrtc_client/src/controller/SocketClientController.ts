@@ -17,7 +17,7 @@ import {
   ProducerControlRequest,
   CloseConsumerRequest,
   LeaveConferenceRequest,
-} from "@quickrtc/types";
+} from "quickrtc-types";
 import {
   AppData,
   Transport,

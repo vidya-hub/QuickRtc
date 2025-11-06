@@ -14,7 +14,7 @@ import {
   JoinConferenceParams,
   ProduceParams,
   ResumeConsumerParams,
-} from "@quickrtc/types";
+} from "quickrtc-types";
 class MediasoupController extends EnhancedEventEmitter implements AppState {
   conferences: ConferenceMap;
   workerService: WorkerService;

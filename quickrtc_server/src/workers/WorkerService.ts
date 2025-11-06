@@ -1,7 +1,7 @@
 import { Worker as MediasoupWorker } from "mediasoup/types";
 import * as mediasoup from "mediasoup";
 import EventEmitter from "events";
-import { MediasoupConfig } from "@quickrtc/types";
+import { MediasoupConfig } from "quickrtc-types";
 import { cpus } from "os";
 
 export class WorkerService extends EventEmitter {

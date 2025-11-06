@@ -1,7 +1,7 @@
 import { Device } from "mediasoup-client";
 import { Transport, Producer, Consumer } from "mediasoup-client/types";
 import { SocketClientController } from "../controller/SocketClientController";
-import { ClientSocket } from "@quickrtc/types";
+import { ClientSocket } from "quickrtc-types";
 
 /**
  * Configuration for ConferenceClient

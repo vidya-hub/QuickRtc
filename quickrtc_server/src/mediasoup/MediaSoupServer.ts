@@ -4,7 +4,7 @@ import { EnhancedEventEmitter } from "mediasoup/extras";
 import MediasoupController from "../controllers/MediasoupController";
 import MediasoupConference from "../models/conference";
 import SocketEventController from "../controllers/SocketController";
-import { MediasoupConfig } from "@quickrtc/types";
+import { MediasoupConfig } from "quickrtc-types";
 
 class MediaSoupServer extends EnhancedEventEmitter {
   private config: MediasoupConfig;

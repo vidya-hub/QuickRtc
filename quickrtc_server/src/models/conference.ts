@@ -10,7 +10,7 @@ import {
   ParticipantsMap,
   ProduceParams,
   ResumeConsumerParams,
-} from "@quickrtc/types";
+} from "quickrtc-types";
 
 class MediasoupConference implements Conference {
   public participants: ParticipantsMap;

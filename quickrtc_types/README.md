@@ -27,22 +27,16 @@ import {
 
 ```typescript
 // Core types
-import { ConferenceMap, ParticipantsMap } from "@quickrtc/types/core";
+import { ConferenceMap, ParticipantsMap } from "quickrtc-types/core";
 
 // Transport types
-import {
-  ProduceParams,
-  ConsumeParams,
-} from "@quickrtc/types/transport";
+import { ProduceParams, ConsumeParams } from "quickrtc-types/transport";
 
 // Socket types
-import { SocketEventType, MeetingParams } from "@quickrtc/types/socket";
+import { SocketEventType, MeetingParams } from "quickrtc-types/socket";
 
 // Client types
-import {
-  ClientConfig,
-  ClientConnectionState,
-} from "@quickrtc/types/client";
+import { ClientConfig, ClientConnectionState } from "quickrtc-types/client";
 ```
 
 ## Type Categories

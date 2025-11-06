@@ -1,4 +1,4 @@
-import { ConferenceClient } from "/quickrtc_client/dist/client.js";
+import { ConferenceClient } from "https://cdn.jsdelivr.net/npm/quickrtc-client@1.0.1/dist/client.min.js";
 
 // Global state
 let client = null;
