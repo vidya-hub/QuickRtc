@@ -1,16 +1,32 @@
 {
-  "name": "quickrtc_server",
+  "name": "@quickrtc/server",
   "version": "1.0.0",
   "description": "QuickRTC Server - High-level WebRTC server abstraction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc"
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "webrtc",
+    "mediasoup",
+    "server",
+    "real-time",
+    "video",
+    "audio"
+  ],
   "author": "",
   "license": "ISC",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.18.1",
   "devDependencies": {
     "ts-node": "^10.9.2",

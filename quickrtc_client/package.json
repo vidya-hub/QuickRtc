@@ -1,5 +1,5 @@
 {
-  "name": "quickrtc_client",
+  "name": "@quickrtc/client",
   "version": "1.0.0",
   "description": "QuickRTC WebRTC client library for browsers",
   "main": "dist/client.js",
@@ -9,11 +9,28 @@
     "build": "webpack --mode=production",
     "build:dev": "webpack --mode=development",
     "build:watch": "webpack --mode=development --watch",
-    "build:tsc": "tsc"
+    "build:tsc": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "webrtc",
+    "mediasoup",
+    "client",
+    "browser",
+    "real-time",
+    "video",
+    "audio"
+  ],
   "author": "",
   "license": "ISC",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.18.1",
   "dependencies": {
     "@quickrtc/types": "file:../quickrtc_types",

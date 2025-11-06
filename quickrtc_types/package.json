@@ -22,6 +22,9 @@
     "dist",
     "src"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "mediasoup": "^3.19.0",
     "socket.io": "^4.8.0"
