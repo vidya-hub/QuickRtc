@@ -1,0 +1,3 @@
+overrides:
+  catalog:
+  "@quickrtc/types": link:../quickrtc_types
