@@ -5,3 +5,10 @@ quickrtc_client/dist/
 quickrtc_server/dist/
 quickrtc_types/dist/
 quickrtc_server/dist/
+quickrtc-react-client/node_modules/
+FILE_MANIFEST.md
+INDEX.md
+PROJECT_SUMMARY.md
+QUICK_START.md
+QUICKRTC_REACT_ARCHITECTURE.md
+setup-react-client.sh
