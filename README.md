@@ -1,5 +1,28 @@
 # 🚀 QuickRTC
 
+# QuickRTC Suite
+
+## Packages
+
+- [quickrtc-server](https://www.npmjs.com/package/quickrtc-server) — server-side library for QuickRTC  
+- [quickrtc-client](https://www.npmjs.com/package/quickrtc-client) — client-side library for QuickRTC  
+- [quickrtc-types](https://www.npmjs.com/package/quickrtc-types) — TypeScript type definitions for QuickRTC  
+
+---
+
+## Installation
+
+Install the packages via npm:
+
+```bash
+npm install quickrtc-server quickrtc-client quickrtc-types
+```
+or via yarn:
+
+```bash
+yarn add quickrtc-server quickrtc-client quickrtc-types
+```
+
 A comprehensive, easy-to-use WebRTC solution built on top of **MediaSoup**, providing simple APIs for client and server applications.
 
 ---
