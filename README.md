@@ -1,12 +1,10 @@
 # 🚀 QuickRTC
 
-# QuickRTC Suite
-
 ## Packages
 
-- [quickrtc-server](https://www.npmjs.com/package/quickrtc-server) — server-side library for QuickRTC  
-- [quickrtc-client](https://www.npmjs.com/package/quickrtc-client) — client-side library for QuickRTC  
-- [quickrtc-types](https://www.npmjs.com/package/quickrtc-types) — TypeScript type definitions for QuickRTC  
+- [![npm](https://img.shields.io/npm/v/quickrtc-server.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-server) **quickrtc-server** — server-side library for QuickRTC  
+- [![npm](https://img.shields.io/npm/v/quickrtc-client.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-client) **quickrtc-client** — client-side library for QuickRTC  
+- [![npm](https://img.shields.io/npm/v/quickrtc-types.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-types) **quickrtc-types** — TypeScript type definitions for QuickRTC  
 
 ---
 
