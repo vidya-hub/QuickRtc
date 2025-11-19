@@ -1,196 +1,156 @@
 # QuickRTC React Example
 
-This is a complete example application demonstrating how to use the `quickrtc-react-client` library to build a production-ready video conferencing application.
+A complete, production-ready video conferencing application built with [QuickRTC React Client](https://github.com/vidyasagar/quickrtc-react-client). This example demonstrates best practices for building scalable WebRTC applications using React and Redux.
 
-## Features Demonstrated
+## 🌟 Features
 
-- ✅ Join/Leave conference
-- ✅ Produce audio and video media
-- ✅ Toggle audio on/off (mute/unmute)
-- ✅ Toggle video on/off
-- ✅ Screen sharing
-- ✅ Consume remote participants' streams
-- ✅ Display local and remote video
-- ✅ Mute remote participants locally
-- ✅ Stop watching specific participants
-- ✅ Redux state management
-- ✅ Clean component architecture
-- ✅ Responsive design
-- ✅ Error handling
+- **Real-time Video Conferencing**: Multi-party video calls with low latency.
+- **Smart Media Handling**:
+  - Automatic quality adjustment
+  - Bandwidth optimization
+  - Device management (camera/microphone selection)
+- **Rich Interactions**:
+  - 🎤 Audio mute/unmute
+  - 📹 Video on/off
+  - 🖥️ Screen sharing
+- **State Management**: Powered by Redux Toolkit for predictable state updates.
+- **Modern UI**: Responsive layout with grid view for participants.
+- **Robust Error Handling**: Graceful handling of network issues and permission errors.
 
-## Prerequisites
+## 🚀 Getting Started
 
-1. Make sure the QuickRTC server is running (from `quickrtc_example` directory)
-2. Ensure you have Node.js 18+ installed
+### Prerequisites
 
-## Installation
+- Node.js 18+
+- A running instance of the **QuickRTC Server** (see `quickrtc_server` directory)
 
-```bash
-# Install dependencies
-npm install
-# or
-pnpm install
+### Installation
+
+1.  Clone the repository (if you haven't already):
+    ```bash
+    git clone https://github.com/vidyasagar/simple_mediasoup.git
+    cd simple_mediasoup/quickrtc-react-example
+    ```
+
+2.  Install dependencies:
+    ```bash
+    npm install
+    # or
+    pnpm install
+    ```
+
+### Configuration
+
+By default, the app connects to `https://localhost:3443`. If your server is running on a different host or port, update the `serverUrl` in `src/App.tsx`:
+
+```typescript
+const [serverUrl] = useState("https://your-server-url:port");
 ```
 
-## Development
+> **Note**: WebRTC requires a secure context (HTTPS) or localhost. Ensure your server is configured with SSL certificates or use localhost for development.
+
+### Running the App
+
+Start the development server:
 
 ```bash
-# Start the development server
 npm run dev
-# or
-pnpm dev
 ```
 
-The application will be available at `https://localhost:3000` (note: HTTPS is required for WebRTC)
+The application will be available at `http://localhost:5173` (or the port shown in your terminal).
 
-## Production Build
-
-```bash
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-## Project Structure
+## 🏗️ Project Structure
 
 ```
 src/
-  ├── components/
-  │   ├── VideoStream.tsx      # Component for displaying video streams
-  │   ├── Controls.tsx          # Control buttons (audio, video, screen share, leave)
-  │   └── ParticipantList.tsx   # Remote participant video/audio display
-  ├── App.tsx                   # Main application component
-  ├── main.tsx                  # Application entry point
-  ├── store.ts                  # Redux store configuration
-  └── index.css                 # Global styles
+├── components/
+│   ├── VideoStream.tsx      # Renders individual video streams (local/remote)
+│   ├── Controls.tsx         # Media controls (mute, video, screen share, leave)
+│   └── ParticipantList.tsx  # Displays participant info and stats
+├── App.tsx                  # Main application logic and layout
+├── main.tsx                 # Entry point and Redux provider setup
+├── store.ts                 # Redux store configuration with conference slice
+└── index.css                # Global styles and utility classes
 ```
 
-## Usage Guide
+## 💡 Key Concepts Demonstrated
 
-### 1. Configure Redux Store
+### 1. Redux Integration
+
+The example shows how to integrate `quickrtc-react-client` into a Redux store:
 
 ```typescript
+// store.ts
 import { configureStore } from "@reduxjs/toolkit";
 import { conferenceReducer, eventMiddleware } from "quickrtc-react-client";
 
 export const store = configureStore({
-  reducer: {
-    conference: conferenceReducer,
-  },
+  reducer: { conference: conferenceReducer },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ["conference/setDevice", /* ... */],
+        ignoredActions: ["conference/setLocalStream", /* ... */],
         ignoredPaths: ["conference.localStreams", /* ... */],
       },
     }).concat(eventMiddleware),
 });
 ```
 
-### 2. Use the Hook
+### 2. Hook Usage
+
+The `useConference` hook is the central point of interaction:
 
 ```typescript
-import { useConference } from "quickrtc-react-client";
+const {
+  joinConference,
+  produceMedia,
+  localStreams,
+  remoteParticipants
+} = useConference();
 
-function MyComponent() {
-  const {
-    isJoined,
-    localStreams,
-    remoteParticipants,
-    joinConference,
-    produceMedia,
-    // ... other methods
-  } = useConference();
-
-  // Use the hook methods and state
-}
-```
-
-### 3. Join Conference
-
-```typescript
-const socket = io("https://your-server.com");
-
+// Joining a room
 await joinConference({
-  conferenceId: "my-room",
-  participantId: "unique-id",
-  participantName: "John Doe",
-  socket,
+  conferenceId: "demo-room",
+  participantId: "user-1",
+  participantName: "Alice",
+  socket
 });
 ```
 
-### 4. Produce Media
+### 3. Media Handling
 
-```typescript
-const stream = await navigator.mediaDevices.getUserMedia({
-  audio: true,
-  video: true,
-});
+The app demonstrates how to handle media streams efficiently:
 
-await produceMedia({
-  audioTrack: stream.getAudioTracks()[0],
-  videoTrack: stream.getVideoTracks()[0],
-});
+- **Local Streams**: Displayed immediately upon creation.
+- **Remote Streams**: Automatically consumed via the `eventMiddleware` and displayed when available.
+- **Screen Sharing**: Handled as a separate video track type (`screenshare`).
+
+## 🔧 Troubleshooting
+
+### Certificate Errors
+If you are using self-signed certificates on localhost:
+1.  Open the server URL (e.g., `https://localhost:3443`) in a separate tab.
+2.  Accept the security warning ("Proceed to localhost (unsafe)").
+3.  Refresh the React app.
+
+### "Device Not Found"
+Ensure your browser has permission to access the camera and microphone. Check the browser's permission settings for the site.
+
+### Connection Failed
+1.  Verify the QuickRTC server is running.
+2.  Check the browser console for WebSocket connection errors.
+3.  Ensure the `serverUrl` matches your server configuration.
+
+## 📦 Building for Production
+
+To create a production build:
+
+```bash
+npm run build
 ```
 
-### 5. Consume Existing Streams
+The output will be in the `dist` directory, ready to be deployed to any static host (Vercel, Netlify, Nginx, etc.).
 
-```typescript
-await consumeExistingStreams();
-```
-
-## Key Features
-
-### Audio/Video Toggle
-
-The example demonstrates proper audio/video toggling by:
-- Stopping the stream when muting/turning off
-- Creating a new stream when unmuting/turning on
-- Properly updating the Redux state
-
-### Screen Sharing
-
-Screen sharing is implemented with:
-- MediaDevices.getDisplayMedia API
-- Proper handling of user cancellation
-- Support for multiple streams (camera + screen share)
-
-### Remote Participant Management
-
-- Automatically consumes new participants' media
-- Displays video and audio streams
-- Allows muting remote audio locally
-- Option to stop watching specific participants
-
-## Browser Support
-
-- Chrome 74+
-- Firefox 66+
-- Safari 12.1+
-- Edge 79+
-
-Note: WebRTC requires HTTPS in production environments.
-
-## Troubleshooting
-
-### Camera/Microphone Permission Issues
-
-Ensure your browser has permission to access camera and microphone. The application requires HTTPS for WebRTC features.
-
-### Connection Issues
-
-1. Verify the server is running
-2. Check that the socket.io connection is established
-3. Ensure firewall allows WebRTC ports
-
-### Video Not Displaying
-
-1. Check browser console for errors
-2. Verify media tracks are being produced
-3. Ensure video element is properly mounted
-
-## License
+## 📄 License
 
 ISC
