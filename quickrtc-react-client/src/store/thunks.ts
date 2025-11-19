@@ -1,5 +1,4 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { Device } from "mediasoup-client";
 import type {
   ConferenceConfig,
   ProduceMediaOptions,
@@ -18,14 +17,35 @@ import {
   addLocalStream,
   removeLocalStream,
   addRemoteParticipant,
-  updateRemoteParticipant,
   removeRemoteParticipant,
-  clearLocalStreams,
-  clearRemoteParticipants,
   resetConference,
   setError,
 } from "./conferenceSlice";
 import type { RootState } from "./selectors";
+
+/**
+ * Enhanced logger for thunks
+ */
+const logger = {
+  info: (thunk: string, message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const prefix = `[${thunk}]`;
+    if (data) {
+      console.info(`${timestamp} ${prefix} ${message}`, data);
+    } else {
+      console.info(`${timestamp} ${prefix} ${message}`);
+    }
+  },
+  error: (thunk: string, message: string, error?: any) => {
+    const timestamp = new Date().toISOString();
+    const prefix = `[${thunk}]`;
+    if (error) {
+      console.error(`${timestamp} ${prefix} ${message}`, error);
+    } else {
+      console.error(`${timestamp} ${prefix} ${message}`);
+    }
+  },
+};
 
 /**
  * Join conference thunk
@@ -35,11 +55,18 @@ export const joinConference = createAsyncThunk<
   ConferenceConfig,
   { state: RootState }
 >("conference/join", async (config, { dispatch }) => {
+  const THUNK = "joinConference";
   try {
+    logger.info(THUNK, "🚀 Starting conference join process", {
+      conferenceId: config.conferenceId,
+      participantName: config.participantName,
+    });
+
     dispatch(setConnecting(true));
     dispatch(setConfig(config));
 
     // Initialize socket
+    logger.info(THUNK, "🔌 Initializing socket connection");
     socketService.setSocket(
       config.socket,
       config.conferenceId,
@@ -47,21 +74,28 @@ export const joinConference = createAsyncThunk<
     );
 
     // Join conference and get router capabilities
+    logger.info(THUNK, "📡 Joining conference on server");
     const routerRtpCapabilities = await socketService.joinConference({
       conferenceId: config.conferenceId,
       conferenceName: config.conferenceName,
       participantId: config.participantId,
       participantName: config.participantName,
     });
+    logger.info(THUNK, "✅ Successfully joined conference on server");
 
     // Load device
+    logger.info(THUNK, "📱 Loading mediasoup device");
     const device = await deviceService.loadDevice(routerRtpCapabilities);
     dispatch(setDevice(device as any));
+    logger.info(THUNK, "✅ Mediasoup device loaded successfully");
 
     // Create transports
+    logger.info(THUNK, "🚚 Creating WebRTC transports");
     const transports = await socketService.createTransports();
+    logger.info(THUNK, "✅ Transports created successfully");
 
     // Create send transport
+    logger.info(THUNK, "📤 Setting up send transport");
     const sendTransport = device.createSendTransport(transports.sendTransport);
 
     // Setup send transport listeners
@@ -69,13 +103,16 @@ export const joinConference = createAsyncThunk<
       "connect",
       async ({ dtlsParameters }, callback, errback) => {
         try {
+          logger.info(THUNK, "🔗 Connecting send transport");
           await socketService.connectTransport({
             transportId: sendTransport.id,
             dtlsParameters,
             direction: "producer",
           });
+          logger.info(THUNK, "✅ Send transport connected");
           callback();
         } catch (error: any) {
+          logger.error(THUNK, "❌ Failed to connect send transport", error);
           errback(error);
         }
       }
@@ -85,13 +122,16 @@ export const joinConference = createAsyncThunk<
       "produce",
       async ({ kind, rtpParameters }, callback, errback) => {
         try {
+          logger.info(THUNK, `📤 Producing ${kind} track`);
           const producerId = await socketService.produce({
             transportId: sendTransport.id,
             kind,
             rtpParameters,
           });
+          logger.info(THUNK, `✅ Producer created for ${kind}`, { producerId });
           callback({ id: producerId });
         } catch (error: any) {
+          logger.error(THUNK, `❌ Failed to produce ${kind}`, error);
           errback(error);
         }
       }
@@ -100,6 +140,7 @@ export const joinConference = createAsyncThunk<
     dispatch(setSendTransport(sendTransport as any));
 
     // Create receive transport
+    logger.info(THUNK, "📥 Setting up receive transport");
     const recvTransport = device.createRecvTransport(transports.recvTransport);
 
     // Setup receive transport listeners
@@ -107,13 +148,16 @@ export const joinConference = createAsyncThunk<
       "connect",
       async ({ dtlsParameters }, callback, errback) => {
         try {
+          logger.info(THUNK, "🔗 Connecting receive transport");
           await socketService.connectTransport({
             transportId: recvTransport.id,
             dtlsParameters,
             direction: "consumer",
           });
+          logger.info(THUNK, "✅ Receive transport connected");
           callback();
         } catch (error: any) {
+          logger.error(THUNK, "❌ Failed to connect receive transport", error);
           errback(error);
         }
       }
@@ -124,8 +168,12 @@ export const joinConference = createAsyncThunk<
     // Mark as joined
     dispatch(setJoined(true));
 
-    console.log("Successfully joined conference");
+    logger.info(
+      THUNK,
+      "🎉 Successfully joined conference - ready to communicate!"
+    );
   } catch (error: any) {
+    logger.error(THUNK, "❌ Failed to join conference", error);
     dispatch(setError(error.message || "Failed to join conference"));
     throw error;
   }
@@ -139,6 +187,7 @@ export const produceMedia = createAsyncThunk<
   ProduceMediaOptions,
   { state: RootState }
 >("conference/produceMedia", async (options, { dispatch, getState }) => {
+  const THUNK = "produceMedia";
   try {
     const state = getState();
     const sendTransport = state.conference.sendTransport;
@@ -147,10 +196,17 @@ export const produceMedia = createAsyncThunk<
       throw new Error("Send transport not available");
     }
 
+    logger.info(THUNK, "🎬 Starting media production", {
+      hasAudio: !!options.audioTrack,
+      hasVideo: !!options.videoTrack,
+      type: options.type || "video",
+    });
+
     const result: ProduceMediaResult = {};
 
     // Produce audio
     if (options.audioTrack) {
+      logger.info(THUNK, "🎤 Producing audio track");
       const audioProducer = await sendTransport.produce({
         track: options.audioTrack,
         codecOptions: {
@@ -169,10 +225,17 @@ export const produceMedia = createAsyncThunk<
 
       dispatch(addLocalStream(audioStreamInfo as any));
       result.audioStreamId = audioStreamId;
+      logger.info(THUNK, "✅ Audio producer created", {
+        streamId: audioStreamId,
+        producerId: audioProducer.id,
+      });
     }
 
     // Produce video
     if (options.videoTrack) {
+      const type = options.type || "video";
+      logger.info(THUNK, `📹 Producing ${type} track`);
+
       const videoProducer = await sendTransport.produce({
         track: options.videoTrack,
         codecOptions: {
@@ -180,7 +243,6 @@ export const produceMedia = createAsyncThunk<
         },
       });
 
-      const type = options.type || "video";
       const videoStreamId = `${type}-${Date.now()}`;
       const videoStreamInfo = streamService.createLocalStreamInfo(
         videoStreamId,
@@ -191,10 +253,16 @@ export const produceMedia = createAsyncThunk<
 
       dispatch(addLocalStream(videoStreamInfo as any));
       result.videoStreamId = videoStreamId;
+      logger.info(THUNK, `✅ ${type} producer created`, {
+        streamId: videoStreamId,
+        producerId: videoProducer.id,
+      });
     }
 
+    logger.info(THUNK, "🎉 Media production completed successfully");
     return result;
   } catch (error: any) {
+    logger.error(THUNK, "❌ Failed to produce media", error);
     dispatch(setError(error.message || "Failed to produce media"));
     throw error;
   }
@@ -208,6 +276,7 @@ export const consumeExistingStreams = createAsyncThunk<
   void,
   { state: RootState }
 >("conference/consumeExistingStreams", async (_, { dispatch, getState }) => {
+  const THUNK = "consumeExistingStreams";
   try {
     const state = getState();
     const device = state.conference.device;
@@ -218,16 +287,28 @@ export const consumeExistingStreams = createAsyncThunk<
       throw new Error("Not properly initialized");
     }
 
+    logger.info(THUNK, "🔍 Fetching existing participants");
+
     // Get list of participants
     const participants = await socketService.getParticipants();
+    logger.info(THUNK, `📋 Found ${participants.length} total participants`);
 
     // Filter out self
     const otherParticipants = participants.filter(
       (p) => p.participantId !== config.participantId
     );
 
+    logger.info(
+      THUNK,
+      `👥 Consuming media from ${otherParticipants.length} other participants`
+    );
+
     // Consume each participant
     for (const participant of otherParticipants) {
+      logger.info(
+        THUNK,
+        `🔄 Consuming participant: ${participant.participantName}`
+      );
       await dispatch(
         consumeParticipant({
           participantId: participant.participantId,
@@ -235,8 +316,10 @@ export const consumeExistingStreams = createAsyncThunk<
         })
       );
     }
+
+    logger.info(THUNK, "✅ Finished consuming existing streams");
   } catch (error: any) {
-    console.error("Error consuming existing streams:", error);
+    logger.error(THUNK, "❌ Error consuming existing streams", error);
     dispatch(setError(error.message || "Failed to consume existing streams"));
   }
 });
@@ -251,6 +334,7 @@ export const consumeParticipant = createAsyncThunk<
 >(
   "conference/consumeParticipant",
   async ({ participantId, participantName }, { dispatch, getState }) => {
+    const THUNK = "consumeParticipant";
     try {
       const state = getState();
       const device = state.conference.device;
@@ -260,6 +344,14 @@ export const consumeParticipant = createAsyncThunk<
         throw new Error("Not properly initialized");
       }
 
+      logger.info(
+        THUNK,
+        `🔄 Starting to consume participant: ${participantName}`,
+        {
+          participantId,
+        }
+      );
+
       const participantData = await streamService.consumeParticipant(
         device,
         recvTransport,
@@ -267,18 +359,34 @@ export const consumeParticipant = createAsyncThunk<
         participantName
       );
 
-      if (Object.keys(participantData).length > 0) {
+      const streamCount = Object.keys(participantData).length;
+      logger.info(
+        THUNK,
+        `📊 Received ${streamCount} streams from ${participantName}`
+      );
+
+      if (streamCount > 0) {
         const fullParticipant = {
           participantId,
           participantName,
-          isAudioEnabled: false,
-          isVideoEnabled: false,
+          isAudioEnabled: !!participantData.audioStream,
+          isVideoEnabled: !!participantData.videoStream,
           ...participantData,
         };
         dispatch(addRemoteParticipant(fullParticipant as any));
+        logger.info(THUNK, `✅ Successfully consumed ${participantName}`, {
+          hasAudio: !!participantData.audioStream,
+          hasVideo: !!participantData.videoStream,
+        });
+      } else {
+        logger.info(THUNK, `ℹ️ No streams available from ${participantName}`);
       }
     } catch (error: any) {
-      console.error(`Error consuming participant ${participantId}:`, error);
+      logger.error(
+        THUNK,
+        `❌ Error consuming participant ${participantId}`,
+        error
+      );
     }
   }
 );
@@ -291,6 +399,7 @@ export const stopLocalStream = createAsyncThunk<
   string,
   { state: RootState }
 >("conference/stopLocalStream", async (streamId, { dispatch, getState }) => {
+  const THUNK = "stopLocalStream";
   try {
     const state = getState();
     const streamInfo = state.conference.localStreams.find(
@@ -301,9 +410,16 @@ export const stopLocalStream = createAsyncThunk<
       throw new Error(`Stream ${streamId} not found`);
     }
 
+    logger.info(THUNK, `🛑 Stopping local ${streamInfo.type} stream`, {
+      streamId,
+    });
+
     await streamService.stopLocalStream(streamInfo);
     dispatch(removeLocalStream(streamId));
+
+    logger.info(THUNK, `✅ Successfully stopped ${streamInfo.type} stream`);
   } catch (error: any) {
+    logger.error(THUNK, "❌ Failed to stop local stream", error);
     dispatch(setError(error.message || "Failed to stop local stream"));
     throw error;
   }
@@ -319,6 +435,7 @@ export const stopWatchingParticipant = createAsyncThunk<
 >(
   "conference/stopWatchingParticipant",
   async (participantId, { dispatch, getState }) => {
+    const THUNK = "stopWatchingParticipant";
     try {
       const state = getState();
       const participant = state.conference.remoteParticipants.find(
@@ -329,9 +446,23 @@ export const stopWatchingParticipant = createAsyncThunk<
         throw new Error(`Participant ${participantId} not found`);
       }
 
+      logger.info(
+        THUNK,
+        `🛑 Stopping watching participant: ${participant.participantName}`,
+        {
+          participantId,
+        }
+      );
+
       await streamService.stopConsumingParticipant(participant);
       dispatch(removeRemoteParticipant(participantId));
+
+      logger.info(
+        THUNK,
+        `✅ Successfully stopped watching ${participant.participantName}`
+      );
     } catch (error: any) {
+      logger.error(THUNK, "❌ Failed to stop watching participant", error);
       dispatch(
         setError(error.message || "Failed to stop watching participant")
       );
@@ -348,39 +479,56 @@ export const leaveConference = createAsyncThunk<
   void,
   { state: RootState }
 >("conference/leave", async (_, { dispatch, getState }) => {
+  const THUNK = "leaveConference";
   try {
+    logger.info(THUNK, "👋 Starting conference leave process");
     const state = getState();
 
     // Stop all local streams
+    logger.info(
+      THUNK,
+      `🛑 Stopping ${state.conference.localStreams.length} local streams`
+    );
     for (const streamInfo of state.conference.localStreams) {
       await streamService.stopLocalStream(streamInfo);
     }
+    logger.info(THUNK, "✅ All local streams stopped");
 
     // Stop all remote consumers
+    logger.info(
+      THUNK,
+      `🛑 Stopping ${state.conference.remoteParticipants.length} remote participants`
+    );
     for (const participant of state.conference.remoteParticipants) {
       await streamService.stopConsumingParticipant(participant);
     }
+    logger.info(THUNK, "✅ All remote consumers stopped");
 
     // Close transports
     if (state.conference.sendTransport) {
+      logger.info(THUNK, "🚚 Closing send transport");
       state.conference.sendTransport.close();
     }
     if (state.conference.recvTransport) {
+      logger.info(THUNK, "🚚 Closing receive transport");
       state.conference.recvTransport.close();
     }
 
     // Leave conference on server
+    logger.info(THUNK, "📡 Notifying server of departure");
     await socketService.leaveConference();
 
     // Cleanup services
+    logger.info(THUNK, "🧹 Cleaning up services");
     socketService.reset();
     deviceService.reset();
 
     // Reset state
     dispatch(resetConference());
 
-    console.log("Successfully left conference");
+    logger.info(THUNK, "✅ Successfully left conference");
   } catch (error: any) {
+    logger.error(THUNK, "❌ Error leaving conference", error);
     dispatch(setError(error.message || "Failed to leave conference"));
     throw error;
   }
@@ -441,3 +589,20 @@ export const toggleVideo = createAsyncThunk<
     throw error;
   }
 });
+
+// export const onNewProducer = createAsyncThunk<
+//   void,
+//   {
+//     producerId: string;
+//     participantId: string;
+//     participantName: string;
+//     kind: "audio" | "video";
+//   },
+//   { state: RootState }
+// >(
+//   "conference/onNewProducer",
+//   async (data, { dispatch }) => {
+//     console.log("📡 New producer:", data.kind, "from", data.participantName);
+
+//     // Consume the new media
+//     socketService.

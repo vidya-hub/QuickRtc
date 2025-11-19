@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConference } from "quickrtc-react-client/src";
 import { io, Socket } from "socket.io-client";
 import VideoStream from "./components/VideoStream";
@@ -9,6 +9,8 @@ function App() {
   const [participantName, setParticipantName] = useState("");
   const [conferenceId, setConferenceId] = useState("demo-room");
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [showCertWarning, setShowCertWarning] = useState(true);
+  const [serverUrl] = useState("https://localhost:3443");
 
   const {
     isJoined,
@@ -22,8 +24,7 @@ function App() {
     consumeExistingStreams,
     stopLocalStream,
     stopWatchingParticipant,
-    toggleAudio,
-    toggleVideo,
+    addEventListener,
   } = useConference();
 
   const generateId = (): string => {
@@ -38,7 +39,24 @@ function App() {
 
     try {
       // Create socket connection
-      const newSocket = io("https://0.0.0.0:3443");
+      const newSocket = io(serverUrl, {
+        transports: ["websocket", "polling"],
+        secure: true,
+      });
+
+      // Handle connection errors specifically for certificate issues
+      newSocket.on("connect_error", (err) => {
+        console.error("[App] ❌ Socket connection error:", err);
+        if (
+          err.message.includes("certificate") ||
+          err.message.includes("ERR_CERT")
+        ) {
+          alert(
+            `Certificate Error: Please visit ${serverUrl} in your browser and accept the security warning first, then try again.`
+          );
+        }
+      });
+
       setSocket(newSocket);
 
       // Join conference
@@ -67,6 +85,88 @@ function App() {
       console.error("Error joining conference:", error);
       alert(`Failed to join: ${error.message}`);
     }
+  };
+  const onNewParticipant = (data: {
+    participantId: string;
+    participantName: string;
+    conferenceId: string;
+  }) => {
+    console.log(`[App] 🎉 New participant joined conference:`, {
+      name: data.participantName,
+      id: data.participantId,
+      conference: data.conferenceId,
+    });
+  };
+
+  const onParticipantLeft = (data: {
+    participantId: string;
+    closedProducerIds: string[];
+    closedConsumerIds: string[];
+  }) => {
+    console.log(`[App] 👋 Participant left:`, {
+      id: data.participantId,
+      closedProducers: data.closedProducerIds.length,
+      closedConsumers: data.closedConsumerIds.length,
+    });
+  };
+
+  const onNewProducer = (data: {
+    producerId: string;
+    participantId: string;
+    participantName: string;
+    kind: "audio" | "video";
+  }) => {
+    console.log(`[App] 📡 New ${data.kind} producer:`, {
+      from: data.participantName,
+      participantId: data.participantId,
+      producerId: data.producerId,
+    });
+  };
+
+  const onProducerClosed = (data: {
+    participantId: string;
+    producerId: string;
+    kind: "audio" | "video";
+  }) => {
+    console.log(`[App] ❌ Producer closed:`, {
+      kind: data.kind,
+      from: data.participantId,
+      producerId: data.producerId,
+    });
+  };
+
+  const onConnect = () => {
+    console.log("[App] ✅ Socket connected successfully");
+  };
+
+  const onDisconnect = (reason: string) => {
+    console.log(`[App] 🔌 Socket disconnected: ${reason}`);
+  };
+
+  const onAudioMuted = (data: {
+    participantId: string;
+    mutedProducerIds?: string[];
+  }) => {
+    console.log(`[App] 🔇 Audio muted by ${data.participantId}`, {
+      producers: data.mutedProducerIds,
+    });
+  };
+
+  const onAudioUnmuted = (data: { participantId: string }) => {
+    console.log(`[App] 🔊 Audio unmuted by ${data.participantId}`);
+  };
+
+  const onVideoMuted = (data: {
+    participantId: string;
+    mutedProducerIds?: string[];
+  }) => {
+    console.log(`[App] 📵 Video muted by ${data.participantId}`, {
+      producers: data.mutedProducerIds,
+    });
+  };
+
+  const onVideoUnmuted = (data: { participantId: string }) => {
+    console.log(`[App] 📹 Video unmuted by ${data.participantId}`);
   };
 
   const handleLeave = async () => {
@@ -130,6 +230,22 @@ function App() {
   const hasVideo = localStreams.some((s) => s.type === "video");
   const hasScreenShare = localStreams.some((s) => s.type === "screenshare");
 
+  useEffect(() => {
+    // Setup all event listeners with enhanced logging
+    addEventListener({
+      participantJoined: onNewParticipant,
+      participantLeft: onParticipantLeft,
+      newProducer: onNewProducer,
+      producerClosed: onProducerClosed,
+      connect: onConnect,
+      disconnect: onDisconnect,
+      audioMuted: onAudioMuted,
+      audioUnmuted: onAudioUnmuted,
+      videoMuted: onVideoMuted,
+      videoUnmuted: onVideoUnmuted,
+    });
+  }, [addEventListener]);
+
   return (
     <div className="app-container">
       <header className="header">
@@ -138,6 +254,69 @@ function App() {
       </header>
 
       <main className="main-content">
+        {/* Certificate Warning Banner */}
+        {showCertWarning && !isJoined && (
+          <div
+            className="warning-message"
+            style={{
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffc107",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "20px",
+              position: "relative",
+            }}
+          >
+            <button
+              onClick={() => setShowCertWarning(false)}
+              style={{
+                position: "absolute",
+                top: "8px",
+                right: "8px",
+                background: "none",
+                border: "none",
+                fontSize: "20px",
+                cursor: "pointer",
+                color: "#856404",
+              }}
+            >
+              ×
+            </button>
+            <strong style={{ color: "#856404" }}>
+              ⚠️ SSL Certificate Setup Required
+            </strong>
+            <p
+              style={{
+                marginTop: "8px",
+                marginBottom: "8px",
+                color: "#856404",
+              }}
+            >
+              This app uses HTTPS with a self-signed certificate. Before joining
+              a conference:
+            </p>
+            <ol style={{ marginLeft: "20px", color: "#856404" }}>
+              <li>
+                Open{" "}
+                <a
+                  href={serverUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#0066cc", textDecoration: "underline" }}
+                >
+                  {serverUrl}
+                </a>{" "}
+                in a new tab
+              </li>
+              <li>
+                Accept the security warning (click "Advanced" → "Proceed to
+                localhost")
+              </li>
+              <li>Return here and join the conference</li>
+            </ol>
+          </div>
+        )}
+
         {error && (
           <div className="error-message">
             <strong>Error:</strong> {error}

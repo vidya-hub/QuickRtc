@@ -403,73 +403,164 @@ export class SocketService {
   }
 
   /**
-   * Setup event listeners (similar to SocketClientController)
+   * Setup event listeners with enhanced logging
    */
   public setupEventListeners(
     handlers: Partial<import("quickrtc-types").ServerToClientEvents>
   ): void {
     const logger = (
       message: string,
-      level: "info" | "warn" | "error" = "info"
+      level: "info" | "warn" | "error" = "info",
+      data?: any
     ) => {
       const timestamp = new Date().toISOString();
-      const prefix = `[SocketService:${this.participantId}]`;
-      console[level](`${timestamp} ${prefix} ${message}`);
+      const prefix = `[SocketService:${this.participantId || "unknown"}]`;
+      const logMessage = `${timestamp} ${prefix} ${message}`;
+
+      if (data) {
+        console[level](logMessage, data);
+      } else {
+        console[level](logMessage);
+      }
     };
 
-    logger("Setting up socket event listeners");
+    if (!this.socket) {
+      logger("Cannot setup event listeners - socket not initialized", "error");
+      return;
+    }
 
+    logger("🔧 Setting up socket event listeners");
+
+    // Participant joined event
     if (handlers.participantJoined) {
-      this.on("participantJoined", handlers.participantJoined);
+      this.on("participantJoined", (data) => {
+        logger(
+          `🎉 Participant joined: ${data.participantName} (${data.participantId})`,
+          "info",
+          { conferenceId: data.conferenceId }
+        );
+        handlers.participantJoined!(data);
+      });
     }
 
+    // Participant left event
     if (handlers.participantLeft) {
-      this.on("participantLeft", handlers.participantLeft);
+      this.on("participantLeft", (data) => {
+        logger(`👋 Participant left: ${data.participantId}`, "info", {
+          closedProducers: data.closedProducerIds.length,
+          closedConsumers: data.closedConsumerIds.length,
+        });
+        handlers.participantLeft!(data);
+      });
     }
 
+    // New producer event
     if (handlers.newProducer) {
-      this.on("newProducer", handlers.newProducer);
+      this.on("newProducer", (data) => {
+        logger(
+          `📡 New ${data.kind} producer from ${data.participantName}`,
+          "info",
+          { producerId: data.producerId, participantId: data.participantId }
+        );
+        handlers.newProducer!(data);
+      });
     }
 
+    // Producer closed event
     if (handlers.producerClosed) {
-      this.on("producerClosed", handlers.producerClosed);
+      this.on("producerClosed", (data) => {
+        logger(
+          `❌ Producer closed: ${data.kind} from ${data.participantId}`,
+          "info",
+          { producerId: data.producerId }
+        );
+        handlers.producerClosed!(data);
+      });
     }
 
+    // Consumer closed event
     if (handlers.consumerClosed) {
-      this.on("consumerClosed", handlers.consumerClosed);
+      this.on("consumerClosed", (data) => {
+        logger(`❌ Consumer closed: ${data.consumerId}`, "info", {
+          participantId: data.participantId,
+        });
+        handlers.consumerClosed!(data);
+      });
     }
 
+    // Audio muted event
+    if (handlers.audioMuted) {
+      this.on("audioMuted", (data) => {
+        logger(`🔇 Audio muted by ${data.participantId}`, "info", {
+          producers: data.mutedProducerIds,
+        });
+        handlers.audioMuted!(data);
+      });
+    }
+
+    // Audio unmuted event
+    if (handlers.audioUnmuted) {
+      this.on("audioUnmuted", (data) => {
+        logger(`🔊 Audio unmuted by ${data.participantId}`, "info");
+        handlers.audioUnmuted!(data);
+      });
+    }
+
+    // Video muted event
+    if (handlers.videoMuted) {
+      this.on("videoMuted", (data) => {
+        logger(`📵 Video muted by ${data.participantId}`, "info", {
+          producers: data.mutedProducerIds,
+        });
+        handlers.videoMuted!(data);
+      });
+    }
+
+    // Video unmuted event
+    if (handlers.videoUnmuted) {
+      this.on("videoUnmuted", (data) => {
+        logger(`📹 Video unmuted by ${data.participantId}`, "info");
+        handlers.videoUnmuted!(data);
+      });
+    }
+
+    // Disconnect event
     if (handlers.disconnect) {
-      this.on("disconnect", handlers.disconnect);
+      this.on("disconnect", (reason) => {
+        logger(`🔌 Disconnected: ${reason}`, "warn");
+        handlers.disconnect!(reason);
+      });
     }
 
     // Connection events using any socket
     const anySocket = this.socket as any;
 
     anySocket.on("connect", () => {
-      logger("Socket connected");
+      logger("✅ Socket connected successfully");
       if (handlers.connect) {
         handlers.connect();
       }
     });
 
     anySocket.on("connect_error", (error: any) => {
-      logger(`Socket connection error: ${error.message}`, "error");
+      logger(`❌ Socket connection error: ${error.message}`, "error", {
+        error: error.stack,
+      });
     });
 
     anySocket.on("reconnect", (attemptNumber: number) => {
-      logger(`Socket reconnected after ${attemptNumber} attempts`);
+      logger(`🔄 Socket reconnected after ${attemptNumber} attempt(s)`, "info");
     });
 
     anySocket.on("reconnecting", (attemptNumber: number) => {
-      logger(`Socket reconnecting... attempt ${attemptNumber}`);
+      logger(`⏳ Socket reconnecting... (attempt ${attemptNumber})`, "warn");
     });
 
     anySocket.on("error", (error: any) => {
-      logger(`Socket error: ${error}`, "error");
+      logger(`❌ Socket error: ${error}`, "error", { error });
     });
 
-    logger("Socket event listeners setup complete");
+    logger("✅ Socket event listeners setup complete");
   }
 
   /**

@@ -21,6 +21,7 @@ import {
   toggleAudio as toggleAudioThunk,
   toggleVideo as toggleVideoThunk,
 } from "../store/thunks";
+import { socketService } from "../api/socketService";
 
 /**
  * Main hook for conference management
@@ -91,6 +92,12 @@ export function useConference() {
     },
     [dispatch]
   );
+  const addEventListener = useCallback(
+    (handlers: Partial<import("quickrtc-types").ServerToClientEvents>) => {
+      socketService.setupEventListeners(handlers);
+    },
+    []
+  );
 
   return {
     // State
@@ -112,5 +119,6 @@ export function useConference() {
     stopWatchingParticipant,
     toggleAudio,
     toggleVideo,
+    addEventListener,
   };
 }
