@@ -1,30 +1,37 @@
 # QuickRTC React Client
 
-Production-ready React client library for QuickRTC with Redux state management. Framework-agnostic architecture compatible with Next.js, Remix, Gatsby, and other React-based frameworks.
+A production-ready, type-safe React client library for building WebRTC conferencing applications with [QuickRTC](https://github.com/vidyasagar/quickrtc). Built on top of **mediasoup-client** and **Redux Toolkit**.
 
-## Features
+## 🚀 Features
 
-- 🎯 **Redux Toolkit** for predictable state management
-- 🔒 **Strict TypeScript** for type safety
-- ⚛️ **React Hooks** for easy integration
-- 🏗️ **Clean Architecture** with separation of concerns
-- 🔌 **Framework Agnostic** - works with any React framework
-- 📦 **Tree Shakeable** for optimal bundle size
-- 🎨 **Headless** - bring your own UI components
+- **State Management**: Built-in Redux slice for predictable conference state.
+- **React Hooks**: `useConference` hook for easy integration with functional components.
+- **Type Safety**: Written in strict TypeScript with complete type definitions.
+- **Event Handling**: Robust socket event middleware for real-time updates.
+- **Media Management**: Simplified handling of local and remote media streams (audio/video/screenshare).
+- **Performance**: Optimized selectors and efficient re-rendering.
+- **Framework Agnostic**: Compatible with Next.js, Vite, Remix, Gatsby, etc.
 
-## Installation
+## 📦 Installation
+
+Install the package and its peer dependencies:
 
 ```bash
-npm install quickrtc-react-client @reduxjs/toolkit react-redux
+npm install quickrtc-react-client @reduxjs/toolkit react-redux socket.io-client mediasoup-client
 # or
-pnpm add quickrtc-react-client @reduxjs/toolkit react-redux
+pnpm add quickrtc-react-client @reduxjs/toolkit react-redux socket.io-client mediasoup-client
+# or
+yarn add quickrtc-react-client @reduxjs/toolkit react-redux socket.io-client mediasoup-client
 ```
 
-## Quick Start
+## 🛠️ Quick Start
 
 ### 1. Configure Redux Store
 
+Add the `conferenceReducer` and `eventMiddleware` to your Redux store.
+
 ```typescript
+// store.ts
 import { configureStore } from "@reduxjs/toolkit";
 import { conferenceReducer, eventMiddleware } from "quickrtc-react-client";
 
@@ -35,13 +42,22 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
+        // Ignore these paths as they contain non-serializable MediaStream objects
         ignoredActions: [
           "conference/setLocalStream",
           "conference/addRemoteStream",
+          "conference/setDevice",
+          "conference/setSendTransport",
+          "conference/setRecvTransport",
+          "conference/addLocalStream",
+          "conference/addRemoteParticipant",
         ],
         ignoredPaths: [
           "conference.localStreams",
           "conference.remoteParticipants",
+          "conference.device",
+          "conference.sendTransport",
+          "conference.recvTransport",
         ],
       },
     }).concat(eventMiddleware),
@@ -51,20 +67,43 @@ export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 ```
 
-### 2. Use the Hook in Your Component
+### 2. Wrap Your App with Provider
 
-```typescript
+```tsx
+// App.tsx or main.tsx
+import { Provider } from "react-redux";
+import { store } from "./store";
+import ConferenceComponent from "./ConferenceComponent";
+
+function App() {
+  return (
+    <Provider store={store}>
+      <ConferenceComponent />
+    </Provider>
+  );
+}
+```
+
+### 3. Build the Conference Component
+
+Use the `useConference` hook to interact with the conference.
+
+```tsx
+import { useEffect } from "react";
 import { useConference } from "quickrtc-react-client";
 import { io } from "socket.io-client";
 
-function VideoConference() {
+const SOCKET_URL = "https://your-quickrtc-server.com";
+
+export default function ConferenceComponent() {
   const {
     // State
     isJoined,
+    isConnecting,
     localStreams,
     remoteParticipants,
     error,
-
+    
     // Actions
     joinConference,
     leaveConference,
@@ -72,197 +111,160 @@ function VideoConference() {
     toggleAudio,
     toggleVideo,
     stopWatchingParticipant,
+    addEventListener,
   } = useConference();
 
-  const handleJoin = async () => {
-    const socket = io("https://your-server.com");
+  // Setup event listeners (optional but recommended for custom notifications)
+  useEffect(() => {
+    addEventListener({
+      participantJoined: (data) => console.log("User joined:", data.participantName),
+      participantLeft: (data) => console.log("User left:", data.participantId),
+      error: (err) => console.error("Socket error:", err),
+    });
+  }, [addEventListener]);
 
+  const handleJoin = async () => {
+    const socket = io(SOCKET_URL);
+    
     await joinConference({
-      conferenceId: "my-room",
-      participantId: "user-123",
-      participantName: "John Doe",
+      conferenceId: "room-1",
+      participantId: `user-${Date.now()}`,
+      participantName: "Alice",
       socket,
     });
 
-    // Get user media
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    });
-
+    // Get and publish local media
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     await produceMedia({
       audioTrack: stream.getAudioTracks()[0],
       videoTrack: stream.getVideoTracks()[0],
     });
   };
 
+  if (!isJoined) {
+    return <button onClick={handleJoin} disabled={isConnecting}>Join Conference</button>;
+  }
+
   return (
     <div>
-      {!isJoined ? (
-        <button onClick={handleJoin}>Join Conference</button>
-      ) : (
-        <>
-          <button onClick={leaveConference}>Leave</button>
-          <button onClick={() => toggleAudio()}>Toggle Audio</button>
-          <button onClick={() => toggleVideo()}>Toggle Video</button>
+      <button onClick={leaveConference}>Leave</button>
+      
+      {/* Local Video */}
+      <div className="local-video">
+        {localStreams.map(stream => (
+          <video 
+            key={stream.id}
+            ref={el => { if (el) el.srcObject = stream.stream }}
+            autoPlay 
+            muted 
+            playsInline 
+          />
+        ))}
+      </div>
 
-          {/* Render local streams */}
-          {localStreams.map((stream) => (
-            <video
-              key={stream.id}
-              ref={(el) => {
-                if (el) el.srcObject = stream.stream;
-              }}
-              autoPlay
-              muted
-            />
-          ))}
-
-          {/* Render remote participants */}
-          {remoteParticipants.map((participant) => (
-            <div key={participant.participantId}>
-              <h3>{participant.participantName}</h3>
-              {participant.videoStream && (
-                <video
-                  ref={(el) => {
-                    if (el) el.srcObject = participant.videoStream;
-                  }}
-                  autoPlay
-                />
-              )}
-              {participant.audioStream && (
-                <audio
-                  ref={(el) => {
-                    if (el) el.srcObject = participant.audioStream;
-                  }}
-                  autoPlay
-                />
-              )}
-              <button
-                onClick={() =>
-                  stopWatchingParticipant(participant.participantId)
-                }
-              >
-                Stop Watching
-              </button>
-            </div>
-          ))}
-        </>
-      )}
+      {/* Remote Participants */}
+      <div className="remote-grid">
+        {remoteParticipants.map(participant => (
+          <div key={participant.participantId}>
+            <p>{participant.participantName}</p>
+            {participant.videoStream && (
+              <video 
+                ref={el => { if (el) el.srcObject = participant.videoStream }}
+                autoPlay 
+                playsInline 
+              />
+            )}
+            {participant.audioStream && (
+              <audio 
+                ref={el => { if (el) el.srcObject = participant.audioStream }}
+                autoPlay 
+              />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 ```
 
-## API Reference
+## 📖 API Reference
 
-### Hook: `useConference()`
+### `useConference()` Hook
 
-Returns an object with state and actions for managing the conference.
+The primary hook for interacting with the library.
 
-#### State
+#### Returns
 
-- `isJoined: boolean` - Whether the user has joined the conference
-- `isConnecting: boolean` - Whether a connection attempt is in progress
-- `localStreams: LocalStreamInfo[]` - Array of local media streams
-- `remoteParticipants: RemoteParticipant[]` - Array of remote participants
-- `error: string | null` - Current error message, if any
+**State:**
+- `isJoined: boolean`: True if currently joined to a conference.
+- `isConnecting: boolean`: True if a join/connect operation is in progress.
+- `localStreams: LocalStreamInfo[]`: List of local media streams being produced.
+- `remoteParticipants: RemoteParticipant[]`: List of other users in the room.
+- `error: string | null`: Latest error message.
+- `hasLocalAudio: boolean`: Helper to check if local audio is active.
+- `hasLocalVideo: boolean`: Helper to check if local video is active.
+- `hasLocalScreenShare: boolean`: Helper to check if screen share is active.
 
-#### Actions
+**Actions:**
+- `joinConference(config: ConferenceConfig)`: Connect to server and join room.
+- `leaveConference()`: Disconnect and clean up all streams.
+- `produceMedia(options: ProduceMediaOptions)`: Publish audio/video/screenshare.
+- `consumeExistingStreams()`: Manually request streams from users already in the room (usually handled automatically).
+- `stopLocalStream(streamId: string)`: Stop a specific local stream.
+- `stopWatchingParticipant(participantId: string)`: Stop receiving media from a specific user.
+- `toggleAudio(streamId?: string)`: Mute/unmute audio.
+- `toggleVideo(streamId?: string)`: Pause/resume video.
+- `addEventListener(handlers)`: Register callbacks for socket events.
 
-- `joinConference(config)` - Join a conference
-- `leaveConference()` - Leave the current conference
-- `produceMedia(options)` - Start producing audio/video
-- `toggleAudio(streamId?)` - Toggle audio on/off
-- `toggleVideo(streamId?)` - Toggle video on/off
-- `stopLocalStream(streamId)` - Stop a specific local stream
-- `stopWatchingParticipant(participantId)` - Stop consuming a participant's media
-- `consumeExistingStreams()` - Consume media from existing participants
+### Types
+
+#### `ConferenceConfig`
+```typescript
+interface ConferenceConfig {
+  conferenceId: string;    // Room ID
+  participantId: string;   // Unique User ID
+  participantName: string; // Display Name
+  socket: Socket;          // Initialized Socket.io client
+}
+```
+
+#### `RemoteParticipant`
+```typescript
+interface RemoteParticipant {
+  participantId: string;
+  participantName: string;
+  videoStream?: MediaStream; // Remote video stream (if enabled)
+  audioStream?: MediaStream; // Remote audio stream (if enabled)
+  isAudioEnabled: boolean;
+  isVideoEnabled: boolean;
+}
+```
 
 ### Selectors
 
+For advanced usage or performance optimization, you can use Redux selectors directly:
+
 ```typescript
-import {
-  selectLocalStreams,
+import { useSelector } from "react-redux";
+import { 
+  selectLocalStreams, 
   selectRemoteParticipants,
+  selectIsJoined 
 } from "quickrtc-react-client";
 
-// In your component
-const localStreams = useSelector(selectLocalStreams);
-const remoteParticipants = useSelector(selectRemoteParticipants);
+const MyComponent = () => {
+  const participants = useSelector(selectRemoteParticipants);
+  // ...
+};
 ```
 
-## Framework Integration
+## ⚠️ Important Notes
 
-### Next.js (App Router)
+1.  **HTTPS Required**: WebRTC requires a secure context (HTTPS) or localhost.
+2.  **React Strict Mode**: In development, React Strict Mode may cause double-rendering which can initialize connections twice. The library handles this, but be aware of side effects in your own `useEffect` hooks.
+3.  **Socket.io Version**: Ensure your client `socket.io-client` version matches the server's version (recommended v4.x).
 
-```typescript
-"use client";
-
-import { Provider } from "react-redux";
-import { store } from "./store";
-import VideoConference from "./VideoConference";
-
-export default function ConferencePage() {
-  return (
-    <Provider store={store}>
-      <VideoConference />
-    </Provider>
-  );
-}
-```
-
-### Next.js (Pages Router)
-
-```typescript
-import { Provider } from "react-redux";
-import { store } from "../store";
-
-function MyApp({ Component, pageProps }) {
-  return (
-    <Provider store={store}>
-      <Component {...pageProps} />
-    </Provider>
-  );
-}
-
-export default MyApp;
-```
-
-### Remix
-
-```typescript
-import { Provider } from "react-redux";
-import { store } from "./store";
-
-export default function App() {
-  return (
-    <Provider store={store}>
-      <Outlet />
-    </Provider>
-  );
-}
-```
-
-## Architecture
-
-```
-src/
-  ├── store/
-  │   ├── conferenceSlice.ts    # Redux slice with all state logic
-  │   ├── selectors.ts           # Memoized selectors
-  │   ├── thunks.ts              # Async actions
-  │   └── eventMiddleware.ts     # WebSocket event handling
-  ├── api/
-  │   ├── deviceService.ts       # MediaSoup device management
-  │   ├── streamService.ts       # Media stream handling
-  │   └── socketService.ts       # Socket.io communication
-  ├── hooks/
-  │   └── useConference.ts       # Main React hook
-  ├── types.ts                   # TypeScript definitions
-  └── index.ts                   # Public API exports
-```
-
-## License
+## 📄 License
 
 ISC
