@@ -17,6 +17,7 @@ import {
   addLocalStream,
   removeLocalStream,
   addRemoteParticipant,
+  updateRemoteParticipant,
   removeRemoteParticipant,
   resetConference,
   setError,
@@ -366,18 +367,40 @@ export const consumeParticipant = createAsyncThunk<
       );
 
       if (streamCount > 0) {
-        const fullParticipant = {
-          participantId,
-          participantName,
-          isAudioEnabled: !!participantData.audioStream,
-          isVideoEnabled: !!participantData.videoStream,
-          ...participantData,
-        };
-        dispatch(addRemoteParticipant(fullParticipant as any));
-        logger.info(THUNK, `✅ Successfully consumed ${participantName}`, {
-          hasAudio: !!participantData.audioStream,
-          hasVideo: !!participantData.videoStream,
-        });
+        const existingParticipant = state.conference.remoteParticipants.find(
+          (p) => p.participantId === participantId
+        );
+
+        if (existingParticipant) {
+          logger.info(THUNK, `🔄 Updating existing participant ${participantName}`, {
+            hasAudio: !!participantData.audioStream,
+            hasVideo: !!participantData.videoStream,
+          });
+          
+          dispatch(
+            updateRemoteParticipant({
+              participantId,
+              updates: {
+                ...participantData,
+                isAudioEnabled: !!participantData.audioStream || existingParticipant.isAudioEnabled,
+                isVideoEnabled: !!participantData.videoStream || existingParticipant.isVideoEnabled,
+              },
+            })
+          );
+        } else {
+          const fullParticipant = {
+            participantId,
+            participantName,
+            isAudioEnabled: !!participantData.audioStream,
+            isVideoEnabled: !!participantData.videoStream,
+            ...participantData,
+          };
+          dispatch(addRemoteParticipant(fullParticipant as any));
+          logger.info(THUNK, `✅ Successfully consumed ${participantName}`, {
+            hasAudio: !!participantData.audioStream,
+            hasVideo: !!participantData.videoStream,
+          });
+        }
       } else {
         logger.info(THUNK, `ℹ️ No streams available from ${participantName}`);
       }
