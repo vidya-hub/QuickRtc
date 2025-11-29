@@ -1,13 +1,48 @@
 /**
  * QuickRTC React Client
- * Production-ready React client library with Redux state management
+ * Simplified WebRTC integration for React applications
+ *
+ * Quick Start:
+ * ```tsx
+ * import { QuickRTCProvider, useQuickRTC } from 'quickrtc-react-client';
+ * import { io } from 'socket.io-client';
+ *
+ * function App() {
+ *   return (
+ *     <QuickRTCProvider>
+ *       <VideoRoom />
+ *     </QuickRTCProvider>
+ *   );
+ * }
+ *
+ * function VideoRoom() {
+ *   const { join, enableAudio, enableVideo, localStreams, remoteParticipants } = useQuickRTC();
+ *   // Your implementation here
+ * }
+ * ```
  */
 
-// Redux store
+// ============================================================================
+// SIMPLE API - Recommended for most use cases
+// ============================================================================
+
+// Provider and Hook - All you need!
+export { QuickRTCProvider } from "./QuickRTCProvider";
+export { useQuickRTC } from "./hooks/useQuickRTC";
+export type { UseQuickRTCOptions } from "./hooks/useQuickRTC";
+
+// ============================================================================
+// ADVANCED API - For custom integrations
+// ============================================================================
+
+// Redux store (if you want to integrate with existing Redux store)
 export { conferenceReducer } from "./store/conferenceSlice";
 export { eventMiddleware } from "./store/eventMiddleware";
 
-// Selectors
+// Advanced hook (for direct Redux integration)
+export { useConference } from "./hooks/useConference";
+
+// Selectors (for custom Redux selectors)
 export {
   selectIsJoined,
   selectIsConnecting,
@@ -30,7 +65,7 @@ export {
   selectCanConsume,
 } from "./store/selectors";
 
-// Thunks
+// Thunks (for custom Redux actions)
 export {
   joinConference,
   leaveConference,
@@ -43,10 +78,10 @@ export {
   toggleVideo,
 } from "./store/thunks";
 
-// Hooks
-export { useConference } from "./hooks/useConference";
+// ============================================================================
+// TYPES
+// ============================================================================
 
-// Types
 export type {
   ConferenceConfig,
   ConferenceState,
@@ -62,7 +97,10 @@ export type {
   SocketEvents,
 } from "./types";
 
-// Services (for advanced usage)
+// ============================================================================
+// LOW-LEVEL SERVICES - For advanced/custom usage
+// ============================================================================
+
 export { deviceService } from "./api/deviceService";
 export { socketService } from "./api/socketService";
 export { streamService } from "./api/streamService";

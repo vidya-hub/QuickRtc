@@ -114,13 +114,13 @@ class MediaSoupExpressServer {
     this.app.use(express.urlencoded({ extended: true }));
 
     // Static files middleware
-    // this.app.use(express.static(join(__dirname, "..", "public")));
+    this.app.use(express.static(join(__dirname, "..", "public")));
 
-    // // Serve client library
-    // this.app.use(
-    //   "/quickrtc_client",
-    //   express.static(join(__dirname, "..", "..", "quickrtc_client"))
-    // );
+    // Serve client library
+    this.app.use(
+      "/quickrtc_client",
+      express.static(join(__dirname, "..", "..", "quickrtc_client"))
+    );
 
     // Error handling middleware
     this.app.use(this.errorHandler.bind(this));
@@ -128,9 +128,9 @@ class MediaSoupExpressServer {
 
   private setupRoutes(): void {
     // Main route
-    // this.app.get("/", (req: Request, res: Response) => {
-    //   res.sendFile(join(__dirname, "..", "public", "index.html"));
-    // });
+    this.app.get("/", (req: Request, res: Response) => {
+      res.sendFile(join(__dirname, "..", "public", "index.html"));
+    });
 
     // Health check
     this.app.get("/health", (req: Request, res: Response) => {
