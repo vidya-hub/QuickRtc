@@ -14,8 +14,8 @@ class SocketService {
   final Logger _logger = Logger();
 
   io.Socket? _socket;
-  // String? _conferenceId; // Reserved for logging/debugging
-  // String? _participantId; // Reserved for future use
+  String? _conferenceId;
+  String? _participantId;
 
   // Event controllers
   final _participantJoinedController =
@@ -117,19 +117,28 @@ class SocketService {
   }) async {
     _logger.d('Joining conference: $conferenceId');
 
+    // Store conference and participant IDs for future use
+    _conferenceId = conferenceId;
+    _participantId = participantId;
+
     final completer = Completer<Map<String, dynamic>>();
 
+    // Wrap data according to server's expected format: { data: { conferenceId, participantId, participantName } }
     _socket!.emitWithAck('joinConference', {
-      'conferenceId': conferenceId,
-      'participantId': participantId,
-      'participantName': participantName,
+      'data': {
+        'conferenceId': conferenceId,
+        'participantId': participantId,
+        'participantName': participantName,
+      }
     }, ack: (response) {
-      if (response['status'] == 'ok') {
+      _logger.d('Join conference response: $response');
+      if (response != null && response['status'] == 'ok') {
         _logger.i('Joined conference successfully');
         completer.complete(response['data'] as Map<String, dynamic>);
       } else {
-        _logger.e('Failed to join conference: ${response['error']}');
-        completer.completeError(Exception(response['error']));
+        final error = response?['error'] ?? 'Unknown error joining conference';
+        _logger.e('Failed to join conference: $error');
+        completer.completeError(Exception(error));
       }
     });
 
@@ -140,10 +149,16 @@ class SocketService {
   Future<TransportPair> createTransports() async {
     _logger.d('Creating transports');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before creating transports');
+    }
+
     final sendCompleter = Completer<TransportOptions>();
     final recvCompleter = Completer<TransportOptions>();
 
     _socket!.emitWithAck('createTransport', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
       'direction': 'producer',
     }, ack: (response) {
       if (response['status'] == 'ok') {
@@ -154,6 +169,8 @@ class SocketService {
     });
 
     _socket!.emitWithAck('createTransport', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
       'direction': 'consumer',
     }, ack: (response) {
       if (response['status'] == 'ok') {
@@ -177,9 +194,15 @@ class SocketService {
   }) async {
     _logger.d('Connecting transport: $direction');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before connecting transport');
+    }
+
     final completer = Completer<void>();
 
     _socket!.emitWithAck('connectTransport', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
       'direction': direction,
       'dtlsParameters': dtlsParameters,
     }, ack: (response) {
@@ -197,19 +220,27 @@ class SocketService {
 
   /// Produce media
   Future<String> produce({
+    required String transportId,
     required String kind,
     required Map<String, dynamic> rtpParameters,
   }) async {
     _logger.d('Producing media: $kind');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before producing');
+    }
+
     final completer = Completer<String>();
 
     _socket!.emitWithAck('produce', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
+      'transportId': transportId,
       'kind': kind,
       'rtpParameters': rtpParameters,
     }, ack: (response) {
       if (response['status'] == 'ok') {
-        final producerId = response['data']['id'] as String;
+        final producerId = response['data']['producerId'] as String;
         _logger.i('Media produced: $kind, producerId: $producerId');
         completer.complete(producerId);
       } else {
@@ -228,9 +259,15 @@ class SocketService {
   }) async {
     _logger.d('Consuming participant media: $targetParticipantId');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before consuming');
+    }
+
     final completer = Completer<List<ConsumerParams>>();
 
     _socket!.emitWithAck('consumeParticipantMedia', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
       'targetParticipantId': targetParticipantId,
       'rtpCapabilities': rtpCapabilities,
     }, ack: (response) {
@@ -253,9 +290,15 @@ class SocketService {
   Future<void> resumeConsumer(String consumerId) async {
     _logger.d('Resuming consumer: $consumerId');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before resuming consumer');
+    }
+
     final completer = Completer<void>();
 
     _socket!.emitWithAck('unpauseConsumer', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
       'consumerId': consumerId,
     }, ack: (response) {
       if (response['status'] == 'ok') {
@@ -274,10 +317,18 @@ class SocketService {
   Future<void> closeProducer(String producerId) async {
     _logger.d('Closing producer: $producerId');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before closing producer');
+    }
+
     final completer = Completer<void>();
 
     _socket!.emitWithAck('closeProducer', {
-      'producerId': producerId,
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
+      'extraData': {
+        'producerId': producerId,
+      },
     }, ack: (response) {
       if (response['status'] == 'ok') {
         _logger.i('Producer closed: $producerId');
@@ -295,10 +346,18 @@ class SocketService {
   Future<void> closeConsumer(String consumerId) async {
     _logger.d('Closing consumer: $consumerId');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Must join conference before closing consumer');
+    }
+
     final completer = Completer<void>();
 
     _socket!.emitWithAck('closeConsumer', {
-      'consumerId': consumerId,
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
+      'extraData': {
+        'consumerId': consumerId,
+      },
     }, ack: (response) {
       if (response['status'] == 'ok') {
         _logger.i('Consumer closed: $consumerId');
@@ -316,9 +375,15 @@ class SocketService {
   Future<List<ParticipantInfo>> getParticipants() async {
     _logger.d('Getting participants');
 
+    if (_conferenceId == null) {
+      throw Exception('Must join conference before getting participants');
+    }
+
     final completer = Completer<List<ParticipantInfo>>();
 
-    _socket!.emitWithAck('getParticipants', {}, ack: (response) {
+    _socket!.emitWithAck('getParticipants', {
+      'conferenceId': _conferenceId,
+    }, ack: (response) {
       if (response['status'] == 'ok') {
         final participants = (response['data'] as List)
             .map((e) => ParticipantInfo.fromJson(e as Map<String, dynamic>))
@@ -338,11 +403,20 @@ class SocketService {
   Future<void> leaveConference() async {
     _logger.d('Leaving conference');
 
+    if (_conferenceId == null || _participantId == null) {
+      throw Exception('Not currently in a conference');
+    }
+
     final completer = Completer<void>();
 
-    _socket!.emitWithAck('leaveConference', {}, ack: (response) {
+    _socket!.emitWithAck('leaveConference', {
+      'conferenceId': _conferenceId,
+      'participantId': _participantId,
+    }, ack: (response) {
       if (response['status'] == 'ok') {
         _logger.i('Left conference successfully');
+        _conferenceId = null;
+        _participantId = null;
         completer.complete();
       } else {
         _logger.e('Failed to leave conference: ${response['error']}');
@@ -370,7 +444,8 @@ class SocketService {
     }
 
     _socket = null;
-    // _conferenceId = null; // Uncomment if field is restored
+    _conferenceId = null;
+    _participantId = null;
 
     _logger.i('Socket service reset completed');
   }

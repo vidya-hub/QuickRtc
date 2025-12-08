@@ -69,7 +69,7 @@ export const joinConference = createAsyncThunk<
     // Initialize socket
     logger.info(THUNK, "🔌 Initializing socket connection");
     socketService.setSocket(
-      config.socket,
+      config.socket as any,
       config.conferenceId,
       config.participantId
     );

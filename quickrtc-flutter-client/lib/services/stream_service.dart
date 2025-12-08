@@ -46,10 +46,17 @@ class StreamService {
     String? videoStreamId;
 
     try {
+      // Create a local media stream to hold the tracks
+      final localStream = await createLocalMediaStream('local_stream');
+
       // Produce audio if provided
       if (options.audioTrack != null) {
         _logger.d('Adding audio track to transport');
-        final audioSender = await sendTransport.addTrack(options.audioTrack!);
+        await localStream.addTrack(options.audioTrack!);
+        final audioSender = await sendTransport.addTrack(
+          options.audioTrack!,
+          localStream,
+        );
         final audioParams = await _getRtpParameters(audioSender);
         audioStreamId = await onProduce('audio', audioParams);
         _logger.i('Audio produced with ID: $audioStreamId');
@@ -58,7 +65,11 @@ class StreamService {
       // Produce video if provided
       if (options.videoTrack != null) {
         _logger.d('Adding video track to transport');
-        final videoSender = await sendTransport.addTrack(options.videoTrack!);
+        await localStream.addTrack(options.videoTrack!);
+        final videoSender = await sendTransport.addTrack(
+          options.videoTrack!,
+          localStream,
+        );
         final videoParams = await _getRtpParameters(videoSender);
         videoStreamId = await onProduce('video', videoParams);
         _logger.i('Video produced with ID: $videoStreamId');

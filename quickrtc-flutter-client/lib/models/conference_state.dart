@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:quickrtc_flutter_client/models/local_stream_info.dart';
 import 'package:quickrtc_flutter_client/models/remote_participant.dart';
 import 'package:quickrtc_flutter_client/models/conference_config.dart';
+import 'package:quickrtc_flutter_client/models/transport_options.dart';
 
 part 'conference_state.freezed.dart';
 
@@ -22,6 +23,10 @@ class ConferenceState with _$ConferenceState {
     dynamic sendTransport,
     @JsonKey(includeFromJson: false, includeToJson: false)
     dynamic recvTransport,
+
+    // Transport options (to track transport IDs)
+    TransportOptions? sendTransportOptions,
+    TransportOptions? recvTransportOptions,
 
     // Local streams
     @Default([]) List<LocalStreamInfo> localStreams,

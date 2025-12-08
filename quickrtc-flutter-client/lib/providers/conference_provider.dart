@@ -114,11 +114,11 @@ class ConferenceProvider extends ChangeNotifier {
 
       // Load device with router capabilities
       final routerRtpCapabilities =
-          joinResponse['routerRtpCapabilities'] as Map<String, dynamic>;
+          joinResponse['routerCapabilities'] as Map<String, dynamic>;
       final device = await _deviceService.loadDevice(routerRtpCapabilities);
 
       // Create send and receive transports
-      await _socketService.createTransports();
+      final transportPair = await _socketService.createTransports();
 
       // Create send transport (peer connection for sending)
       final sendTransport = await createPeerConnection({
@@ -143,6 +143,8 @@ class ConferenceProvider extends ChangeNotifier {
         device: device,
         sendTransport: sendTransport,
         recvTransport: recvTransport,
+        sendTransportOptions: transportPair.sendTransport,
+        recvTransportOptions: transportPair.recvTransport,
       ));
 
       _logger.i('Successfully joined conference');
@@ -194,6 +196,7 @@ class ConferenceProvider extends ChangeNotifier {
         ),
         onProduce: (kind, rtpParameters) async {
           return await _socketService.produce(
+            transportId: _state.sendTransportOptions!.id,
             kind: kind,
             rtpParameters: rtpParameters,
           );

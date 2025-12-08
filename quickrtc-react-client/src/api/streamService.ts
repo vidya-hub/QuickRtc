@@ -10,7 +10,6 @@ import type {
   ProduceMediaOptions,
   ProduceMediaResult,
   RemoteParticipant,
-  ConsumeParams,
 } from "../types";
 import { socketService } from "./socketService";
 
@@ -31,7 +30,7 @@ export class StreamService {
     try {
       // Produce audio if provided
       if (options.audioTrack) {
-        const audioProducer = await sendTransport.produce({
+        await sendTransport.produce({
           track: options.audioTrack,
           codecOptions: {
             opusStereo: true,
@@ -44,7 +43,7 @@ export class StreamService {
 
       // Produce video if provided
       if (options.videoTrack) {
-        const videoProducer = await sendTransport.produce({
+        await sendTransport.produce({
           track: options.videoTrack,
           codecOptions: {
             videoGoogleStartBitrate: 1000,

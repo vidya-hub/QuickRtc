@@ -1,4 +1,4 @@
-package com.quickrtc.quickrtc_flutter_example_new
+package com.quickrtc.flutter.example
 
 import io.flutter.embedding.android.FlutterActivity
 
