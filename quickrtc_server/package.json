@@ -1,6 +1,6 @@
 {
-  "name": "@quickrtc/server",
-  "version": "1.0.0",
+  "name": "quickrtc-server",
+  "version": "1.0.1",
   "description": "QuickRTC Server - High-level WebRTC server abstraction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,7 +33,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@quickrtc/types": "file:../quickrtc_types",
+    "quickrtc-types": "^1.0.0",
     "mediasoup": "^3.19.3",
     "socket.io": "^4.8.1"
   }

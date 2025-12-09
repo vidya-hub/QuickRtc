@@ -81,22 +81,6 @@ print_step "Building example project"
 npm run build:example
 print_success "Example project built successfully"
 
-# Create symbolic links for easier development (optional)
-print_step "Creating development symlinks"
-cd "$EXAMPLE_DIR"
-
-# Create public directory symlinks for client access
-if [ ! -d "public/quickrtc_client" ]; then
-    mkdir -p public/quickrtc_client
-fi
-
-# Link client dist to public directory for browser access
-if [ -L "public/quickrtc_client/dist" ]; then
-    rm "public/quickrtc_client/dist"
-fi
-ln -s "$PROJECT_ROOT/quickrtc_client/dist" "public/quickrtc_client/dist"
-
-print_success "Development symlinks created"
 
 # Final verification
 print_step "Verifying builds"

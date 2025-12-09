@@ -1,5 +1,5 @@
 {
-  "name": "@quickrtc/types",
+  "name": "quickrtc-types",
   "version": "1.0.0",
   "description": "Shared TypeScript types for QuickRTC client and server",
   "main": "dist/index.js",

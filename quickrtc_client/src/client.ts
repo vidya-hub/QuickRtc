@@ -36,4 +36,4 @@ export type {
 
 export type { WebRtcTransportOptions } from "mediasoup/types";
 
-export type { ClientSocket, ConsumeParams } from "@quickrtc/types";
+export type { ClientSocket, ConsumeParams } from "quickrtc-types";

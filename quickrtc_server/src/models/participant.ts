@@ -9,7 +9,7 @@ import {
   ProduceParams,
   ProducersToUsers,
   Participant,
-} from "@quickrtc/types";
+} from "quickrtc-types";
 class MediasoupParticipant implements Participant {
   id: string;
   socketId: string;

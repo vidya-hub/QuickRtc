@@ -100,14 +100,16 @@ Then open **https://localhost:3443** and accept the self-signed certificate.
 
 ## 📦 Packages
 
-This monorepo includes four packages:
+This monorepo includes six packages:
 
-| Package               | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| **quickrtc_client**  | WebRTC client library for browsers.                     |
-| **quickrtc_server**  | MediaSoup server abstraction with dependency injection. |
-| **quickrtc_types**   | Shared TypeScript definitions.                          |
-| **quickrtc_example** | Complete working example (Express + Socket.IO).         |
+| Package                     | Description                                             |
+| --------------------------- | ------------------------------------------------------- |
+| **quickrtc_client**         | WebRTC client library for browsers.                     |
+| **quickrtc_server**         | MediaSoup server abstraction with dependency injection. |
+| **quickrtc_types**          | Shared TypeScript definitions.                          |
+| **quickrtc-react-client**   | React client library with Redux state management.       |
+| **quickrtc-flutter-client** | Flutter client library with Provider state management.  |
+| **quickrtc_example**        | Complete working example (Express + Socket.IO).         |
 
 ---
 
@@ -226,11 +228,12 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## 🗺️ Roadmap
 
-- [ ] Flutter support
-- [ ] React/Vue SDK
+- [x] Flutter support
+- [x] React SDK
 - [ ] React Native support
 - [ ] Recording + RTMP Broadcasting
 - [ ] SFU Cascading
+- [ ] Vue SDK
 
 ---
 

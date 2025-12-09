@@ -25,7 +25,7 @@ import {
   ProducerClosedData,
   ConsumerClosedData,
   MediaMutedData,
-} from "@quickrtc/types";
+} from "quickrtc-types";
 
 class SocketEventController extends EnhancedEventEmitter {
   private mediasoupController?: MediasoupController;

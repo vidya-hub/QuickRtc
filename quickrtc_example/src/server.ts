@@ -330,7 +330,7 @@ class MediaSoupExpressServer {
           listenIps: [
             {
               ip: "0.0.0.0",
-              announcedIp: "13.234.229.229", // public ip address
+              announcedIp: getLocalIp(), // public ip address
             },
             // {
             //   ip: "192.168.29.46", // local network ip address

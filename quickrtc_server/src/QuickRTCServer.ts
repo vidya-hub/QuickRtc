@@ -5,7 +5,7 @@ import MediasoupController from "./controllers/MediasoupController";
 import SocketEventController from "./controllers/SocketController";
 import { WorkerService } from "./workers/WorkerService";
 import type { WorkerSettings } from "mediasoup/types";
-import type { MediasoupConfig, SocketEventData } from "@quickrtc/types";
+import type { MediasoupConfig, SocketEventData } from "quickrtc-types";
 
 // Simple, easy-to-use types
 export interface QuickRTCServerConfig {

@@ -1,14 +1,14 @@
 # Publishing QuickRTC Packages to npm
 
-This guide explains how to publish the three QuickRTC packages (`@quickrtc/types`, `@quickrtc/server`, and `@quickrtc/client`) to npm using GitHub Actions.
+This guide explains how to publish the three QuickRTC packages (`quickrtc-types`, `quickrtc-server`, and `quickrtc-client`) to npm using GitHub Actions.
 
 ## Package Overview
 
 The monorepo contains three publishable packages:
 
-1. **@quickrtc/types** - Shared TypeScript types
-2. **@quickrtc/server** - Server-side WebRTC abstraction
-3. **@quickrtc/client** - Client-side browser library
+1. **quickrtc-types** - Shared TypeScript types
+2. **quickrtc-server** - Server-side WebRTC abstraction
+3. **quickrtc-client** - Client-side browser library
 
 ## Prerequisites
 
@@ -58,6 +58,7 @@ git push origin handling_client --tags
 ```
 
 The GitHub Action will automatically:
+
 1. Detect the tag push
 2. Build all three packages
 3. Publish them to npm in the correct order (types → server & client)
@@ -72,9 +73,9 @@ You can manually trigger the workflow to publish specific packages:
 4. Click **Run workflow**
 5. Select which package(s) to publish:
    - `all` - Publish all three packages
-   - `types` - Publish only @quickrtc/types
-   - `server` - Publish only @quickrtc/server
-   - `client` - Publish only @quickrtc/client
+   - `types` - Publish only quickrtc-types
+   - `server` - Publish only quickrtc-server
+   - `client` - Publish only quickrtc-client
 6. Click **Run workflow**
 
 ### Method 3: Local Publishing (Development/Testing)
@@ -108,6 +109,7 @@ npm publish
 ### Semantic Versioning
 
 Follow [Semantic Versioning](https://semver.org/):
+
 - **MAJOR** (1.0.0 → 2.0.0): Breaking changes
 - **MINOR** (1.0.0 → 1.1.0): New features (backward compatible)
 - **PATCH** (1.0.0 → 1.0.1): Bug fixes
@@ -136,19 +138,21 @@ git push origin handling_client --tags
 When publishing to npm, update the local file references to use the published packages:
 
 ### Before Publishing (Development)
+
 ```json
 {
   "dependencies": {
-    "@quickrtc/types": "file:../quickrtc_types"
+    "quickrtc-types": "file:../quickrtc_types"
   }
 }
 ```
 
 ### After Publishing (Production)
+
 ```json
 {
   "dependencies": {
-    "@quickrtc/types": "^1.0.0"
+    "quickrtc-types": "^1.0.0"
   }
 }
 ```
@@ -160,13 +164,15 @@ When publishing to npm, update the local file references to use the published pa
 The GitHub Actions workflow (`.github/workflows/publish.yml`) does the following:
 
 1. **Triggers:**
+
    - On push of tags matching `v*.*.*` pattern
    - Manual workflow dispatch
 
 2. **Jobs:**
-   - `publish-types`: Builds and publishes @quickrtc/types
-   - `publish-server`: Waits for types, then publishes @quickrtc/server
-   - `publish-client`: Waits for types, then publishes @quickrtc/client
+
+   - `publish-types`: Builds and publishes quickrtc-types
+   - `publish-server`: Waits for types, then publishes quickrtc-server
+   - `publish-client`: Waits for types, then publishes quickrtc-client
 
 3. **Each job:**
    - Checks out code
@@ -181,12 +187,12 @@ After publishing, verify your packages:
 
 ```bash
 # Check if packages are available
-npm view @quickrtc/types
-npm view @quickrtc/server
-npm view @quickrtc/client
+npm view quickrtc-types
+npm view quickrtc-server
+npm view quickrtc-client
 
 # Install in a test project
-npm install @quickrtc/types @quickrtc/server @quickrtc/client
+npm install quickrtc-types quickrtc-server quickrtc-client
 ```
 
 ## Troubleshooting
@@ -225,15 +231,17 @@ npm install @quickrtc/types @quickrtc/server @quickrtc/client
 ## Package Structure
 
 Each package includes:
+
 - `dist/` - Compiled JavaScript and TypeScript declarations
 - `README.md` - Package documentation
 - `package.json` - Package metadata
 - `.npmignore` - Files to exclude from npm package
 
 Files in published packages are controlled by the `files` field in package.json:
-- `@quickrtc/types`: `dist`, `src` (for TypeScript source maps)
-- `@quickrtc/server`: `dist`, `README.md`
-- `@quickrtc/client`: `dist`, `README.md`
+
+- `quickrtc-types`: `dist`, `src` (for TypeScript source maps)
+- `quickrtc-server`: `dist`, `README.md`
+- `quickrtc-client`: `dist`, `README.md`
 
 ## Next Steps
 
@@ -245,5 +253,6 @@ Files in published packages are controlled by the `files` field in package.json:
 6. Verify packages on npmjs.com
 
 For more information, see:
+
 - [npm Publishing Documentation](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
