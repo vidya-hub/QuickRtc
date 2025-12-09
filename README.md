@@ -108,7 +108,6 @@ This monorepo includes six packages:
 | **quickrtc_server**         | MediaSoup server abstraction with dependency injection. |
 | **quickrtc_types**          | Shared TypeScript definitions.                          |
 | **quickrtc-react-client**   | React client library with Redux state management.       |
-| **quickrtc-flutter-client** | Flutter client library with Provider state management.  |
 | **quickrtc_example**        | Complete working example (Express + Socket.IO).         |
 
 ---
@@ -228,7 +227,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## 🗺️ Roadmap
 
-- [x] Flutter support
+- [ ] Flutter support
 - [x] React SDK
 - [ ] React Native support
 - [ ] Recording + RTMP Broadcasting
