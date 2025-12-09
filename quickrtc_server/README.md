@@ -30,7 +30,7 @@ A powerful yet simple MediaSoup server with dependency injection support. Bring 
 ## 📦 Installation
 
 ```bash
-npm install quickrtc_server
+npm i quickrtc-server
 ```
 
 ---
