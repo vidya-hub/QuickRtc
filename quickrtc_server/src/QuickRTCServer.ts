@@ -4,8 +4,11 @@ import { Server as HttpsServer } from "https";
 import MediasoupController from "./controllers/MediasoupController";
 import SocketEventController from "./controllers/SocketController";
 import { WorkerService } from "./workers/WorkerService";
-import type { WorkerSettings } from "mediasoup/types";
-import type { MediasoupConfig, SocketEventData } from "quickrtc-types";
+import type { MediasoupConfig } from "quickrtc-types";
+import {
+  QuickRTCMediasoupConfig,
+  mergeMediasoupConfig,
+} from "./config/defaultMediasoupConfig";
 
 // Simple, easy-to-use types
 export interface QuickRTCServerConfig {
@@ -23,11 +26,22 @@ export interface QuickRTCServerConfig {
     credentials?: boolean;
   };
 
-  mediasoup?: {
-    workerSettings?: WorkerSettings;
-    routerOptions?: any;
-    transportOptions?: any;
-  };
+  /**
+   * QuickRTC mediasoup configuration
+   * If not provided, uses sensible defaults
+   * You can override any part of the config - missing values will use defaults
+   *
+   * @example
+   * ```ts
+   * quickrtcConfig: {
+   *   // Only override what you need
+   *   webRtcServerOptions: {
+   *     listenInfos: [{ ip: "0.0.0.0", announcedIp: "your-public-ip" }]
+   *   }
+   * }
+   * ```
+   */
+  quickrtcConfig?: Partial<QuickRTCMediasoupConfig>;
 }
 
 export interface ConferenceInfo {
@@ -416,14 +430,25 @@ export class QuickRTCServer extends EventTarget {
 
   private async initializeMediaSoup(): Promise<void> {
     try {
-      // Initialize Worker Service with default config
-      const defaultMediasoupConfig: MediasoupConfig = {
-        workerConfig: this.config.mediasoup?.workerSettings || {},
-        routerConfig: this.config.mediasoup?.routerOptions || {},
-        transportConfig: this.config.mediasoup?.transportOptions || {},
+      // Merge user config with defaults
+      const mergedConfig = mergeMediasoupConfig(this.config.quickrtcConfig);
+
+      // Build the MediasoupConfig for WorkerService
+      const mediasoupConfig: MediasoupConfig = {
+        workerConfig: mergedConfig.workerSettings,
+        routerConfig: mergedConfig.routerOptions,
+        transportConfig: {
+          ...mergedConfig.transportOptions,
+          listenIps: mergedConfig.webRtcServerOptions.listenInfos.map(
+            (info) => ({
+              ip: info.ip,
+              announcedIp: info.announcedIp ?? undefined,
+            })
+          ),
+        },
       };
 
-      this.workerService = new WorkerService(defaultMediasoupConfig);
+      this.workerService = new WorkerService(mediasoupConfig);
       await this.workerService.createWorkers();
 
       // Initialize MediaSoup Controller

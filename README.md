@@ -1,219 +1,58 @@
-# 🚀 QuickRTC
+# QuickRTC
 
-A comprehensive, easy-to-use WebRTC solution built on top of **MediaSoup**, providing simple APIs for client and server applications.
+Simple WebRTC video conferencing built on MediaSoup.
 
----
+## Packages
 
-## 📋 Table of Contents
+| Package | Description |
+|---------|-------------|
+| `quickrtc-server` | MediaSoup server with auto conference management |
+| `quickrtc-client` | Browser client library |
+| `quickrtc-react-client` | React hooks + Redux integration |
+| `quickrtc-flutter-client` | Flutter client library |
+| `quickrtc-types` | Shared TypeScript types |
 
-- [Overview](#-overview)
-- [Quick Start](#-quick-start)
-- [Packages](#-packages)
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Development](#-development)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Support](#-support)
+## Quick Start
 
----
-
-## 🎯 Overview
-
-**QuickRTC** abstracts the complexity of WebRTC and MediaSoup so you can build real-time video conferencing apps with minimal code.
-
-### Before (Raw MediaSoup)
-
-```typescript
-const worker = await mediasoup.createWorker(workerSettings);
-const router = await worker.createRouter(routerOptions);
-const transport = await router.createWebRtcTransport(transportOptions);
-// ... many more setup steps
+```bash
+cd quickrtc-example
+npm run setup
+npm run dev
 ```
 
-### After (QuickRTC)
+- Server: https://localhost:3000
+- Client: https://localhost:5173
 
-**Server**
+## Server
 
 ```typescript
-const mediaServer = new QuickRTCServer({
-  httpServer,
-  socketServer,
-  mediasoup: {},
+import { QuickRTCServer } from "quickrtc-server";
+
+const server = new QuickRTCServer({ httpServer, socketServer });
+await server.start();
+```
+
+## Client
+
+```typescript
+import { ConferenceClient } from "quickrtc-client";
+
+const client = new ConferenceClient({
+  conferenceId: "room-1",
+  participantId: "user-1",
+  participantName: "John",
+  socket,
 });
-await mediaServer.start();
-```
 
-**Client**
-
-```typescript
-const client = new ConferenceClient({ conferenceId, participantId, socket });
 await client.joinMeeting();
 await client.produceMedia(audioTrack, videoTrack);
-await client.consumeExistingStreams();
 ```
 
----
+## Production
 
-## ⚡ Quick Start
+- Use HTTPS (required for WebRTC)
+- Open ports: `3443/tcp`, `40000-49999/udp`
 
-### Try the Example (30 Seconds)
+## License
 
-```bash
-git clone https://github.com/vidya-hub/QuickRTC.git
-cd QuickRTC/quickrtc_example
-npm run setup && npm run start:https
-```
-
-Then open **https://localhost:3443** and accept the self-signed certificate.
-
-✅ Multi-participant support  
-✅ Audio/Video controls  
-✅ Screen sharing  
-✅ Real-time events  
-✅ HTTPS-ready demo
-
-> ⚠️ HTTPS is required for WebRTC (camera, mic, screen sharing).
-
----
-
-## 📦 Packages
-
-This monorepo includes six packages:
-
-| Package                     | Description                                             |
-| --------------------------- | ------------------------------------------------------- |
-| **quickrtc_client**         | WebRTC client library for browsers.                     |
-| **quickrtc_server**         | MediaSoup server abstraction with dependency injection. |
-| **quickrtc_types**          | Shared TypeScript definitions.                          |
-| **quickrtc-react-client**   | React client library with Redux state management.       |
-| **quickrtc-flutter-client** | Flutter client library with Provider state management.  |
-| **quickrtc_example**        | Complete working example (Express + Socket.IO).         |
-
----
-
-## ✨ Features
-
-### 🖥️ Client Features
-
-- 🎥 Join/start conference in 3 lines of code
-- 🔇 Simple mute/unmute controls
-- 🖥️ Screen sharing
-- 👥 Real-time participant tracking
-- 📡 Auto stream consumption
-- 💬 Event-driven architecture
-- 🧩 TypeScript support
-
-### 🏠 Server Features
-
-- ⚙️ Dependency injection (Express compatible)
-- 🔁 Auto conference management
-- 👥 Participant tracking
-- 📊 Built-in statistics
-- 🛡️ Admin APIs (kick, broadcast, etc.)
-- 🧼 Automatic cleanup
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────┐       ┌─────────────┐         ┌──────────────┐
-│ Web Clients │◄────► │ QuickRTCServer│  ◄────► │MediaSoup Core│
-│ (Browser)   │       │ + Socket.IO │         │(Routers, Tx) │
-└─────────────┘       └─────────────┘         └──────────────┘
-```
-
-**Key Flow**
-
-1. Browser connects via Socket.IO
-2. QuickRTCServer manages conferences and transports
-3. MediaSoup handles media routing
-
----
-
-## 🛠️ Development
-
-### Setup
-
-```bash
-git clone https://github.com/vidya-hub/QuickRTC.git
-cd QuickRTC
-npm install
-npm run build
-```
-
-### Run Example
-
-```bash
-cd quickrtc_example
-npm run setup && npm run start:https
-```
-
-### Available Scripts
-
-| Command               | Description         |
-| --------------------- | ------------------- |
-| `npm run build`       | Build all packages  |
-| `npm run build:watch` | Watch mode          |
-| `npm test`            | Run tests           |
-| `npm run start:https` | Start HTTPS example |
-
----
-
-## 🔐 Production Setup
-
-### SSL Certificates
-
-Use real certificates from **Let’s Encrypt**:
-
-```bash
-sudo certbot certonly --standalone -d yourdomain.com
-```
-
-### Firewall Ports
-
-- `3443/tcp` – HTTPS
-- `40000-49999/udp` – WebRTC
-
----
-
-## 🤝 Contributing
-
-We welcome contributions!
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/awesome-feature`)
-3. Commit and push your changes
-4. Open a Pull Request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
-
----
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 📞 Support
-
-- 📘 **Docs:** Package-specific READMEs
-- 🐛 **Issues:** [GitHub Issues](https://github.com/vidya-hub/QuickRTC/issues)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/vidya-hub/QuickRTC/discussions)
-
----
-
-## 🗺️ Roadmap
-
-- [x] Flutter support
-- [x] React SDK
-- [ ] React Native support
-- [ ] Recording + RTMP Broadcasting
-- [ ] SFU Cascading
-- [ ] Vue SDK
-
----
-
-**Made with ❤️ for developers who want simple, powerful WebRTC.**
+MIT

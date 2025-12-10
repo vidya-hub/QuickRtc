@@ -244,8 +244,11 @@ class SocketEventController extends EnhancedEventEmitter {
         return;
       }
 
+      // Get conference for producer info
+      const conference = this.mediasoupController?.getConference(conferenceId);
+
       // Create consumers for each producer
-      const consumerParams = [];
+      const consumerParams: Array<ConsumerParamsResponse & { targetParticipantId: string }> = [];
 
       for (const producerId of targetParticipantData.producerIds) {
         try {
@@ -259,9 +262,13 @@ class SocketEventController extends EnhancedEventEmitter {
           });
 
           if (consumerResponse) {
+            // Get producer info to include streamType
+            const producerInfo = conference?.getProducerInfo(producerId);
+            const streamType = producerInfo?.streamType as "audio" | "video" | "screenshare" | undefined;
             consumerParams.push({
               ...consumerResponse,
               targetParticipantId,
+              streamType: streamType || (consumerResponse.kind as "audio" | "video"),
             });
           }
         } catch (error) {
@@ -273,7 +280,7 @@ class SocketEventController extends EnhancedEventEmitter {
         }
       }
 
-      callback({ status: "ok", data: consumerParams });
+      callback({ status: "ok", data: consumerParams as any });
     } catch (error) {
       console.error("Error consuming participant media:", error);
       callback({ status: "error", error: (error as Error).message });
@@ -493,9 +500,13 @@ class SocketEventController extends EnhancedEventEmitter {
     socket: Socket,
     callback: (response: SocketResponse<ProduceResponse>) => void
   ) {
-    const { conferenceId, participantId } = socketEventData;
+    const { conferenceId, participantId, streamType } = socketEventData;
     const { transportId, kind, rtpParameters } = socketEventData;
-    const producerOptions = { kind, rtpParameters, appData: { participantId } };
+    const producerOptions = { 
+      kind, 
+      rtpParameters, 
+      appData: { participantId, streamType: streamType || kind } 
+    };
     try {
       if (!transportId || !kind || !rtpParameters) {
         callback({
@@ -504,6 +515,40 @@ class SocketEventController extends EnhancedEventEmitter {
         });
         return;
       }
+
+      // Validate producer limits
+      const limits = this.mediasoupController?.workerService.mediasoupConfig.participantLimits;
+      if (limits) {
+        const participants = this.mediasoupController?.getParticipants(conferenceId);
+        const participant = participants?.find(p => p.participantId === participantId);
+        
+        if (participant) {
+          // Get existing producer info through the conference
+          const conference = this.mediasoupController?.getConference(conferenceId);
+          if (conference) {
+            const existingProducers = conference.getParticipantProducers(participantId);
+            const videoProducerCount = existingProducers.filter(p => p.kind === 'video').length;
+            const audioProducerCount = existingProducers.filter(p => p.kind === 'audio').length;
+
+            if (kind === 'video' && videoProducerCount >= limits.maxVideoProducers) {
+              callback({
+                status: "error",
+                error: `Maximum video producers (${limits.maxVideoProducers}) reached. Close an existing video producer first.`,
+              });
+              return;
+            }
+
+            if (kind === 'audio' && audioProducerCount >= limits.maxAudioProducers) {
+              callback({
+                status: "error",
+                error: `Maximum audio producers (${limits.maxAudioProducers}) reached. Close an existing audio producer first.`,
+              });
+              return;
+            }
+          }
+        }
+      }
+
       const producerId = await this.mediasoupController?.produce({
         conferenceId,
         participantId,
@@ -522,16 +567,20 @@ class SocketEventController extends EnhancedEventEmitter {
       const participantName =
         participant?.participantName || "Unknown Participant";
 
+      // Determine the actual stream type
+      const actualStreamType = streamType || (kind === 'audio' ? 'audio' : 'video');
+
       const newProducerData: NewProducerData = {
         producerId: producerId!,
         participantId,
         participantName,
         kind,
+        streamType: actualStreamType,
       };
       socket.to(conferenceId).emit("newProducer", newProducerData);
 
       callback({ status: "ok", data: { producerId: producerId! } });
-      this.emit("producerCreated", { producerId, participantId });
+      this.emit("producerCreated", { producerId, participantId, streamType: actualStreamType });
     } catch (error) {
       console.error("Error producing:", error);
       callback({ status: "error", error: (error as Error).message });

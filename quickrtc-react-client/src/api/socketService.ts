@@ -167,6 +167,7 @@ export class SocketService {
     transportId: string;
     kind: "audio" | "video";
     rtpParameters: any;
+    streamType?: "audio" | "video" | "screenshare";
   }): Promise<string> {
     if (!this.socket) {
       throw new Error("Socket not initialized");
@@ -182,6 +183,7 @@ export class SocketService {
         kind: params.kind,
         rtpParameters: params.rtpParameters,
       },
+      streamType: params.streamType || (params.kind === 'audio' ? 'audio' : 'video'),
     };
 
     const response = await this.socket.emitWithAck("produce", requestData);

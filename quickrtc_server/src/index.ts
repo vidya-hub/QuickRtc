@@ -7,6 +7,16 @@ export {
   type ParticipantInfo,
 } from "./QuickRTCServer";
 
+// Default mediasoup configuration
+export {
+  defaultMediasoupConfig,
+  mergeMediasoupConfig,
+  type QuickRTCMediasoupConfig,
+  type ListenIpConfig,
+  type TransportOptions,
+  type WebRtcServerOptions,
+} from "./config/defaultMediasoupConfig";
+
 // Advanced exports (for custom implementations)
 export * from "./mediasoup/MediaSoupServer";
 export * from "./workers/WorkerService";

@@ -221,6 +221,49 @@ class MediasoupConference implements Conference {
     }
     return producerData;
   }
+
+  /**
+   * Get all producers for a specific participant with their details
+   */
+  getParticipantProducers(participantId: string): Array<{
+    id: string;
+    kind: "audio" | "video";
+    paused: boolean;
+    streamType?: string;
+  }> {
+    const participant = this.getParticipant(participantId) as MediasoupParticipant;
+    if (!participant) {
+      return [];
+    }
+    return participant.getAllProducers().map(producer => ({
+      id: producer.id,
+      kind: producer.kind as "audio" | "video",
+      paused: producer.paused,
+      streamType: (producer.appData as any)?.streamType,
+    }));
+  }
+
+  /**
+   * Get producer by ID with details including streamType
+   */
+  getProducerInfo(producerId: string): {
+    id: string;
+    kind: "audio" | "video";
+    streamType?: string;
+  } | null {
+    for (const [, participant] of this.participants.entries()) {
+      const mediasoupParticipant = participant as MediasoupParticipant;
+      const producer = mediasoupParticipant.getProducerById(producerId);
+      if (producer) {
+        return {
+          id: producer.id,
+          kind: producer.kind as "audio" | "video",
+          streamType: (producer.appData as any)?.streamType,
+        };
+      }
+    }
+    return null;
+  }
   async resumeProducer(
     participantId: string,
     producerId: string

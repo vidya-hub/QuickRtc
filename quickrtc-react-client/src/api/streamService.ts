@@ -10,8 +10,42 @@ import type {
   ProduceMediaOptions,
   ProduceMediaResult,
   RemoteParticipant,
+  RemoteStreamInfo,
 } from "../types";
 import { socketService } from "./socketService";
+
+/**
+ * Enhanced logger for stream service
+ */
+const logger = {
+  info: (method: string, message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const prefix = `[StreamService:${method}]`;
+    if (data) {
+      console.info(`${timestamp} ${prefix} ${message}`, data);
+    } else {
+      console.info(`${timestamp} ${prefix} ${message}`);
+    }
+  },
+  error: (method: string, message: string, error?: any) => {
+    const timestamp = new Date().toISOString();
+    const prefix = `[StreamService:${method}]`;
+    if (error) {
+      console.error(`${timestamp} ${prefix} ${message}`, error);
+    } else {
+      console.error(`${timestamp} ${prefix} ${message}`);
+    }
+  },
+  debug: (method: string, message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const prefix = `[StreamService:${method}]`;
+    if (data) {
+      console.debug(`${timestamp} ${prefix} ${message}`, data);
+    } else {
+      console.debug(`${timestamp} ${prefix} ${message}`);
+    }
+  },
+};
 
 /**
  * Service for managing media streams (local and remote)
@@ -71,6 +105,14 @@ export class StreamService {
     producer: Producer
   ): LocalStreamInfo {
     const stream = new MediaStream([track]);
+    
+    logger.info('createLocalStreamInfo', `Creating local stream info`, {
+      streamId,
+      type,
+      producerId: producer.id,
+      trackId: track.id,
+      trackKind: track.kind,
+    });
 
     return {
       id: streamId,
@@ -86,17 +128,35 @@ export class StreamService {
    * Stop local stream
    */
   public async stopLocalStream(streamInfo: LocalStreamInfo): Promise<void> {
+    const METHOD = 'stopLocalStream';
     try {
+      logger.info(METHOD, `Stopping local stream`, {
+        streamId: streamInfo.id,
+        type: streamInfo.type,
+        producerId: streamInfo.producer.id,
+        trackId: streamInfo.track.id,
+        trackReadyState: streamInfo.track.readyState,
+        producerClosed: streamInfo.producer.closed,
+      });
+
       // Stop the track
+      logger.debug(METHOD, `Stopping track ${streamInfo.track.id}`);
       streamInfo.track.stop();
 
       // Close the producer on server
+      logger.debug(METHOD, `Closing producer ${streamInfo.producer.id} on server`);
       await socketService.closeProducer(streamInfo.producer.id);
 
       // Close the producer locally
+      logger.debug(METHOD, `Closing producer ${streamInfo.producer.id} locally`);
       streamInfo.producer.close();
+      
+      logger.info(METHOD, `Successfully stopped ${streamInfo.type} stream`, {
+        streamId: streamInfo.id,
+        producerId: streamInfo.producer.id,
+      });
     } catch (error) {
-      console.error("Error stopping local stream:", error);
+      logger.error(METHOD, `Error stopping local stream ${streamInfo.id}`, error);
       throw error;
     }
   }
@@ -133,6 +193,8 @@ export class StreamService {
         participantName,
         isAudioEnabled: false,
         isVideoEnabled: false,
+        isScreenShareEnabled: false,
+        streams: [],
       };
 
       // Create consumers for each media type
@@ -150,16 +212,37 @@ export class StreamService {
         // Create media stream
         const stream = new MediaStream([consumer.track]);
 
-        // Store consumer and stream
-        if (params.kind === "audio") {
+        // Determine stream type from server response or fallback to kind
+        const serverStreamType = (params as any).streamType;
+        let streamType: "audio" | "video" | "screenshare";
+        
+        if (serverStreamType === 'screenshare') {
+          streamType = 'screenshare';
+          result.isScreenShareEnabled = true;
+        } else if (params.kind === "audio" || serverStreamType === 'audio') {
+          streamType = "audio";
+          // Keep backward compatibility
           result.audioConsumer = consumer;
           result.audioStream = stream;
           result.isAudioEnabled = true;
-        } else if (params.kind === "video") {
+        } else {
+          // Video camera
+          streamType = "video";
+          // Keep backward compatibility
           result.videoConsumer = consumer;
           result.videoStream = stream;
           result.isVideoEnabled = true;
         }
+
+        // Add to streams array
+        const streamInfo: RemoteStreamInfo = {
+          id: `${participantId}-${streamType}-${Date.now()}`,
+          type: streamType,
+          stream,
+          consumer,
+          producerId: params.producerId,
+        };
+        result.streams!.push(streamInfo);
       }
 
       return result;
@@ -176,16 +259,27 @@ export class StreamService {
     participant: RemoteParticipant
   ): Promise<void> {
     try {
-      // Close audio consumer
-      if (participant.audioConsumer) {
-        await socketService.closeConsumer(participant.audioConsumer.id);
-        participant.audioConsumer.close();
-      }
+      // Close all streams
+      if (participant.streams && participant.streams.length > 0) {
+        for (const streamInfo of participant.streams) {
+          try {
+            await socketService.closeConsumer(streamInfo.consumer.id);
+            streamInfo.consumer.close();
+          } catch (error) {
+            console.error(`Error closing consumer ${streamInfo.consumer.id}:`, error);
+          }
+        }
+      } else {
+        // Backward compatibility: close legacy consumers
+        if (participant.audioConsumer) {
+          await socketService.closeConsumer(participant.audioConsumer.id);
+          participant.audioConsumer.close();
+        }
 
-      // Close video consumer
-      if (participant.videoConsumer) {
-        await socketService.closeConsumer(participant.videoConsumer.id);
-        participant.videoConsumer.close();
+        if (participant.videoConsumer) {
+          await socketService.closeConsumer(participant.videoConsumer.id);
+          participant.videoConsumer.close();
+        }
       }
     } catch (error) {
       console.error("Error stopping participant consumption:", error);
