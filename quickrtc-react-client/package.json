@@ -1,9 +1,17 @@
 {
   "name": "quickrtc-react-client",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Production-ready React client library for QuickRTC with Redux state management",
+  "type": "module",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc && webpack --mode=production",
     "build:dev": "tsc && webpack --mode=development",
@@ -39,7 +47,7 @@
   },
   "dependencies": {
     "mediasoup-client": "^3.16.7",
-    "quickrtc-types": "^1.0.0",
+    "quickrtc-types": "^1.1.0",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {

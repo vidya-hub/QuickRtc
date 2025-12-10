@@ -6,6 +6,7 @@ import {
   updateRemoteParticipant,
   setJoined,
   setError,
+  resetConference,
 } from "./conferenceSlice";
 import { consumeParticipant } from "./thunks";
 import type { RootState } from "./selectors";
@@ -18,6 +19,9 @@ import type {
   MediaMutedData,
 } from "quickrtc-types";
 
+// Track if listeners have been set up to prevent duplicate listeners
+let listenersSetUp = false;
+
 /**
  * Event middleware for handling socket events
  * Listens to socket events and dispatches appropriate actions
@@ -28,7 +32,16 @@ export const eventMiddleware: Middleware<{}, RootState> =
 
     // Setup socket listeners when conference is joined
     if (setJoined.match(action) && action.payload === true) {
-      setupSocketListeners(storeAPI.dispatch, storeAPI.getState);
+      if (!listenersSetUp) {
+        setupSocketListeners(storeAPI.dispatch, storeAPI.getState);
+        listenersSetUp = true;
+      }
+    }
+
+    // Cleanup socket listeners when conference is reset/left
+    if (resetConference.match(action)) {
+      cleanupSocketListeners();
+      listenersSetUp = false;
     }
 
     return result;
@@ -68,6 +81,16 @@ const logger = {
 };
 
 /**
+ * Cleanup socket event listeners
+ * Prevents memory leaks and duplicate event handlers
+ */
+function cleanupSocketListeners(): void {
+  logger.info("🧹 Cleaning up socket event listeners");
+  socketService.removeAllListeners();
+  logger.info("✅ Socket event listeners cleaned up");
+}
+
+/**
  * Setup socket event listeners with comprehensive logging
  */
 function setupSocketListeners(dispatch: any, getState: () => RootState): void {
@@ -94,6 +117,8 @@ function setupSocketListeners(dispatch: any, getState: () => RootState): void {
           participantName: data.participantName,
           isAudioEnabled: false,
           isVideoEnabled: false,
+          isScreenShareEnabled: false,
+          streams: [],
         })
       );
 
@@ -156,6 +181,8 @@ function setupSocketListeners(dispatch: any, getState: () => RootState): void {
             participantName: data.participantName,
             isAudioEnabled: false,
             isVideoEnabled: false,
+            isScreenShareEnabled: false,
+            streams: [],
           })
         );
       }
@@ -184,19 +211,53 @@ function setupSocketListeners(dispatch: any, getState: () => RootState): void {
         { producerId: data.producerId }
       );
 
-      // Update participant to remove the stream
-      const updates: any = {};
-      if (data.kind === "audio") {
+      // Get current participant state to filter streams
+      const state = getState();
+      const participant = state.conference.remoteParticipants.find(
+        (p) => p.participantId === data.participantId
+      );
+
+      if (!participant) {
+        logger.warn(`⚠️ Participant ${data.participantId} not found for producerClosed`);
+        return;
+      }
+
+      // Filter out the closed stream from the streams array
+      const updatedStreams = (participant.streams || []).filter(
+        (stream) => stream.producerId !== data.producerId
+      );
+
+      // Determine what type of stream was removed
+      const removedStream = (participant.streams || []).find(
+        (stream) => stream.producerId === data.producerId
+      );
+      const streamType = removedStream?.type || data.kind;
+
+      // Build updates object
+      const updates: any = {
+        streams: updatedStreams,
+      };
+
+      // Update legacy fields and flags based on stream type
+      if (streamType === "audio") {
         updates.audioStream = undefined;
         updates.audioConsumer = undefined;
-        updates.isAudioEnabled = false;
+        updates.isAudioEnabled = updatedStreams.some(s => s.type === "audio");
         logger.info(`🔇 Removed audio stream for ${data.participantId}`);
-      } else if (data.kind === "video") {
+      } else if (streamType === "screenshare") {
+        updates.isScreenShareEnabled = updatedStreams.some(s => s.type === "screenshare");
+        logger.info(`📺 Removed screenshare stream for ${data.participantId}`);
+      } else if (streamType === "video") {
         updates.videoStream = undefined;
         updates.videoConsumer = undefined;
-        updates.isVideoEnabled = false;
+        updates.isVideoEnabled = updatedStreams.some(s => s.type === "video");
         logger.info(`📵 Removed video stream for ${data.participantId}`);
       }
+
+      logger.info(`📊 Updated streams for ${data.participantId}:`, {
+        remainingStreams: updatedStreams.length,
+        removedType: streamType,
+      });
 
       dispatch(
         updateRemoteParticipant({

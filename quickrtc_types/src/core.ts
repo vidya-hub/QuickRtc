@@ -27,6 +27,11 @@ export interface MediasoupConfig {
   workerConfig: WorkerSettings;
   transportConfig: WebRtcTransportOptions;
   routerConfig: RouterOptions;
+  /** Limits for producers per participant */
+  participantLimits?: {
+    maxVideoProducers: number;
+    maxAudioProducers: number;
+  };
 }
 
 /**
@@ -111,6 +116,17 @@ export interface Conference {
     participantId: string;
     producerIds: string[];
   }>;
+  getParticipantProducers(participantId: string): Array<{
+    id: string;
+    kind: "audio" | "video";
+    paused: boolean;
+    streamType?: string;
+  }>;
+  getProducerInfo(producerId: string): {
+    id: string;
+    kind: "audio" | "video";
+    streamType?: string;
+  } | null;
 }
 
 export interface Participant {

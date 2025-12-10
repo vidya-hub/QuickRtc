@@ -29,6 +29,11 @@ export type ConnectTransportParams = {
 };
 
 /**
+ * Stream type for identifying the purpose of a stream
+ */
+export type StreamType = "audio" | "video" | "screenshare";
+
+/**
  * Parameters for producing media
  */
 export type ProduceParams = {
@@ -38,6 +43,8 @@ export type ProduceParams = {
   producerOptions: ProducerOptions;
   kind: MediaKind;
   rtpParameters: RtpParameters;
+  /** Stream type: audio, video (camera), or screenshare */
+  streamType?: StreamType;
 };
 
 /**

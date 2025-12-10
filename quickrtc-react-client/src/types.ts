@@ -35,17 +35,35 @@ export interface LocalStreamInfo {
 }
 
 /**
+ * Remote stream information (for multiple streams per participant)
+ */
+export interface RemoteStreamInfo {
+  id: string;
+  type: "audio" | "video" | "screenshare";
+  stream: MediaStream;
+  consumer: Consumer;
+  producerId: string;
+}
+
+/**
  * Remote participant information
  */
 export interface RemoteParticipant {
   participantId: string;
   participantName: string;
+  /** @deprecated Use streams array instead */
   videoStream?: MediaStream;
+  /** @deprecated Use streams array instead */
   audioStream?: MediaStream;
+  /** @deprecated Use streams array instead */
   videoConsumer?: Consumer;
+  /** @deprecated Use streams array instead */
   audioConsumer?: Consumer;
+  /** All streams from this participant */
+  streams: RemoteStreamInfo[];
   isAudioEnabled: boolean;
   isVideoEnabled: boolean;
+  isScreenShareEnabled: boolean;
 }
 
 /**

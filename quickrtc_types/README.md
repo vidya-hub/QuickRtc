@@ -1,105 +1,193 @@
-# 📦 quickrtc_types
+# quickrtc-types
 
-Shared TypeScript type definitions for QuickRTC client and server applications.
-
-## Overview
-
-This package provides comprehensive type-safe interfaces for MediaSoup WebRTC communications, socket events, and application state management. It's designed to be shared between client and server implementations to ensure type consistency across your MediaSoup application.
+Shared TypeScript types for QuickRTC client and server packages.
 
 ## Installation
 
 ```bash
-npm install quickrtc_types
+npm install quickrtc-types
 ```
 
 ## Usage
 
 ```typescript
 import {
+  // Core types
   MediasoupConfig,
-  JoinConferenceParams,
+  Conference,
+  Participant,
+  
+  // Transport types
   CreateTransportParams,
+  ConnectTransportParams,
+  ProduceParams,
+  ConsumeParams,
+  ConsumerParams,
+  
+  // Socket event types
+  SocketEventType,
   SocketEventData,
-} from "quickrtc_types";
+  ClientToServerEvents,
+  ServerToClientEvents,
+  
+  // Client types
+  JoinConferenceRequest,
+  JoinConferenceResponse,
+  ParticipantJoinedData,
+  ParticipantLeftData,
+  NewProducerData,
+  ProducerClosedData,
+} from "quickrtc-types";
 ```
 
-### Category-Specific Imports
+## Core Types
+
+### MediasoupConfig
 
 ```typescript
-// Core types
-import { ConferenceMap, ParticipantsMap } from "quickrtc-types/core";
-
-// Transport types
-import { ProduceParams, ConsumeParams } from "quickrtc-types/transport";
-
-// Socket types
-import { SocketEventType, MeetingParams } from "quickrtc-types/socket";
-
-// Client types
-import { ClientConfig, ClientConnectionState } from "quickrtc-types/client";
+interface MediasoupConfig {
+  workerSettings: WorkerSettings;
+  routerOptions: RouterOptions;
+  transportOptions: WebRtcTransportOptions;
+  webRtcServerOptions: WebRtcServerOptions;
+}
 ```
 
-## Type Categories
+### Conference & Participant
 
-### Core Types (`/core`)
+```typescript
+interface Conference {
+  conferenceId: string;
+  conferenceName?: string;
+  participants: Map<string, Participant>;
+  router: Router;
+}
 
-- `MediasoupConfig` - Server configuration
-- `Conference` - Conference entity interface
-- `Participant` - Participant entity interface
-- `ConferenceMap`, `ParticipantsMap` - Type aliases
+interface Participant {
+  participantId: string;
+  participantName: string;
+  socketId: string;
+  producers: Map<string, Producer>;
+  consumers: Map<string, Consumer>;
+  sendTransport?: Transport;
+  recvTransport?: Transport;
+}
+```
 
-### Transport Types (`/transport`)
+## Transport Types
 
-- `CreateTransportParams` - WebRTC transport creation
-- `ConnectTransportParams` - Transport connection
-- `ProduceParams` - Media production
-- `ConsumeParams` - Media consumption
-- `ConsumerResponse` - Consumer creation response
+### ProduceParams
 
-### Conference Types (`/conference`)
+```typescript
+interface ProduceParams {
+  conferenceId: string;
+  participantId: string;
+  transportId: string;
+  kind: MediaKind;
+  rtpParameters: RtpParameters;
+  streamType?: "audio" | "video" | "screenshare";
+}
+```
 
-- `JoinConferenceParams` - Conference joining
-- `AppState` - Application state management
+### ConsumerParams
 
-### Socket Types (`/socket`)
+```typescript
+interface ConsumerParams {
+  id: string;
+  producerId: string;
+  kind: MediaKind;
+  rtpParameters: RtpParameters;
+  streamType?: "audio" | "video" | "screenshare";
+}
+```
 
-- `SocketEventType` - Supported event types
-- `SocketEventData` - Event data structure
-- `MeetingParams` - Base meeting parameters
-- `SocketResponse` - Standard response format
+## Socket Event Types
 
-### Client Types (`/client`)
+### Server to Client Events
 
-- `ClientConfig` - Client configuration
-- `ClientConnectionState` - Connection states
-- `MediaConstraints` - Media constraints
-- `ClientParticipant` - Client-side participant info
+```typescript
+interface ServerToClientEvents {
+  connect: () => void;
+  disconnect: (reason: string) => void;
+  participantJoined: (data: ParticipantJoinedData) => void;
+  participantLeft: (data: ParticipantLeftData) => void;
+  newProducer: (data: NewProducerData) => void;
+  producerClosed: (data: ProducerClosedData) => void;
+  consumerClosed: (data: ConsumerClosedData) => void;
+  audioMuted: (data: MediaMutedData) => void;
+  audioUnmuted: (data: MediaMutedData) => void;
+  videoMuted: (data: MediaMutedData) => void;
+  videoUnmuted: (data: MediaMutedData) => void;
+}
+```
 
-### Utility Types (`/utils`)
+### Client to Server Events
 
-- `DeepPartial<T>` - Deep partial utility
-- `AsyncResult<T>` - Async operation result
-- `Callback<T>` - Callback function type
+```typescript
+interface ClientToServerEvents {
+  joinConference: (data, callback) => void;
+  leaveConference: (data, callback) => void;
+  createTransport: (data, callback) => void;
+  connectTransport: (data, callback) => void;
+  produce: (data, callback) => void;
+  consume: (data, callback) => void;
+  pauseProducer: (data, callback) => void;
+  resumeProducer: (data, callback) => void;
+  closeProducer: (data, callback) => void;
+  closeConsumer: (data, callback) => void;
+  consumeParticipantMedia: (data, callback) => void;
+  getParticipants: (data, callback) => void;
+}
+```
+
+## Event Data Types
+
+### ParticipantJoinedData
+
+```typescript
+interface ParticipantJoinedData {
+  participantId: string;
+  participantName: string;
+  conferenceId: string;
+}
+```
+
+### NewProducerData
+
+```typescript
+interface NewProducerData {
+  producerId: string;
+  participantId: string;
+  participantName: string;
+  kind: MediaKind;
+  streamType?: "audio" | "video" | "screenshare";
+}
+```
+
+### ProducerClosedData
+
+```typescript
+interface ProducerClosedData {
+  participantId: string;
+  producerId: string;
+  kind: "audio" | "video";
+}
+```
+
+## Stream Types
+
+QuickRTC uses `streamType` to differentiate media sources:
+
+| Type | Description |
+|------|-------------|
+| `audio` | Microphone audio |
+| `video` | Camera video |
+| `screenshare` | Screen/window capture |
 
 ## Peer Dependencies
 
-This package requires the following peer dependencies:
-
 - `mediasoup ^3.19.0`
 - `socket.io ^4.8.0`
-
-## Development
-
-```bash
-# Build the package
-pnpm build
-
-# Watch mode for development
-pnpm dev
-
-# Clean build artifacts
-pnpm clean
-```
 
 ## License
 

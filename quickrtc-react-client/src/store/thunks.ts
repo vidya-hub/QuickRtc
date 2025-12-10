@@ -121,15 +121,19 @@ export const joinConference = createAsyncThunk<
 
     sendTransport.on(
       "produce",
-      async ({ kind, rtpParameters }, callback, errback) => {
+      async ({ kind, rtpParameters, appData }, callback, errback) => {
         try {
-          logger.info(THUNK, `📤 Producing ${kind} track`);
+          // Get streamType from appData if available
+          const appDataTyped = appData as { streamType?: "audio" | "video" | "screenshare" } | undefined;
+          const streamType = appDataTyped?.streamType || (kind === 'audio' ? 'audio' : 'video') as "audio" | "video" | "screenshare";
+          logger.info(THUNK, `📤 Producing ${streamType} track (kind: ${kind})`);
           const producerId = await socketService.produce({
             transportId: sendTransport.id,
             kind,
             rtpParameters,
+            streamType,
           });
-          logger.info(THUNK, `✅ Producer created for ${kind}`, { producerId });
+          logger.info(THUNK, `✅ Producer created for ${streamType}`, { producerId });
           callback({ id: producerId });
         } catch (error: any) {
           logger.error(THUNK, `❌ Failed to produce ${kind}`, error);
@@ -214,6 +218,7 @@ export const produceMedia = createAsyncThunk<
           opusStereo: true,
           opusDtx: true,
         },
+        appData: { streamType: "audio" },
       });
 
       const audioStreamId = `audio-${Date.now()}`;
@@ -235,13 +240,18 @@ export const produceMedia = createAsyncThunk<
     // Produce video
     if (options.videoTrack) {
       const type = options.type || "video";
-      logger.info(THUNK, `📹 Producing ${type} track`);
+      logger.info(THUNK, `📹 Producing ${type} track`, {
+        trackId: options.videoTrack.id,
+        trackKind: options.videoTrack.kind,
+        trackLabel: options.videoTrack.label,
+      });
 
       const videoProducer = await sendTransport.produce({
         track: options.videoTrack,
         codecOptions: {
           videoGoogleStartBitrate: 1000,
         },
+        appData: { streamType: type },
       });
 
       const videoStreamId = `${type}-${Date.now()}`;
@@ -254,9 +264,18 @@ export const produceMedia = createAsyncThunk<
 
       dispatch(addLocalStream(videoStreamInfo as any));
       result.videoStreamId = videoStreamId;
+      
+      // Log all streams after adding
+      const updatedState = getState();
       logger.info(THUNK, `✅ ${type} producer created`, {
         streamId: videoStreamId,
         producerId: videoProducer.id,
+        trackId: options.videoTrack.id,
+        allStreams: updatedState.conference.localStreams.map(s => ({
+          id: s.id,
+          type: s.type,
+          producerId: s.producer?.id,
+        })),
       });
     }
 
@@ -372,9 +391,32 @@ export const consumeParticipant = createAsyncThunk<
         );
 
         if (existingParticipant) {
+          const newStreams = participantData.streams || [];
+          const existingStreams = existingParticipant.streams || [];
+          
           logger.info(THUNK, `🔄 Updating existing participant ${participantName}`, {
             hasAudio: !!participantData.audioStream,
             hasVideo: !!participantData.videoStream,
+            hasScreenShare: !!participantData.isScreenShareEnabled,
+            newStreamCount: newStreams.length,
+            existingStreamCount: existingStreams.length,
+          });
+          
+          // Smart merge: only add streams that don't already exist (by producerId)
+          // This prevents duplicate streams when consumeParticipant is called multiple times
+          const existingProducerIds = new Set(existingStreams.map(s => s.producerId));
+          const uniqueNewStreams = newStreams.filter(s => !existingProducerIds.has(s.producerId));
+          
+          const mergedStreams = [
+            ...existingStreams,
+            ...uniqueNewStreams,
+          ];
+          
+          logger.info(THUNK, `📊 Stream merge result for ${participantName}`, {
+            existingStreams: existingStreams.map(s => ({ type: s.type, producerId: s.producerId })),
+            newStreams: newStreams.map(s => ({ type: s.type, producerId: s.producerId })),
+            uniqueNewStreams: uniqueNewStreams.map(s => ({ type: s.type, producerId: s.producerId })),
+            finalStreamCount: mergedStreams.length,
           });
           
           dispatch(
@@ -382,8 +424,10 @@ export const consumeParticipant = createAsyncThunk<
               participantId,
               updates: {
                 ...participantData,
-                isAudioEnabled: !!participantData.audioStream || existingParticipant.isAudioEnabled,
-                isVideoEnabled: !!participantData.videoStream || existingParticipant.isVideoEnabled,
+                streams: mergedStreams,
+                isAudioEnabled: mergedStreams.some(s => s.type === 'audio'),
+                isVideoEnabled: mergedStreams.some(s => s.type === 'video'),
+                isScreenShareEnabled: mergedStreams.some(s => s.type === 'screenshare'),
               },
             })
           );
@@ -393,12 +437,16 @@ export const consumeParticipant = createAsyncThunk<
             participantName,
             isAudioEnabled: !!participantData.audioStream,
             isVideoEnabled: !!participantData.videoStream,
+            isScreenShareEnabled: !!participantData.isScreenShareEnabled,
+            streams: participantData.streams || [],
             ...participantData,
           };
           dispatch(addRemoteParticipant(fullParticipant as any));
           logger.info(THUNK, `✅ Successfully consumed ${participantName}`, {
             hasAudio: !!participantData.audioStream,
             hasVideo: !!participantData.videoStream,
+            hasScreenShare: !!participantData.isScreenShareEnabled,
+            streamCount: participantData.streams?.length || 0,
           });
         }
       } else {
@@ -425,22 +473,39 @@ export const stopLocalStream = createAsyncThunk<
   const THUNK = "stopLocalStream";
   try {
     const state = getState();
+    
+    // Log all current local streams for debugging
+    logger.info(THUNK, `📋 Current local streams:`, 
+      state.conference.localStreams.map(s => ({
+        id: s.id,
+        type: s.type,
+        producerId: s.producer?.id,
+        enabled: s.enabled,
+      }))
+    );
+    
     const streamInfo = state.conference.localStreams.find(
       (s) => s.id === streamId
     );
 
     if (!streamInfo) {
+      logger.error(THUNK, `❌ Stream ${streamId} not found in local streams`);
       throw new Error(`Stream ${streamId} not found`);
     }
 
     logger.info(THUNK, `🛑 Stopping local ${streamInfo.type} stream`, {
       streamId,
+      type: streamInfo.type,
+      producerId: streamInfo.producer?.id,
+      trackId: streamInfo.track?.id,
     });
 
     await streamService.stopLocalStream(streamInfo);
     dispatch(removeLocalStream(streamId));
 
-    logger.info(THUNK, `✅ Successfully stopped ${streamInfo.type} stream`);
+    logger.info(THUNK, `✅ Successfully stopped ${streamInfo.type} stream`, {
+      streamId,
+    });
   } catch (error: any) {
     logger.error(THUNK, "❌ Failed to stop local stream", error);
     dispatch(setError(error.message || "Failed to stop local stream"));

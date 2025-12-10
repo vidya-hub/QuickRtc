@@ -1,239 +1,183 @@
-# 🚀 QuickRTC
+# QuickRTC
+
+Simple WebRTC video conferencing built on MediaSoup.
 
 ## Packages
 
-- [![npm](https://img.shields.io/npm/v/quickrtc-server.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-server) **quickrtc-server** — server-side library for QuickRTC  
-- [![npm](https://img.shields.io/npm/v/quickrtc-client.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-client) **quickrtc-client** — client-side library for QuickRTC  
-- [![npm](https://img.shields.io/npm/v/quickrtc-types.svg?logo=npm)](https://www.npmjs.com/package/quickrtc-types) **quickrtc-types** — TypeScript type definitions for QuickRTC  
+| Package | Description |
+|---------|-------------|
+| `quickrtc-server` | MediaSoup server with auto conference management |
+| `quickrtc-client` | Vanilla JavaScript browser client |
+| `quickrtc-react-client` | React hooks with Redux state management |
+| `quickrtc-flutter-client` | Flutter client with Provider state management |
+| `quickrtc-types` | Shared TypeScript types |
 
----
-
-## Installation
-
-Install the packages via npm:
-
-```bash
-npm install quickrtc-server quickrtc-client quickrtc-types
-```
-or via yarn:
+## Quick Start
 
 ```bash
-yarn add quickrtc-server quickrtc-client quickrtc-types
+cd quickrtc-example
+npm run setup
+npm run dev
 ```
 
-A comprehensive, easy-to-use WebRTC solution built on top of **MediaSoup**, providing simple APIs for client and server applications.
+- Server: https://localhost:3000
+- Client: https://localhost:5173
 
----
-
-## 📋 Table of Contents
-
-- [Overview](#-overview)
-- [Quick Start](#-quick-start)
-- [Packages](#-packages)
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Development](#-development)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Support](#-support)
-
----
-
-## 🎯 Overview
-
-**QuickRTC** abstracts the complexity of WebRTC and MediaSoup so you can build real-time video conferencing apps with minimal code.
-
-### Before (Raw MediaSoup)
+## Server Setup
 
 ```typescript
-const worker = await mediasoup.createWorker(workerSettings);
-const router = await worker.createRouter(routerOptions);
-const transport = await router.createWebRtcTransport(transportOptions);
-// ... many more setup steps
+import express from "express";
+import { createServer } from "https";
+import { Server } from "socket.io";
+import { QuickRTCServer } from "quickrtc-server";
+
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, { cors: { origin: "*" } });
+
+const server = new QuickRTCServer({ httpServer, socketServer: io });
+await server.start();
+
+httpServer.listen(3000);
 ```
 
-### After (QuickRTC)
+## React Client
 
-**Server**
+```tsx
+import { QuickRTCProvider, useQuickRTC } from "quickrtc-react-client";
+import { io } from "socket.io-client";
+
+function App() {
+  const {
+    isJoined,
+    localStreams,
+    remoteParticipants,
+    join,
+    leave,
+    toggleAudio,
+    toggleVideo,
+    toggleScreenShare,
+    watchAllParticipants,
+    hasAudio,
+    hasVideo,
+    hasScreenShare,
+  } = useQuickRTC();
+
+  const handleJoin = async () => {
+    const socket = io("https://localhost:3000");
+    await join({ conferenceId: "room-1", participantName: "Alice", socket });
+    await toggleAudio();
+    await toggleVideo();
+    await watchAllParticipants();
+  };
+
+  if (!isJoined) return <button onClick={handleJoin}>Join</button>;
+
+  return (
+    <div>
+      <button onClick={toggleAudio}>{hasAudio ? "Mute" : "Unmute"}</button>
+      <button onClick={toggleVideo}>{hasVideo ? "Stop" : "Start"} Video</button>
+      <button onClick={toggleScreenShare}>{hasScreenShare ? "Stop" : "Share"}</button>
+      <button onClick={leave}>Leave</button>
+      
+      {localStreams.map(s => (
+        <video key={s.id} ref={el => el && (el.srcObject = s.stream)} autoPlay muted playsInline />
+      ))}
+      
+      {remoteParticipants.map(p => (
+        <div key={p.participantId}>
+          <p>{p.participantName}</p>
+          {p.streams?.map(s => (
+            <video key={s.id} ref={el => el && (el.srcObject = s.stream)} autoPlay playsInline />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Wrap with provider
+<QuickRTCProvider>
+  <App />
+</QuickRTCProvider>
+```
+
+## Vanilla JavaScript Client
 
 ```typescript
-const mediaServer = new QuickRTCServer({
-  httpServer,
-  socketServer,
-  mediasoup: {},
+import { ConferenceClient } from "quickrtc-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://localhost:3000");
+const client = new ConferenceClient({
+  conferenceId: "room-1",
+  participantId: "user-1",
+  participantName: "John",
+  socket,
 });
-await mediaServer.start();
-```
 
-**Client**
-
-```typescript
-const client = new ConferenceClient({ conferenceId, participantId, socket });
 await client.joinMeeting();
-await client.produceMedia(audioTrack, videoTrack);
+
+const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+await client.produceMedia(stream.getAudioTracks()[0], stream.getVideoTracks()[0]);
 await client.consumeExistingStreams();
+
+// Screen sharing
+const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+await client.produceMedia(undefined, screen.getVideoTracks()[0], "screenshare");
 ```
 
----
+## Flutter Client
 
-## ⚡ Quick Start
+```dart
+import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 
-### Try the Example (30 Seconds)
+// Wrap app with provider
+QuickRTCProviderWidget(child: MyApp())
 
-```bash
-git clone https://github.com/vidya-hub/QuickRTC.git
-cd QuickRTC/quickrtc_example
-npm run setup && npm run start:https
+// In your widget
+final provider = Provider.of<ConferenceProvider>(context);
+
+await provider.joinConference(ConferenceConfig(
+  conferenceId: 'room-1',
+  participantId: 'user-1',
+  participantName: 'John',
+  socket: socket,
+));
+
+await provider.produceMedia(
+  audioTrack: tracks.getAudioTracks().first,
+  videoTrack: tracks.getVideoTracks().first,
+);
 ```
 
-Then open **https://localhost:3443** and accept the self-signed certificate.
+## Features
 
-✅ Multi-participant support  
-✅ Audio/Video controls  
-✅ Screen sharing  
-✅ Real-time events  
-✅ HTTPS-ready demo
+- **Multi-stream support** - Camera + screen share simultaneously
+- **Auto stream consumption** - New participants auto-connect
+- **Cross-platform** - Web, React, Flutter clients
+- **TypeScript** - Full type safety
+- **Simple API** - Join, produce, consume in few lines
 
-> ⚠️ HTTPS is required for WebRTC (camera, mic, screen sharing).
+## Production Deployment
 
----
+1. **HTTPS Required** - WebRTC requires secure context
+2. **Configure Public IP**:
+   ```typescript
+   new QuickRTCServer({
+     httpServer,
+     socketServer,
+     quickrtcConfig: {
+       webRtcServerOptions: {
+         listenInfos: [{ ip: "0.0.0.0", announcedIp: "YOUR_PUBLIC_IP" }],
+       },
+     },
+   });
+   ```
+3. **Open Ports**: 
+   - `443/tcp` - HTTPS/WebSocket
+   - `40000-49999/udp` - WebRTC media
 
-## 📦 Packages
+## License
 
-This monorepo includes six packages:
-
-| Package                     | Description                                             |
-| --------------------------- | ------------------------------------------------------- |
-| **quickrtc_client**         | WebRTC client library for browsers.                     |
-| **quickrtc_server**         | MediaSoup server abstraction with dependency injection. |
-| **quickrtc_types**          | Shared TypeScript definitions.                          |
-| **quickrtc-react-client**   | React client library with Redux state management.       |
-| **quickrtc_example**        | Complete working example (Express + Socket.IO).         |
-
----
-
-## ✨ Features
-
-### 🖥️ Client Features
-
-- 🎥 Join/start conference in 3 lines of code
-- 🔇 Simple mute/unmute controls
-- 🖥️ Screen sharing
-- 👥 Real-time participant tracking
-- 📡 Auto stream consumption
-- 💬 Event-driven architecture
-- 🧩 TypeScript support
-
-### 🏠 Server Features
-
-- ⚙️ Dependency injection (Express compatible)
-- 🔁 Auto conference management
-- 👥 Participant tracking
-- 📊 Built-in statistics
-- 🛡️ Admin APIs (kick, broadcast, etc.)
-- 🧼 Automatic cleanup
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────┐       ┌─────────────┐         ┌──────────────┐
-│ Web Clients │◄────► │ QuickRTCServer│  ◄────► │MediaSoup Core│
-│ (Browser)   │       │ + Socket.IO │         │(Routers, Tx) │
-└─────────────┘       └─────────────┘         └──────────────┘
-```
-
-**Key Flow**
-
-1. Browser connects via Socket.IO
-2. QuickRTCServer manages conferences and transports
-3. MediaSoup handles media routing
-
----
-
-## 🛠️ Development
-
-### Setup
-
-```bash
-git clone https://github.com/vidya-hub/QuickRTC.git
-cd QuickRTC
-npm install
-npm run build
-```
-
-### Run Example
-
-```bash
-cd quickrtc_example
-npm run setup && npm run start:https
-```
-
-### Available Scripts
-
-| Command               | Description         |
-| --------------------- | ------------------- |
-| `npm run build`       | Build all packages  |
-| `npm run build:watch` | Watch mode          |
-| `npm test`            | Run tests           |
-| `npm run start:https` | Start HTTPS example |
-
----
-
-## 🔐 Production Setup
-
-### SSL Certificates
-
-Use real certificates from **Let’s Encrypt**:
-
-```bash
-sudo certbot certonly --standalone -d yourdomain.com
-```
-
-### Firewall Ports
-
-- `3443/tcp` – HTTPS
-- `40000-49999/udp` – WebRTC
-
----
-
-## 🤝 Contributing
-
-We welcome contributions!
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/awesome-feature`)
-3. Commit and push your changes
-4. Open a Pull Request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
-
----
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 📞 Support
-
-- 📘 **Docs:** Package-specific READMEs
-- 🐛 **Issues:** [GitHub Issues](https://github.com/vidya-hub/QuickRTC/issues)
-- 💬 **Discussions:** [GitHub Discussions](https://github.com/vidya-hub/QuickRTC/discussions)
-
----
-
-## 🗺️ Roadmap
-
-- [ ] Flutter support
-- [x] React SDK
-- [ ] React Native support
-- [ ] Recording + RTMP Broadcasting
-- [ ] SFU Cascading
-- [ ] Vue SDK
-
----
-
-**Made with ❤️ for developers who want simple, powerful WebRTC.**
+MIT

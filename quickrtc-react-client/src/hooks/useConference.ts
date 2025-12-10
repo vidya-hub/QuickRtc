@@ -1,5 +1,5 @@
-import { useDispatch, useSelector } from "react-redux";
-import { useCallback } from "react";
+import { useDispatch, useSelector, shallowEqual } from "react-redux";
+import { useCallback, useMemo } from "react";
 import type { ConferenceConfig, ProduceMediaOptions } from "../types";
 import {
   selectIsJoined,
@@ -26,21 +26,27 @@ import { socketService } from "../api/socketService";
 /**
  * Main hook for conference management
  * Provides all state and actions needed to manage a conference
+ * 
+ * Performance optimizations:
+ * - Uses shallowEqual for arrays (localStreams, remoteParticipants) to prevent
+ *   unnecessary re-renders when array contents haven't changed
+ * - All action callbacks are memoized with useCallback
+ * - Return object is memoized to provide stable reference
  */
 export function useConference() {
   const dispatch = useDispatch();
 
-  // Selectors
+  // Selectors - use shallowEqual for array comparisons to reduce re-renders
   const isJoined = useSelector(selectIsJoined);
   const isConnecting = useSelector(selectIsConnecting);
-  const localStreams = useSelector(selectLocalStreams);
-  const remoteParticipants = useSelector(selectRemoteParticipants);
+  const localStreams = useSelector(selectLocalStreams, shallowEqual);
+  const remoteParticipants = useSelector(selectRemoteParticipants, shallowEqual);
   const error = useSelector(selectError);
   const hasLocalAudio = useSelector(selectHasLocalAudio);
   const hasLocalVideo = useSelector(selectHasLocalVideo);
   const hasLocalScreenShare = useSelector(selectHasLocalScreenShare);
 
-  // Actions
+  // Actions - all memoized to prevent unnecessary child re-renders
   const joinConference = useCallback(
     async (config: ConferenceConfig) => {
       return dispatch(joinConferenceThunk(config) as any).unwrap();
@@ -92,6 +98,7 @@ export function useConference() {
     },
     [dispatch]
   );
+
   const addEventListener = useCallback(
     (handlers: Partial<import("quickrtc-types").ServerToClientEvents>) => {
       socketService.setupEventListeners(handlers);
@@ -99,26 +106,49 @@ export function useConference() {
     []
   );
 
-  return {
-    // State
-    isJoined,
-    isConnecting,
-    localStreams,
-    remoteParticipants,
-    error,
-    hasLocalAudio,
-    hasLocalVideo,
-    hasLocalScreenShare,
+  // Memoize the return object to provide stable reference
+  // This prevents unnecessary re-renders in child components that destructure this object
+  return useMemo(
+    () => ({
+      // State
+      isJoined,
+      isConnecting,
+      localStreams,
+      remoteParticipants,
+      error,
+      hasLocalAudio,
+      hasLocalVideo,
+      hasLocalScreenShare,
 
-    // Actions
-    joinConference,
-    leaveConference,
-    produceMedia,
-    consumeExistingStreams,
-    stopLocalStream,
-    stopWatchingParticipant,
-    toggleAudio,
-    toggleVideo,
-    addEventListener,
-  };
+      // Actions
+      joinConference,
+      leaveConference,
+      produceMedia,
+      consumeExistingStreams,
+      stopLocalStream,
+      stopWatchingParticipant,
+      toggleAudio,
+      toggleVideo,
+      addEventListener,
+    }),
+    [
+      isJoined,
+      isConnecting,
+      localStreams,
+      remoteParticipants,
+      error,
+      hasLocalAudio,
+      hasLocalVideo,
+      hasLocalScreenShare,
+      joinConference,
+      leaveConference,
+      produceMedia,
+      consumeExistingStreams,
+      stopLocalStream,
+      stopWatchingParticipant,
+      toggleAudio,
+      toggleVideo,
+      addEventListener,
+    ]
+  );
 }

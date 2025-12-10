@@ -85,6 +85,8 @@ export interface ConsumerParams {
   kind: MediaKind;
   rtpParameters: RtpParameters;
   appData?: any;
+  /** Stream type: audio, video (camera), or screenshare */
+  streamType?: "audio" | "video" | "screenshare";
 }
 
 /**
@@ -161,6 +163,8 @@ export interface NewProducerData {
   participantId: string;
   participantName: string;
   kind: MediaKind;
+  /** Stream type: audio, video (camera), or screenshare */
+  streamType?: "audio" | "video" | "screenshare";
 }
 
 /**
