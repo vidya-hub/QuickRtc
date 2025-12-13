@@ -40,7 +40,8 @@ COPY quickrtc-example/client/vite.config.ts ./
 COPY quickrtc-example/client/tailwind.config.cjs ./
 COPY quickrtc-example/client/postcss.config.cjs ./
 
-# Build client
+# Build client (set NODE_ENV to skip SSL cert loading)
+ENV NODE_ENV=production
 RUN npm run build
 
 # ============================================================================
