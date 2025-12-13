@@ -1,9 +1,10 @@
 # QuickRTC Server Dockerfile
 FROM node:20-alpine AS builder
 
-# Install dependencies for mediasoup
+# Install dependencies for mediasoup (including pip for building worker)
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     make \
     g++ \
     linux-headers
@@ -42,6 +43,7 @@ FROM node:20-alpine
 # Install runtime dependencies for mediasoup
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     make \
     g++ \
     linux-headers
