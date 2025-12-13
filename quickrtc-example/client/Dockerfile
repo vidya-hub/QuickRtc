@@ -28,11 +28,17 @@ COPY quickrtc-react-client/ ./quickrtc-react-client/
 WORKDIR /app/quickrtc-react-client
 RUN npm install && npm run build
 
-# Copy and build the example client
+# Copy example client package.json and modify to use local package
 WORKDIR /app/client
 COPY quickrtc-example/client/package*.json ./
+
+# Replace npm registry version with local file path for Docker build
+RUN sed -i 's|"quickrtc-react-client": "[^"]*"|"quickrtc-react-client": "file:../quickrtc-react-client"|g' package.json
+
+# Install dependencies (will use local quickrtc-react-client)
 RUN npm install
 
+# Copy client source files
 COPY quickrtc-example/client/src ./src
 COPY quickrtc-example/client/index.html ./
 COPY quickrtc-example/client/tsconfig.json ./
