@@ -1,0 +1,33 @@
+import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
+
+const sidebars: SidebarsConfig = {
+  docsSidebar: [
+    'intro',
+    {
+      type: 'category',
+      label: 'Client SDK',
+      collapsed: false,
+      items: [
+        'client/overview',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Server SDK',
+      collapsed: false,
+      items: [
+        'server/overview',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'React',
+      collapsed: false,
+      items: [
+        'react/overview',
+      ],
+    },
+  ],
+};
+
+export default sidebars;

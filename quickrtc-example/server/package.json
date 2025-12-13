@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "generate-certs": "mkdir -p ../certs && openssl req -x509 -newkey rsa:4096 -keyout ../certs/key.pem -out ../certs/cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost'",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc"
