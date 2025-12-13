@@ -13,10 +13,11 @@ const SERVER_URL = "https://localhost:3000";
 // TYPES
 // ============================================================================
 
-/** Remote participant info */
+/** Remote participant with their streams */
 interface RemoteParticipant {
   id: string;
   name: string;
+  streams: RemoteStream[];
 }
 
 // ============================================================================
@@ -37,16 +38,13 @@ export default function App() {
   // PARTICIPANT & STREAM STATE - Managed by YOU, not the library
   // ============================================================================
 
-  /** Remote participants (tracked separately from streams) */
+  /** Remote participants with their streams */
   const [remoteParticipants, setRemoteParticipants] = useState<
     RemoteParticipant[]
   >([]);
 
   /** Local streams (audio, video, screenshare) - from produce() return value */
   const [localStreams, setLocalStreams] = useState<LocalStream[]>([]);
-
-  /** Remote streams from other participants - from newParticipant event */
-  const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
 
   // ============================================================================
   // QUICKRTC HOOK
@@ -78,25 +76,26 @@ export default function App() {
         `[Event] New participant: ${data.participantName} with ${data.streams.length} streams`
       );
 
-      // Add participant if not already tracked
       setRemoteParticipants((prev) => {
-        if (prev.some((p) => p.id === data.participantId)) return prev;
-        return [
-          ...prev,
-          { id: data.participantId, name: data.participantName },
-        ];
-      });
-
-      // Add any streams they have (for existing participants when you join)
-      if (data.streams.length > 0) {
-        setRemoteStreams((prev) => {
+        const existing = prev.find((p) => p.id === data.participantId);
+        if (existing) {
+          // Participant exists, merge new streams
           const newStreams = data.streams.filter(
-            (s) => !prev.some((existing) => existing.id === s.id)
+            (s) => !existing.streams.some((es) => es.id === s.id)
           );
           if (newStreams.length === 0) return prev;
-          return [...prev, ...newStreams];
-        });
-      }
+          return prev.map((p) =>
+            p.id === data.participantId
+              ? { ...p, streams: [...p.streams, ...newStreams] }
+              : p
+          );
+        }
+        // New participant
+        return [
+          ...prev,
+          { id: data.participantId, name: data.participantName, streams: data.streams },
+        ];
+      });
     };
 
     /**
@@ -109,10 +108,18 @@ export default function App() {
       console.log(
         `[Event] Stream added: ${stream.type} from ${stream.participantName}`
       );
-      setRemoteStreams((prev) => {
-        if (prev.some((s) => s.id === stream.id)) return prev;
-        return [...prev, stream];
-      });
+      setRemoteParticipants((prev) =>
+        prev.map((p) =>
+          p.id === stream.participantId
+            ? {
+                ...p,
+                streams: p.streams.some((s) => s.id === stream.id)
+                  ? p.streams
+                  : [...p.streams, stream],
+              }
+            : p
+        )
+      );
     };
 
     /**
@@ -122,9 +129,6 @@ export default function App() {
       console.log(`[Event] Participant left: ${data.participantId}`);
       setRemoteParticipants((prev) =>
         prev.filter((p) => p.id !== data.participantId)
-      );
-      setRemoteStreams((prev) =>
-        prev.filter((s) => s.participantId !== data.participantId)
       );
     };
 
@@ -137,7 +141,13 @@ export default function App() {
       type: string;
     }) => {
       console.log(`[Event] Stream removed: ${data.type} (${data.streamId})`);
-      setRemoteStreams((prev) => prev.filter((s) => s.id !== data.streamId));
+      setRemoteParticipants((prev) =>
+        prev.map((p) =>
+          p.id === data.participantId
+            ? { ...p, streams: p.streams.filter((s) => s.id !== data.streamId) }
+            : p
+        )
+      );
     };
 
     /**
@@ -193,11 +203,6 @@ export default function App() {
   const localVideo = localStreams.find((s) => s.type === "video");
   const localScreen = localStreams.find((s) => s.type === "screenshare");
   const localAudio = localStreams.find((s) => s.type === "audio");
-
-  /** Get streams for a specific participant */
-  const getParticipantStreams = (participantId: string) => {
-    return remoteStreams.filter((s) => s.participantId === participantId);
-  };
 
   // ============================================================================
   // ACTIONS
@@ -259,7 +264,6 @@ export default function App() {
     socket?.disconnect();
     setSocket(null);
     setLocalStreams([]);
-    setRemoteStreams([]);
     setRemoteParticipants([]);
   }, [leave, socket]);
 
@@ -477,10 +481,9 @@ export default function App() {
         {/* REMOTE PARTICIPANTS - Show card even without streams               */}
         {/* ================================================================== */}
         {remoteParticipants.map((participant) => {
-          const streams = getParticipantStreams(participant.id);
-          const video = streams.find((s) => s.type === "video");
-          const screen = streams.find((s) => s.type === "screenshare");
-          const audio = streams.find((s) => s.type === "audio");
+          const video = participant.streams.find((s) => s.type === "video");
+          const screen = participant.streams.find((s) => s.type === "screenshare");
+          const audio = participant.streams.find((s) => s.type === "audio");
           const hasNoVideo = !video && !screen;
 
           return (

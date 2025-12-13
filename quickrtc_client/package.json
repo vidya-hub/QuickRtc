@@ -1,6 +1,6 @@
 {
   "name": "quickrtc-client",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Simple, event-driven WebRTC conferencing library built on mediasoup",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
