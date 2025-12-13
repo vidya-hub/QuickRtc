@@ -2,3 +2,6 @@ node_modules/
 dist/
 certs/
 .DS_Store
+
+# Docker
+.docker/

@@ -1,0 +1,81 @@
+# QuickRTC Example - Docker Compose
+# 
+# Usage:
+#   Development:  docker-compose up
+#   Production:   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   With SSL:     docker-compose -f docker-compose.yml -f docker-compose.ssl.yml up -d
+
+services:
+  # ===========================================================================
+  # Backend - Node.js + MediaSoup Server
+  # ===========================================================================
+  server:
+    build:
+      context: ..
+      dockerfile: quickrtc-example/server/Dockerfile
+    container_name: quickrtc-server
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # For WebRTC - set your public IP here
+      - ANNOUNCED_IP=${ANNOUNCED_IP:-}
+    ports:
+      - "3000:3000"
+      # WebRTC UDP ports
+      - "40000-40100:40000-40100/udp"
+    networks:
+      - quickrtc-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================================================
+  # Frontend - React App served by Nginx
+  # ===========================================================================
+  client:
+    build:
+      context: ..
+      dockerfile: quickrtc-example/client/Dockerfile
+    container_name: quickrtc-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - quickrtc-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================================================
+  # Nginx Reverse Proxy (Optional - for SSL termination)
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: quickrtc-nginx
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "8080:80"
+    volumes:
+      - ./nginx.docker.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - server
+      - client
+    networks:
+      - quickrtc-network
+    profiles:
+      - ssl
+
+networks:
+  quickrtc-network:
+    driver: bridge

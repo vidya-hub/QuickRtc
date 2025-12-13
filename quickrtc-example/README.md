@@ -14,49 +14,109 @@ npm run dev     # Start server and client
 
 Accept the self-signed certificate warning in your browser.
 
+---
+
+## Docker Deployment
+
+### Quick Start with Docker
+
+```bash
+# 1. Generate SSL certs (required for WebRTC)
+cd quickrtc-example
+npm run generate-certs
+
+# 2. Build and run
+docker-compose up --build
+```
+
+- Client: http://localhost (port 80)
+- Server: http://localhost:3000
+
+### With SSL (HTTPS)
+
+```bash
+# 1. Generate certs or use your own
+npm run generate-certs
+
+# 2. Run with SSL profile
+docker-compose --profile ssl up --build
+```
+
+- HTTPS: https://localhost (port 443)
+
+### Production Deployment
+
+```bash
+# Set your public IP for WebRTC
+export ANNOUNCED_IP=your.public.ip.address
+
+# Run in detached mode
+docker-compose up -d --build
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ANNOUNCED_IP` | Public IP for WebRTC | Auto-detect |
+| `PORT` | Server port | 3000 |
+| `USE_SSL` | Enable HTTPS on server | false (in Docker) |
+
+### Docker Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `client` | 80 | React app (nginx) |
+| `server` | 3000 | Node.js + MediaSoup |
+| `nginx` | 443 | SSL reverse proxy (optional) |
+
+### Ports to Open
+
+For production deployment, ensure these ports are open:
+
+- `80/tcp` - HTTP (redirects to HTTPS)
+- `443/tcp` - HTTPS
+- `3000/tcp` - Backend (if not using nginx)
+- `40000-40100/udp` - WebRTC media
+
+---
+
 ## Project Structure
 
 ```
 quickrtc-example/
 ├── server/                 # Express + QuickRTC server
-│   └── src/
-│       └── index.ts       # Server entry point
+│   ├── src/
+│   │   └── index.ts       # Server entry point
+│   └── Dockerfile
 ├── client/                 # Vite + React client
-│   └── src/
-│       ├── App.tsx        # Main app component
-│       └── components/    # UI components
-│           ├── VideoTile.tsx      # Single participant video
-│           ├── VideoGrid.tsx      # Grid of all participants
-│           ├── ControlBar.tsx     # Media control buttons
-│           ├── ConferenceRoom.tsx # In-call view
-│           ├── JoinForm.tsx       # Join conference form
-│           └── LoadingScreen.tsx  # Connecting state
-└── certs/                 # SSL certificates (generated)
+│   ├── src/
+│   │   └── App.tsx        # Main app component
+│   ├── Dockerfile
+│   └── nginx.docker.conf  # Nginx config for client container
+├── certs/                 # SSL certificates (generated)
+├── docker-compose.yml     # Docker Compose config
+├── nginx.conf             # Nginx config (local dev)
+├── nginx.docker.conf      # Nginx config (Docker SSL proxy)
+└── nginx.production.conf  # Nginx config (production)
 ```
 
-## Client Components
+---
 
-### App.tsx
-Main component handling conference lifecycle:
-- Join form -> Connecting -> In-call
+## Local Development
 
-### VideoTile
-Displays a single participant's video/audio:
-- Camera video as primary view
-- Screen share as primary with camera overlay
-- Avatar placeholder when no video
+```bash
+# Server only
+cd server && npm run dev
 
-### VideoGrid
-Responsive grid of all participants:
-- Local user tile (muted)
-- Remote participant tiles
+# Client only
+cd client && npm run dev
 
-### ControlBar
-Media control buttons:
-- Mute/Unmute audio
-- Start/Stop video
-- Start/Stop screen share
-- Leave conference
+# Both (from root)
+npm run dev
+```
+
+---
 
 ## Server Code
 
@@ -86,72 +146,47 @@ await quickrtc.start();
 httpsServer.listen(3000);
 ```
 
+---
+
 ## Client Code
 
 ```tsx
-import { useQuickRTC, QuickRTCProvider } from "quickrtc-react-client";
+import { useQuickRTC } from "quickrtc-react-client";
 import { io } from "socket.io-client";
 
 function App() {
-  const {
-    isJoined,
-    localStreams,
-    remoteParticipants,
-    join,
-    leave,
-    toggleAudio,
-    toggleVideo,
-    toggleScreenShare,
-    watchAllParticipants,
-    hasAudio,
-    hasVideo,
-    hasScreenShare,
-  } = useQuickRTC();
+  const { rtc, isConnected, join, produce, leave } = useQuickRTC({ socket });
 
   const handleJoin = async () => {
     const socket = io("https://localhost:3000");
-    await join({ conferenceId: "room-1", participantName: "Alice", socket });
-    await toggleAudio();
-    await toggleVideo();
-    await watchAllParticipants();
+    await join({ conferenceId: "room-1", participantName: "Alice" });
+    
+    const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    await produce(media.getTracks());
   };
 
   // ... render UI
 }
-
-// Wrap with provider
-<QuickRTCProvider>
-  <App />
-</QuickRTCProvider>
 ```
+
+---
 
 ## Features Demonstrated
 
 - Join/leave conference
 - Camera and microphone toggle
-- Screen sharing with camera overlay
+- Screen sharing
 - Multiple participants
 - Auto-consume new participant streams
 - Responsive video grid
 
-## Development
-
-```bash
-# Server only
-cd server && npm run dev
-
-# Client only
-cd client && npm run dev
-
-# Both (from root)
-npm run dev
-```
+---
 
 ## Production Notes
 
-- Use proper SSL certificates
-- Configure `announcedIp` in server config for public deployment
-- Open ports: `443/tcp` (HTTPS), `40000-49999/udp` (WebRTC)
+- Use proper SSL certificates (Let's Encrypt recommended)
+- Configure `ANNOUNCED_IP` environment variable for public deployment
+- Open ports: `443/tcp` (HTTPS), `40000-40100/udp` (WebRTC)
 
 ## License
 
