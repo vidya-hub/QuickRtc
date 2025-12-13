@@ -1,6 +1,6 @@
 # quickrtc-client
 
-Vanilla JavaScript WebRTC client for QuickRTC server.
+Simple WebRTC conferencing client built on mediasoup.
 
 ## Installation
 
@@ -11,207 +11,114 @@ npm install quickrtc-client
 ## Quick Start
 
 ```typescript
-import { ConferenceClient } from "quickrtc-client";
+import { QuickRTC } from "quickrtc-client";
 import { io } from "socket.io-client";
 
 const socket = io("https://localhost:3000");
+const rtc = new QuickRTC({ socket });
 
-const client = new ConferenceClient({
-  conferenceId: "room-1",
-  participantId: "user-1",
-  participantName: "John",
-  socket,
+// Listen for participants
+rtc.on("newParticipant", ({ participantName, streams }) => {
+  console.log(`${participantName} joined`);
+  // streams may be empty if they haven't started sharing yet
 });
 
-// Join and produce media
-await client.joinMeeting();
+rtc.on("streamAdded", (stream) => {
+  // Existing participant started sharing media
+  console.log(`${stream.participantName} started ${stream.type}`);
+});
 
-const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-await client.produceMedia(stream.getAudioTracks()[0], stream.getVideoTracks()[0]);
+// Join room
+await rtc.join({ conferenceId: "room-1", participantName: "Alice" });
 
-// Consume other participants
-await client.consumeExistingStreams();
-```
-
-## API
-
-### Lifecycle
-
-```typescript
-await client.joinMeeting();
-await client.leaveMeeting();
-client.isInMeeting(); // boolean
-```
-
-### Media Production
-
-```typescript
-// Produce camera + audio
-await client.produceMedia(audioTrack, videoTrack);
-
-// Produce with type (for screen share)
-await client.produceMedia(audioTrack, videoTrack, "screenshare");
-
-// Stop a specific stream
-await client.stopLocalStream(streamId);
-```
-
-### Media Consumption
-
-```typescript
-// Consume all existing participants
-await client.consumeExistingStreams();
-
-// Stop watching a specific participant
-await client.stopWatchingStream(participantId);
-```
-
-### Controls
-
-```typescript
-await client.toggleAudio(streamId?);
-await client.toggleVideo(streamId?);
-```
-
-### Participants
-
-```typescript
-client.getParticipants();           // All participants
-client.getRemoteParticipant(id);    // Single remote participant
-client.getAllRemoteParticipants();  // All remote participants
-```
-
-### Local Streams
-
-```typescript
-client.getLocalStreams();          // All local streams
-client.getLocalStream(streamId);   // Single local stream
+// Start sharing media
+const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+const localStreams = await rtc.produce(media.getTracks());
 ```
 
 ## Events
 
+| Event | When | Data |
+|-------|------|------|
+| `newParticipant` | Someone joins | `{ participantId, participantName, streams[] }` |
+| `streamAdded` | Participant starts sharing | `{ id, type, stream, participantId, participantName }` |
+| `streamRemoved` | Participant stops sharing | `{ participantId, streamId, type }` |
+| `participantLeft` | Someone leaves | `{ participantId }` |
+| `localStreamEnded` | Your stream stopped externally | `{ streamId, type }` |
+
+## API
+
 ```typescript
-// Participant events
-client.addEventListener("participantJoined", (e) => {
-  const { participantId, participantName } = e.detail;
+// Join/Leave
+await rtc.join({ conferenceId, participantName });
+await rtc.leave();
+
+// Produce media
+const streams = await rtc.produce(track);           // Single track
+const streams = await rtc.produce([track1, track2]); // Multiple tracks
+const streams = await rtc.produce({ track, type: "screenshare" }); // With type hint
+
+// Control streams
+await localStream.pause();
+await localStream.resume();
+await localStream.stop();
+```
+
+## Example
+
+```typescript
+let remoteParticipants = [];
+let remoteStreams = [];
+
+rtc.on("newParticipant", ({ participantId, participantName, streams }) => {
+  remoteParticipants.push({ id: participantId, name: participantName });
+  remoteStreams.push(...streams);
+  render();
 });
 
-client.addEventListener("participantLeft", (e) => {
-  const { participantId } = e.detail;
+rtc.on("streamAdded", (stream) => {
+  remoteStreams.push(stream);
+  render();
 });
 
-// Stream events
-client.addEventListener("remoteStreamAdded", (e) => {
-  const { participantId, kind, stream, streamType } = e.detail;
-  // streamType: "audio" | "video" | "screenshare"
-  videoElement.srcObject = stream;
+rtc.on("streamRemoved", ({ streamId }) => {
+  remoteStreams = remoteStreams.filter(s => s.id !== streamId);
+  render();
 });
 
-client.addEventListener("remoteStreamRemoved", (e) => {
-  const { participantId, kind } = e.detail;
+rtc.on("participantLeft", ({ participantId }) => {
+  remoteParticipants = remoteParticipants.filter(p => p.id !== participantId);
+  remoteStreams = remoteStreams.filter(s => s.participantId !== participantId);
+  render();
 });
 
-client.addEventListener("localStreamAdded", (e) => {
-  const { streamId, type, stream } = e.detail;
-});
-
-// Toggle events
-client.addEventListener("localAudioToggled", (e) => {
-  const { enabled } = e.detail;
-});
-
-client.addEventListener("localVideoToggled", (e) => {
-  const { enabled } = e.detail;
-});
-
-// Error event
-client.addEventListener("error", (e) => {
-  console.error(e.detail.error);
+rtc.on("localStreamEnded", ({ streamId }) => {
+  // Browser stopped the track (e.g., "Stop sharing" button)
+  localStreams = localStreams.filter(s => s.id !== streamId);
+  render();
 });
 ```
 
-## Screen Sharing
+## Types
 
 ```typescript
-// Start screen share
-const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-const { videoStreamId } = await client.produceMedia(
-  undefined, 
-  screenStream.getVideoTracks()[0], 
-  "screenshare"
-);
+interface LocalStream {
+  id: string;
+  type: "audio" | "video" | "screenshare";
+  stream: MediaStream;
+  track: MediaStreamTrack;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  stop: () => Promise<void>;
+}
 
-// Stop screen share
-await client.stopLocalStream(videoStreamId);
-```
-
-## Multi-Stream Support
-
-QuickRTC supports multiple simultaneous streams per participant:
-
-- **Camera video** (`video`) - Regular webcam
-- **Screen share** (`screenshare`) - Display/window capture
-- **Audio** (`audio`) - Microphone
-
-A participant can share both camera and screen simultaneously. Use the `streamType` field to differentiate:
-
-```typescript
-client.addEventListener("remoteStreamAdded", (e) => {
-  const { stream, streamType, participantId } = e.detail;
-  
-  if (streamType === "screenshare") {
-    screenShareElement.srcObject = stream;
-  } else if (streamType === "video") {
-    videoElement.srcObject = stream;
-  } else if (streamType === "audio") {
-    audioElement.srcObject = stream;
-  }
-});
-```
-
-## Complete Example
-
-```typescript
-import { ConferenceClient } from "quickrtc-client";
-import { io } from "socket.io-client";
-
-const socket = io("https://localhost:3000");
-const client = new ConferenceClient({
-  conferenceId: "demo-room",
-  participantId: crypto.randomUUID(),
-  participantName: "User",
-  socket,
-});
-
-// Setup event listeners
-client.addEventListener("participantJoined", (e) => {
-  console.log(`${e.detail.participantName} joined`);
-});
-
-client.addEventListener("remoteStreamAdded", (e) => {
-  const video = document.createElement("video");
-  video.srcObject = e.detail.stream;
-  video.autoplay = true;
-  video.dataset.participantId = e.detail.participantId;
-  video.dataset.streamType = e.detail.streamType;
-  document.body.appendChild(video);
-});
-
-client.addEventListener("remoteStreamRemoved", (e) => {
-  const video = document.querySelector(
-    `video[data-participant-id="${e.detail.participantId}"]`
-  );
-  video?.remove();
-});
-
-// Join and start
-await client.joinMeeting();
-const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-await client.produceMedia(stream.getAudioTracks()[0], stream.getVideoTracks()[0]);
-await client.consumeExistingStreams();
-
-// Cleanup on page unload
-window.addEventListener("beforeunload", () => client.leaveMeeting());
+interface RemoteStream {
+  id: string;
+  type: "audio" | "video" | "screenshare";
+  stream: MediaStream;
+  participantId: string;
+  participantName: string;
+}
 ```
 
 ## License

@@ -392,7 +392,7 @@ class SocketEventController extends EnhancedEventEmitter {
     console.log("received data socket ", socketEventData);
 
     try {
-      const { conferenceId, participantId, conferenceName, participantName } =
+      const { conferenceId, participantId, conferenceName, participantName, participantInfo } =
         socketEventData;
       const conference = await this.mediasoupController?.joinConference({
         conferenceId: conferenceId,
@@ -400,6 +400,7 @@ class SocketEventController extends EnhancedEventEmitter {
         conferenceName: conferenceName || conferenceId,
         participantName: participantName,
         socketId: socket.id,
+        participantInfo: participantInfo,
       });
       console.log("mediasoup con response ", conference);
 
@@ -409,6 +410,7 @@ class SocketEventController extends EnhancedEventEmitter {
         participantId,
         participantName,
         conferenceId,
+        participantInfo,
       };
       socket.to(conferenceId).emit("participantJoined", participantJoinedData);
 

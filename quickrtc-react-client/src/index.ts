@@ -1,106 +1,92 @@
 /**
  * QuickRTC React Client
- * Simplified WebRTC integration for React applications
+ * Event-driven WebRTC integration for React applications
+ *
+ * Pattern: 
+ * - `rtc` is used ONLY for event subscriptions
+ * - Streams are auto-consumed - listen for `newParticipant` event
+ * - You manage your own stream state
  *
  * Quick Start:
  * ```tsx
- * import { QuickRTCProvider, useQuickRTC } from 'quickrtc-react-client';
- * import { io } from 'socket.io-client';
- *
- * function App() {
- *   return (
- *     <QuickRTCProvider>
- *       <VideoRoom />
- *     </QuickRTCProvider>
- *   );
- * }
+ * import { useQuickRTC, QuickRTCVideo } from 'quickrtc-react-client';
+ * import type { LocalStream, RemoteStream, NewParticipantEvent } from 'quickrtc-react-client';
  *
  * function VideoRoom() {
- *   const { join, enableAudio, enableVideo, localStreams, remoteParticipants } = useQuickRTC();
- *   // Your implementation here
+ *   const socket = useMemo(() => io('http://localhost:3000'), []);
+ *   const { rtc, join, produce } = useQuickRTC({ socket });
+ *   
+ *   // YOU manage state
+ *   const [localStreams, setLocalStreams] = useState<LocalStream[]>([]);
+ *   const [remoteStreams, setRemoteStreams] = useState<RemoteStream[]>([]);
+ *
+ *   // Subscribe to events - streams are auto-consumed!
+ *   useEffect(() => {
+ *     if (!rtc) return;
+ *     
+ *     rtc.on("newParticipant", ({ participantName, streams }) => {
+ *       console.log(`${participantName} joined with ${streams.length} streams`);
+ *       setRemoteStreams(prev => [...prev, ...streams]);
+ *     });
+ *     
+ *     rtc.on("streamRemoved", ({ streamId }) => {
+ *       setRemoteStreams(prev => prev.filter(s => s.id !== streamId));
+ *     });
+ *   }, [rtc]);
+ *
+ *   const handleJoin = async () => {
+ *     await join({ conferenceId: 'room-1', participantName: 'Alice' });
+ *     
+ *     // Produce from getUserMedia
+ *     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+ *     const streams = await produce(stream.getTracks());
+ *     setLocalStreams(streams);
+ *   };
+ *
+ *   return (
+ *     <>
+ *       {localStreams.map(s => (
+ *         <QuickRTCVideo key={s.id} stream={s.stream} muted mirror />
+ *       ))}
+ *       {remoteStreams.map(s => (
+ *         <QuickRTCVideo key={s.id} stream={s.stream} />
+ *       ))}
+ *     </>
+ *   );
  * }
  * ```
  */
 
 // ============================================================================
-// SIMPLE API - Recommended for most use cases
+// HOOK - Main API
 // ============================================================================
 
-// Provider and Hook - All you need!
-export { QuickRTCProvider } from "./QuickRTCProvider";
-export { useQuickRTC } from "./hooks/useQuickRTC";
-export type { UseQuickRTCOptions } from "./hooks/useQuickRTC";
+export { useQuickRTC } from "./useQuickRTC";
+export type { UseQuickRTCOptions, UseQuickRTCReturn } from "./useQuickRTC";
 
 // ============================================================================
-// ADVANCED API - For custom integrations
+// VIDEO COMPONENT - Optimized for WebRTC streams
 // ============================================================================
 
-// Redux store (if you want to integrate with existing Redux store)
-export { conferenceReducer } from "./store/conferenceSlice";
-export { eventMiddleware } from "./store/eventMiddleware";
-
-// Advanced hook (for direct Redux integration)
-export { useConference } from "./hooks/useConference";
-
-// Selectors (for custom Redux selectors)
-export {
-  selectIsJoined,
-  selectIsConnecting,
-  selectConfig,
-  selectError,
-  selectLocalStreams,
-  selectLocalStreamById,
-  selectLocalStreamsByType,
-  selectHasLocalAudio,
-  selectHasLocalVideo,
-  selectHasLocalScreenShare,
-  selectRemoteParticipants,
-  selectRemoteParticipantById,
-  selectRemoteParticipantCount,
-  selectDevice,
-  selectSendTransport,
-  selectRecvTransport,
-  selectIsMediaEnabled,
-  selectCanProduce,
-  selectCanConsume,
-} from "./store/selectors";
-
-// Thunks (for custom Redux actions)
-export {
-  joinConference,
-  leaveConference,
-  produceMedia,
-  consumeExistingStreams,
-  consumeParticipant,
-  stopLocalStream,
-  stopWatchingParticipant,
-  toggleAudio,
-  toggleVideo,
-} from "./store/thunks";
+export { QuickRTCVideo, QuickRTCVideoOptimized } from "./components";
+export type { QuickRTCVideoProps, StreamSource, VideoLoadingState } from "./components";
 
 // ============================================================================
-// TYPES
+// RE-EXPORT TYPES FROM quickrtc-client for convenience
 // ============================================================================
 
 export type {
-  ConferenceConfig,
-  ConferenceState,
-  LocalStreamType,
-  LocalStreamInfo,
-  RemoteParticipant,
-  ProduceMediaOptions,
-  ProduceMediaResult,
-  TransportOptions,
-  TransportPair,
-  ConsumeParams,
-  ParticipantInfo,
-  SocketEvents,
-} from "./types";
+  QuickRTCConfig,
+  JoinConfig,
+  LocalStream,
+  RemoteStream,
+  Participant,
+  StreamType,
+  ProduceInput,
+  TrackWithType,
+  QuickRTCEvents,
+  NewParticipantEvent,
+} from "quickrtc-client";
 
-// ============================================================================
-// LOW-LEVEL SERVICES - For advanced/custom usage
-// ============================================================================
-
-export { deviceService } from "./api/deviceService";
-export { socketService } from "./api/socketService";
-export { streamService } from "./api/streamService";
+// Re-export the core class for advanced usage
+export { QuickRTC } from "quickrtc-client";

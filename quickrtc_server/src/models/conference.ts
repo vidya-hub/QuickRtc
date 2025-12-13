@@ -111,9 +111,10 @@ class MediasoupConference implements Conference {
   createParticipant(
     participantId: string,
     participantName: string,
-    socketId: string
+    socketId: string,
+    participantInfo?: Record<string, unknown>
   ): MediasoupParticipant {
-    return new MediasoupParticipant(participantId, participantName, socketId);
+    return new MediasoupParticipant(participantId, participantName, socketId, participantInfo);
   }
   async createTransport(
     transportParams: CreateTransportParams

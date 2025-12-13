@@ -1,19 +1,8 @@
 const path = require("path");
 
-module.exports = {
-  mode: "development", // Change to 'production' for production builds
-  entry: "./src/client.ts",
-  output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "client.js",
-    library: {
-      type: "module",
-    },
-    clean: true,
-  },
-  experiments: {
-    outputModule: true,
-  },
+// Common configuration
+const common = {
+  entry: "./src/index.ts",
   module: {
     rules: [
       {
@@ -32,11 +21,49 @@ module.exports = {
       process: require.resolve("process/browser"),
     },
   },
-  // Remove externals to bundle socket.io-client
-  // externals: {
-  //   // Don't bundle these - they'll be available globally or via CDN
-  //   "socket.io-client": "io",
-  // },
+  externals: {
+    "socket.io-client": {
+      commonjs: "socket.io-client",
+      commonjs2: "socket.io-client",
+      amd: "socket.io-client",
+      root: "io",
+    },
+  },
   target: "web",
   devtool: "source-map",
 };
+
+// UMD build (for script tags and CommonJS)
+const umdConfig = {
+  ...common,
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "index.js",
+    library: {
+      type: "umd",
+    },
+    globalObject: "this",
+    clean: false, // Don't clean - tsc outputs type files
+  },
+};
+
+// ESM build (for modern bundlers like Vite/Rollup)
+const esmConfig = {
+  ...common,
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "index.esm.js",
+    library: {
+      type: "module",
+    },
+    clean: false,
+  },
+  experiments: {
+    outputModule: true,
+  },
+  externals: {
+    "socket.io-client": "socket.io-client",
+  },
+};
+
+module.exports = [umdConfig, esmConfig];

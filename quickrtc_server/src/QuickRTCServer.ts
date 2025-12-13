@@ -57,6 +57,8 @@ export interface ParticipantInfo {
   conferenceId: string;
   socketId: string;
   joinedAt: Date;
+  /** Extra participant metadata (permissions, role, etc.) */
+  info?: Record<string, unknown>;
   mediaState: {
     audioEnabled: boolean;
     videoEnabled: boolean;
@@ -508,6 +510,7 @@ export class QuickRTCServer extends EventTarget {
         conferenceId,
         socketId,
         joinedAt: new Date(),
+        info: data.participantInfo,
         mediaState: {
           audioEnabled: true,
           videoEnabled: true,

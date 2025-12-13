@@ -35,6 +35,21 @@ const app = express();
 app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json());
 
+// Serve static files for vanilla example
+const vanillaDir = path.join(process.cwd(), "..", "vanilla");
+app.use(express.static(vanillaDir));
+
+// Serve QuickRTC client bundle
+const quickrtcClientBundle = path.join(process.cwd(), "..", "..", "quickrtc_client", "dist", "index.js");
+app.get("/quickrtc-client.js", (req, res) => {
+  if (fs.existsSync(quickrtcClientBundle)) {
+    res.type("application/javascript");
+    res.sendFile(quickrtcClientBundle);
+  } else {
+    res.status(404).send("QuickRTC client not found. Run 'npm run build' in quickrtc_client first.");
+  }
+});
+
 // Health check
 app.get("/health", (_, res) => res.json({ status: "ok" }));
 
@@ -62,9 +77,10 @@ const quickrtc = new QuickRTCServer({
 quickrtc.on("conferenceCreated", (e) =>
   console.log(`Conference created: ${e.detail.conference.id}`)
 );
-quickrtc.on("participantJoined", (e) =>
-  console.log(`${e.detail.participant.name} joined`)
-);
+quickrtc.on("participantJoined", (e) => {
+  const info = e.detail.participant.info;
+  console.log(`${e.detail.participant.name} joined`, info ? `(info: ${JSON.stringify(info)})` : '');
+});
 quickrtc.on("participantLeft", (e) =>
   console.log(`${e.detail.participant.name} left`)
 );
@@ -73,6 +89,7 @@ quickrtc.on("participantLeft", (e) =>
 quickrtc.start().then(() => {
   httpsServer.listen(PORT, () => {
     console.log(`\nServer running at https://localhost:${PORT}`);
+    console.log(`Vanilla example: https://localhost:${PORT}/`);
     console.log(`Local IP: ${getLocalIp()}\n`);
   });
 });

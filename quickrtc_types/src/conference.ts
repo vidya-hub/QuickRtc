@@ -7,6 +7,8 @@ export type JoinConferenceParams = {
   participantId: string;
   participantName: string;
   socketId: string;
+  /** Extra participant metadata (permissions, role, etc.) */
+  participantInfo?: Record<string, unknown>;
 };
 
 /**

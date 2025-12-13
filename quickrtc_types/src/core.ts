@@ -81,7 +81,8 @@ export interface Conference {
   createParticipant(
     participantId: string,
     participantName: string,
-    socketId: string
+    socketId: string,
+    participantInfo?: Record<string, unknown>
   ): Participant;
   createTransport(
     transportParams: CreateTransportParams
@@ -133,6 +134,8 @@ export interface Participant {
   id: string;
   name: string;
   socketId: string;
+  /** Extra participant metadata (permissions, role, etc.) */
+  info?: Record<string, unknown>;
   producerTransport?: Transport;
   consumerTransport?: Transport;
   producers: ProducersToUsers;

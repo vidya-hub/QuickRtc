@@ -44,6 +44,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
         participantId,
         participantName,
         socketId,
+        participantInfo,
       } = params;
 
       // Validate parameters
@@ -78,7 +79,8 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
         participant = conference.createParticipant(
           participantId,
           participantName,
-          socketId
+          socketId,
+          participantInfo
         );
       }
       conference.addParticipant(participant);
@@ -603,6 +605,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
     participantId: string;
     participantName: string;
     socketId: string;
+    participantInfo?: Record<string, unknown>;
   }[] {
     const conference = this.conferences.get(conferenceId);
     if (!conference) {
@@ -613,6 +616,7 @@ class MediasoupController extends EnhancedEventEmitter implements AppState {
         participantId: participant.id,
         participantName: participant.name,
         socketId: participant.socketId,
+        participantInfo: participant.info,
         producers: participant.getProducerIds(),
       };
     });

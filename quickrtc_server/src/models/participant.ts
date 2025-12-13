@@ -14,6 +14,7 @@ class MediasoupParticipant implements Participant {
   id: string;
   socketId: string;
   name: string;
+  info: Record<string, unknown>;
   producerTransport?: mediasoup.types.Transport;
   consumerTransport?: mediasoup.types.Transport;
   producers: ProducersToUsers;
@@ -27,10 +28,11 @@ class MediasoupParticipant implements Participant {
     }
   > = new Map();
 
-  constructor(id: string, name: string, socketId: string) {
+  constructor(id: string, name: string, socketId: string, info?: Record<string, unknown>) {
     this.id = id;
     this.name = name;
     this.socketId = socketId;
+    this.info = info || {};
     this.producers = new Map();
     this.consumers = new Map();
   }

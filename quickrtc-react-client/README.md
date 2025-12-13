@@ -1,6 +1,6 @@
 # quickrtc-react-client
 
-React hooks and Redux integration for QuickRTC video conferencing.
+React hooks and components for QuickRTC conferencing.
 
 ## Installation
 
@@ -10,221 +10,100 @@ npm install quickrtc-react-client
 
 ## Quick Start
 
-### 1. Wrap with Provider
-
 ```tsx
-import { QuickRTCProvider } from "quickrtc-react-client";
-
-function Main() {
-  return (
-    <QuickRTCProvider>
-      <App />
-    </QuickRTCProvider>
-  );
-}
-```
-
-### 2. Use the Hook
-
-```tsx
-import { useQuickRTC } from "quickrtc-react-client";
+import { useQuickRTC, QuickRTCVideo } from "quickrtc-react-client";
 import { io } from "socket.io-client";
 
-function Conference() {
-  const {
-    isJoined,
-    localStreams,
-    remoteParticipants,
-    join,
-    leave,
-    toggleAudio,
-    toggleVideo,
-    toggleScreenShare,
-    watchAllParticipants,
-    hasAudio,
-    hasVideo,
-    hasScreenShare,
-  } = useQuickRTC();
+function App() {
+  const [socket, setSocket] = useState(null);
+  const [remoteParticipants, setRemoteParticipants] = useState([]);
+  const [remoteStreams, setRemoteStreams] = useState([]);
+  const [localStreams, setLocalStreams] = useState([]);
+
+  const { rtc, isConnected, join, leave, produce } = useQuickRTC({ socket });
+
+  useEffect(() => {
+    if (!rtc) return;
+
+    rtc.on("newParticipant", ({ participantId, participantName, streams }) => {
+      setRemoteParticipants(prev => [...prev, { id: participantId, name: participantName }]);
+      setRemoteStreams(prev => [...prev, ...streams]);
+    });
+
+    rtc.on("streamAdded", (stream) => {
+      setRemoteStreams(prev => [...prev, stream]);
+    });
+
+    rtc.on("streamRemoved", ({ streamId }) => {
+      setRemoteStreams(prev => prev.filter(s => s.id !== streamId));
+    });
+
+    rtc.on("participantLeft", ({ participantId }) => {
+      setRemoteParticipants(prev => prev.filter(p => p.id !== participantId));
+      setRemoteStreams(prev => prev.filter(s => s.participantId !== participantId));
+    });
+
+    rtc.on("localStreamEnded", ({ streamId }) => {
+      setLocalStreams(prev => prev.filter(s => s.id !== streamId));
+    });
+  }, [rtc]);
 
   const handleJoin = async () => {
-    const socket = io("https://your-server.com");
-    await join({
-      conferenceId: "room-1",
-      participantName: "Alice",
-      socket,
-    });
-    await toggleAudio();
-    await toggleVideo();
-    await watchAllParticipants();
+    const newSocket = io("https://localhost:3000");
+    await new Promise(resolve => newSocket.on("connect", resolve));
+    setSocket(newSocket);
+    
+    await join({ conferenceId: "room-1", participantName: "Alice" });
+    
+    const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    setLocalStreams(await produce(media.getTracks()));
   };
-
-  if (!isJoined) {
-    return <button onClick={handleJoin}>Join</button>;
-  }
 
   return (
     <div>
-      <button onClick={toggleAudio}>{hasAudio ? "Mute" : "Unmute"}</button>
-      <button onClick={toggleVideo}>{hasVideo ? "Stop" : "Start"} Video</button>
-      <button onClick={toggleScreenShare}>
-        {hasScreenShare ? "Stop" : "Start"} Screen Share
-      </button>
-      <button onClick={leave}>Leave</button>
-
-      {/* Local video */}
-      {localStreams.map((stream) => (
-        <video
-          key={stream.id}
-          ref={(el) => el && (el.srcObject = stream.stream)}
-          autoPlay
-          muted
-          playsInline
-        />
+      {localStreams.map(s => (
+        <QuickRTCVideo key={s.id} stream={s.stream} muted mirror />
       ))}
-
-      {/* Remote participants */}
-      {remoteParticipants.map((p) => (
-        <div key={p.participantId}>
-          <p>{p.participantName}</p>
-          {p.streams?.map((s) => (
-            <video
-              key={s.id}
-              ref={(el) => el && (el.srcObject = s.stream)}
-              autoPlay
-              playsInline
-            />
-          ))}
-        </div>
+      {remoteStreams.map(s => (
+        <QuickRTCVideo key={s.id} stream={s.stream} />
       ))}
     </div>
   );
 }
 ```
 
-## useQuickRTC Hook API
+## Events
+
+| Event | When | Data |
+|-------|------|------|
+| `newParticipant` | Someone joins | `{ participantId, participantName, streams[] }` |
+| `streamAdded` | Participant starts sharing | `{ id, type, stream, participantId, participantName }` |
+| `streamRemoved` | Participant stops sharing | `{ participantId, streamId, type }` |
+| `participantLeft` | Someone leaves | `{ participantId }` |
+| `localStreamEnded` | Your stream stopped externally | `{ streamId, type }` |
+
+## Hook API
 
 ```typescript
 const {
-  // Connection State
-  isJoined: boolean,
-  isConnecting: boolean,
-  error: string | null,
-
-  // Streams
-  localStreams: LocalStreamInfo[],      // Your audio/video/screenshare streams
-  remoteParticipants: RemoteParticipant[], // Other participants with their streams
-
-  // Convenience Flags
-  hasAudio: boolean,      // Has active audio stream
-  hasVideo: boolean,      // Has active video stream  
-  hasScreenShare: boolean, // Has active screen share
-
-  // Actions
-  join: (config: ConferenceConfig) => Promise<void>,
-  leave: () => Promise<void>,
-  toggleAudio: () => Promise<void>,
-  toggleVideo: () => Promise<void>,
-  toggleScreenShare: () => Promise<void>,
-  watchAllParticipants: () => Promise<void>,
-} = useQuickRTC();
+  rtc,           // QuickRTC instance for events
+  isConnected,   // boolean
+  join,          // ({ conferenceId, participantName }) => Promise
+  leave,         // () => Promise
+  produce,       // (tracks) => Promise<LocalStream[]>
+} = useQuickRTC({ socket, debug?: boolean });
 ```
 
-## Types
-
-### LocalStreamInfo
-
-```typescript
-interface LocalStreamInfo {
-  id: string;
-  type: "audio" | "video" | "screenshare";
-  track: MediaStreamTrack;
-  stream: MediaStream;
-  producer: Producer;
-  enabled: boolean;
-}
-```
-
-### RemoteParticipant
-
-```typescript
-interface RemoteParticipant {
-  participantId: string;
-  participantName: string;
-  isAudioEnabled: boolean;
-  isVideoEnabled: boolean;
-  isScreenShareEnabled: boolean;
-  streams: RemoteStreamInfo[];
-  // Legacy fields (for backwards compatibility)
-  videoStream?: MediaStream;
-  audioStream?: MediaStream;
-}
-```
-
-### RemoteStreamInfo
-
-```typescript
-interface RemoteStreamInfo {
-  id: string;
-  type: "audio" | "video" | "screenshare";
-  stream: MediaStream;
-  consumer: Consumer;
-  producerId: string;
-}
-```
-
-### ConferenceConfig
-
-```typescript
-interface ConferenceConfig {
-  conferenceId: string;
-  participantName: string;
-  socket: Socket;
-  participantId?: string;  // Auto-generated if not provided
-  conferenceName?: string;
-}
-```
-
-## Advanced: Using useConference
-
-For more control, use the lower-level `useConference` hook:
-
-```typescript
-import { useConference } from "quickrtc-react-client";
-
-const {
-  // All useQuickRTC state...
-  
-  // Additional actions
-  produceMedia: (options: ProduceMediaOptions) => Promise<ProduceMediaResult>,
-  stopLocalStream: (streamId: string) => Promise<void>,
-  stopWatchingParticipant: (participantId: string) => Promise<void>,
-} = useConference();
-```
-
-## Multi-Stream Support
-
-QuickRTC supports multiple simultaneous streams per participant:
-
-- **Camera video** - Regular video stream
-- **Screen share** - Display/window capture  
-- **Audio** - Microphone input
-
-Each participant can share both camera and screen simultaneously. The `streams` array on `RemoteParticipant` contains all active streams with their type.
+## Components
 
 ```tsx
-{remoteParticipants.map((participant) => {
-  const videoStream = participant.streams.find(s => s.type === "video");
-  const screenStream = participant.streams.find(s => s.type === "screenshare");
-  const audioStream = participant.streams.find(s => s.type === "audio");
-  
-  return (
-    <div key={participant.participantId}>
-      {screenStream && <video srcObject={screenStream.stream} />}
-      {videoStream && <video srcObject={videoStream.stream} />}
-      {audioStream && <audio srcObject={audioStream.stream} />}
-    </div>
-  );
-})}
+<QuickRTCVideo
+  stream={mediaStream}
+  muted={false}       // Mute audio (use for local video)
+  mirror={false}      // Flip horizontally (use for self-view)
+  audioOnly={false}   // Render as hidden audio element
+  className=""
+/>
 ```
 
 ## License

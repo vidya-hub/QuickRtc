@@ -29,6 +29,8 @@ export interface SocketResponse<T = any> {
 export interface ParticipantInfo {
   participantId: string;
   participantName: string;
+  /** Extra participant metadata (permissions, role, etc.) */
+  participantInfo?: Record<string, unknown>;
 }
 
 /**
@@ -40,6 +42,8 @@ export interface JoinConferenceRequest {
     participantId: string;
     conferenceName?: string;
     participantName: string;
+    /** Extra participant metadata (permissions, role, etc.) */
+    participantInfo?: Record<string, unknown>;
   };
 }
 
@@ -144,6 +148,8 @@ export interface ParticipantJoinedData {
   participantId: string;
   participantName: string;
   conferenceId: string;
+  /** Extra participant metadata (permissions, role, etc.) */
+  participantInfo?: Record<string, unknown>;
 }
 
 /**
@@ -174,6 +180,8 @@ export interface ProducerClosedData {
   participantId: string;
   producerId: string;
   kind: "audio" | "video";
+  /** Stream type: audio, video (camera), or screenshare */
+  streamType?: "audio" | "video" | "screenshare";
 }
 
 export interface ConsumerClosedData {

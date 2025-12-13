@@ -1,7 +1,7 @@
 {
   "name": "quickrtc-react-client",
-  "version": "1.2.0",
-  "description": "Production-ready React client library for QuickRTC with Redux state management",
+  "version": "2.0.0",
+  "description": "React hooks and components for QuickRTC WebRTC conferencing",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -24,7 +24,7 @@
     "webrtc",
     "mediasoup",
     "react",
-    "redux",
+    "hooks",
     "client",
     "real-time",
     "video",
@@ -41,21 +41,16 @@
     "access": "public"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-redux": "^8.0.0 || ^9.0.0",
-    "@reduxjs/toolkit": "^2.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "mediasoup-client": "^3.16.7",
-    "quickrtc-types": "^1.1.0",
+    "quickrtc-client": "^2.0.0",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "@reduxjs/toolkit": "^2.5.0",
     "@types/node": "^24.7.1",
     "@types/react": "^18.3.18",
     "react": "^18.3.1",
-    "react-redux": "^9.2.0",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "webpack": "^5.102.1",

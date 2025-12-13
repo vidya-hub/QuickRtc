@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickRTC Vanilla JS Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #111827;
+      color: white;
+      min-height: 100vh;
+    }
+    
+    /* Join Form */
+    .join-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .join-container h1 {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    .join-form {
+      background: #1f2937;
+      padding: 2rem;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 360px;
+    }
+    
+    .join-form input {
+      width: 100%;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      background: #374151;
+      border: 1px solid #4b5563;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+    }
+    
+    .join-form input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    
+    .join-form button {
+      width: 100%;
+      padding: 12px 16px;
+      background: #3b82f6;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .join-form button:hover {
+      background: #2563eb;
+    }
+    
+    /* Conference Room */
+    .conference-container {
+      display: none;
+      padding: 16px;
+    }
+    
+    .conference-container.active {
+      display: block;
+    }
+    
+    /* Controls */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .controls button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .btn-audio { background: #22c55e; }
+    .btn-audio:hover { background: #16a34a; }
+    .btn-audio.active { background: #ef4444; }
+    .btn-audio.active:hover { background: #dc2626; }
+    
+    .btn-video { background: #22c55e; }
+    .btn-video:hover { background: #16a34a; }
+    .btn-video.active { background: #ef4444; }
+    .btn-video.active:hover { background: #dc2626; }
+    
+    .btn-screen { background: #4b5563; }
+    .btn-screen:hover { background: #6b7280; }
+    .btn-screen.active { background: #eab308; }
+    .btn-screen.active:hover { background: #ca8a04; }
+    
+    .btn-leave {
+      background: #dc2626;
+    }
+    .btn-leave:hover {
+      background: #b91c1c;
+    }
+    
+    /* Video Grid */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    
+    .video-tile {
+      position: relative;
+      background: #1f2937;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 16/9;
+    }
+    
+    .video-tile video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .video-tile.screen video {
+      object-fit: contain;
+    }
+    
+    .video-tile .name-tag {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      z-index: 10;
+    }
+    
+    .video-tile .pip {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      width: 120px;
+      height: 90px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .video-tile .pip video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .video-tile.local video {
+      transform: scaleX(-1);
+    }
+    
+    .video-tile .avatar {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4rem;
+      color: #6b7280;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      color: #6b7280;
+      margin-top: 3rem;
+    }
+    
+    /* Error message */
+    .error {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      max-width: 360px;
+      display: none;
+    }
+    
+    .error.active {
+      display: block;
+    }
+
+    /* Status indicator */
+    .status {
+      text-align: center;
+      margin-bottom: 16px;
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <!-- Join Screen -->
+  <div id="join-screen" class="join-container">
+    <h1>QuickRTC Demo</h1>
+    <div id="error" class="error"></div>
+    <div class="join-form">
+      <input type="text" id="name-input" placeholder="Your Name" autocomplete="off">
+      <input type="text" id="room-input" placeholder="Room ID" value="demo-room" autocomplete="off">
+      <button id="join-btn">Join Room</button>
+    </div>
+  </div>
+
+  <!-- Conference Screen -->
+  <div id="conference-screen" class="conference-container">
+    <div class="status" id="status"></div>
+    
+    <div class="controls">
+      <button class="btn-audio" id="audio-btn">Unmute</button>
+      <button class="btn-video" id="video-btn">Start Video</button>
+      <button class="btn-screen" id="screen-btn">Share Screen</button>
+      <button class="btn-leave" id="leave-btn">Leave</button>
+    </div>
+    
+    <div class="video-grid" id="video-grid"></div>
+    
+    <p class="empty-state" id="empty-state">Waiting for others to join...</p>
+  </div>
+
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  
+  <!-- QuickRTC Client (served from server or CDN) -->
+  <script src="/quickrtc-client.js"></script>
+  
+  <!-- App -->
+  <script src="app.js"></script>
+</body>
+</html>

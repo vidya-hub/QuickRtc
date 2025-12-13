@@ -17,8 +17,8 @@ module.exports = {
   externals: {
     react: "react",
     "react-dom": "react-dom",
-    "react-redux": "react-redux",
-    "@reduxjs/toolkit": "@reduxjs/toolkit",
+    "quickrtc-client": "quickrtc-client",
+    "socket.io-client": "socket.io-client",
   },
   resolve: {
     extensions: [".ts", ".tsx", ".js"],
