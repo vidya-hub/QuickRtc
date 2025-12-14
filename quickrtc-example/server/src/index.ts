@@ -117,7 +117,7 @@ quickrtc.on("conferenceCreated", (e) =>
   console.log(`Conference created: ${e.detail.conference.id}`)
 );
 quickrtc.on("participantJoined", (e) => {
-  const info = e.detail.participant.info;
+  const info = (e.detail.participant as { participantInfo?: Record<string, unknown> }).participantInfo;
   console.log(
     `${e.detail.participant.name} joined`,
     info ? `(info: ${JSON.stringify(info)})` : ""
