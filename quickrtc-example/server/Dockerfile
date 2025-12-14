@@ -1,56 +1,54 @@
 # QuickRTC Server Dockerfile
-FROM node:20-alpine AS builder
+# Using Debian-based image for better mediasoup C++ compilation compatibility
+FROM node:20-bookworm AS builder
 
-# Install dependencies for mediasoup (including pip for building worker)
-RUN apk add --no-cache \
+# Install dependencies for mediasoup
+RUN apt-get update && apt-get install -y \
     python3 \
-    py3-pip \
-    make \
-    g++ \
-    linux-headers
+    python3-pip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy local packages that server depends on
+# ============================================================================
+# Build quickrtc_types first (dependency for others)
+# ============================================================================
 COPY quickrtc_types/package*.json ./quickrtc_types/
-COPY quickrtc_server/package*.json ./quickrtc_server/
-COPY quickrtc-example/server/package*.json ./server/
-
-# Install and build quickrtc_types
 WORKDIR /app/quickrtc_types
-COPY quickrtc_types/ ./
-RUN npm install && npm run build
-
-# Install and build quickrtc_server
-WORKDIR /app/quickrtc_server
-COPY quickrtc_server/ ./
-RUN npm install && npm run build
-
-# Install server dependencies
-WORKDIR /app/server
 RUN npm install
+COPY quickrtc_types/ ./
+RUN npm run build
 
-# Copy server source and build
+# ============================================================================
+# Build quickrtc_server (depends on quickrtc_types)
+# This is the slow step - mediasoup compiles C++ worker
+# ============================================================================
+WORKDIR /app
+COPY quickrtc_server/package*.json ./quickrtc_server/
+WORKDIR /app/quickrtc_server
+RUN npm install
+COPY quickrtc_server/ ./
+RUN npm run build
+
+# ============================================================================
+# Build example server
+# ============================================================================
+WORKDIR /app/server
+COPY quickrtc-example/server/package*.json ./
+RUN npm install
 COPY quickrtc-example/server/src ./src
 COPY quickrtc-example/server/tsconfig.json ./
 RUN npm run build
 
 # ============================================================================
-# Production image
+# Production image (smaller)
 # ============================================================================
-FROM node:20-alpine
-
-# Install runtime dependencies for mediasoup
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    make \
-    g++ \
-    linux-headers
+FROM node:20-slim
 
 WORKDIR /app
 
-# Copy built packages
+# Copy only what's needed
 COPY --from=builder /app/quickrtc_types ./quickrtc_types
 COPY --from=builder /app/quickrtc_server ./quickrtc_server
 COPY --from=builder /app/server ./server
@@ -62,12 +60,9 @@ ENV NODE_ENV=production
 ENV USE_SSL=false
 ENV PORT=3000
 
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
-# Start server
 CMD ["node", "dist/index.js"]
