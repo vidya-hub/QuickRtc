@@ -15,19 +15,15 @@ services:
       dockerfile: quickrtc-example/server/Dockerfile
     container_name: quickrtc-server
     restart: unless-stopped
+    network_mode: host
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - USE_SSL=false
       # For WebRTC - set your public IP here
       - ANNOUNCED_IP=${ANNOUNCED_IP:-}
-    ports:
-      - "3000:3000"
-      # WebRTC UDP ports
-      - "40000-40100:40000-40100/udp"
-    networks:
-      - quickrtc-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { if (res.statusCode !== 200) process.exit(1); })"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -47,6 +43,8 @@ services:
     depends_on:
       server:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - quickrtc-network
     healthcheck:
@@ -62,6 +60,8 @@ services:
     image: nginx:alpine
     container_name: quickrtc-nginx
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "443:443"
       - "8080:80"

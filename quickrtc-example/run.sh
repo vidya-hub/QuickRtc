@@ -23,11 +23,21 @@ generate_certs() {
     if [ ! -f "certs/cert.pem" ] || [ ! -f "certs/key.pem" ]; then
         log "Generating SSL certificates..."
         mkdir -p certs
+        
+        # Get public IP for SAN if available
+        local PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "")
+        local SAN="DNS:localhost,IP:127.0.0.1"
+        if [ -n "$PUBLIC_IP" ]; then
+            SAN="$SAN,IP:$PUBLIC_IP"
+            log "Including public IP $PUBLIC_IP in certificate"
+        fi
+        
         openssl req -x509 -newkey rsa:4096 \
             -keyout certs/key.pem \
             -out certs/cert.pem \
             -sha256 -days 365 -nodes \
-            -subj '/CN=localhost'
+            -subj '/CN=localhost' \
+            -addext "subjectAltName=$SAN"
         log "Certificates generated in ./certs/"
     else
         log "SSL certificates already exist"

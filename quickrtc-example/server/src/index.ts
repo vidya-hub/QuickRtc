@@ -11,24 +11,19 @@ import os from "os";
 const PORT = parseInt(process.env.PORT || "3000");
 const USE_SSL = process.env.USE_SSL !== "false"; // Default to SSL for local dev
 
-// Get local IP for announcedIp
-const getLocalIp = (): string => {
-  // First check for environment variable (Docker)
+// Get local IP for listenIp (internal)
+const getListenIp = (): string => {
+  // Use 0.0.0.0 to bind to all interfaces - this works for both local and remote connections
+  return "0.0.0.0";
+};
+
+// Get announced IP for external access
+const getAnnouncedIp = (): string | null => {
   if (process.env.ANNOUNCED_IP) {
     return process.env.ANNOUNCED_IP;
   }
-
-  const ifaces = os.networkInterfaces();
-  for (const ifname of Object.keys(ifaces)) {
-    const ifaceList = ifaces[ifname];
-    if (!ifaceList) continue;
-    for (const iface of ifaceList) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return "127.0.0.1";
+  // Return null to let mediasoup auto-detect
+  return null;
 };
 
 const app = express();
@@ -101,13 +96,19 @@ const io = new SocketIOServer(server, {
 });
 
 // Create QuickRTC server
-const announcedIp = getLocalIp();
+const listenIp = getListenIp();
+const announcedIp = getAnnouncedIp();
 const quickrtc = new QuickRTCServer({
   httpServer: server,
   socketServer: io,
   quickrtcConfig: {
     webRtcServerOptions: {
-      listenInfos: [{ ip: "0.0.0.0", announcedIp }],
+      listenInfos: [
+        {
+          ip: listenIp,
+          announcedIp,
+        },
+      ],
     },
   },
 });
@@ -132,6 +133,7 @@ quickrtc.start().then(() => {
   server.listen(PORT, () => {
     const protocol = USE_SSL ? "https" : "http";
     console.log(`\nServer running at ${protocol}://localhost:${PORT}`);
+    console.log(`Listen IP: ${listenIp}`);
     console.log(`Announced IP: ${announcedIp}`);
     // if (fs.existsSync(vanillaDir)) {
     //   console.log(`Vanilla example: ${protocol}://localhost:${PORT}/`);

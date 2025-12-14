@@ -5,3 +5,6 @@ certs/
 
 # Docker
 .docker/
+
+# VSCode snippets (demo)
+**/.vscode/

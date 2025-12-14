@@ -7,7 +7,7 @@ import type {
 } from "quickrtc-react-client";
 import { io, Socket } from "socket.io-client";
 
-const SERVER_URL = "https://localhost:3000";
+const SERVER_URL = `https://${window.location.hostname}`;
 
 // ============================================================================
 // TYPES
