@@ -11,6 +11,10 @@ import os from "os";
 const PORT = parseInt(process.env.PORT || "3000");
 const USE_SSL = process.env.USE_SSL !== "false"; // Default to SSL for local dev
 
+// RTC port range (must match Docker exposed ports)
+const RTC_MIN_PORT = parseInt(process.env.RTC_MIN_PORT || "40000");
+const RTC_MAX_PORT = parseInt(process.env.RTC_MAX_PORT || "40100");
+
 // Get local IP for listenIp (internal)
 const getListenIp = (): string => {
   // Use 0.0.0.0 to bind to all interfaces - this works for both local and remote connections
@@ -102,6 +106,12 @@ const quickrtc = new QuickRTCServer({
   httpServer: server,
   socketServer: io,
   quickrtcConfig: {
+    workerSettings: {
+      logLevel: "warn",
+      logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+      rtcMinPort: RTC_MIN_PORT,
+      rtcMaxPort: RTC_MAX_PORT,
+    },
     webRtcServerOptions: {
       listenInfos: [
         {
@@ -135,9 +145,7 @@ quickrtc.start().then(() => {
     console.log(`\nServer running at ${protocol}://localhost:${PORT}`);
     console.log(`Listen IP: ${listenIp}`);
     console.log(`Announced IP: ${announcedIp}`);
-    // if (fs.existsSync(vanillaDir)) {
-    //   console.log(`Vanilla example: ${protocol}://localhost:${PORT}/`);
-    // }
+    console.log(`RTC Ports: ${RTC_MIN_PORT}-${RTC_MAX_PORT}`);
     console.log();
   });
 });

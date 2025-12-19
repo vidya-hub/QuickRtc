@@ -1,8 +1,10 @@
 # QuickRTC Server Dockerfile
-# Using Debian-based image for better mediasoup C++ compilation compatibility
+# Standalone build using published npm packages
+# Using Debian-based image for mediasoup C++ compilation compatibility
+
 FROM node:20-bookworm AS builder
 
-# Install dependencies for mediasoup
+# Install dependencies for mediasoup native compilation
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -11,34 +13,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# ============================================================================
-# Build quickrtc_types first (dependency for others)
-# ============================================================================
-COPY quickrtc_types/package*.json ./quickrtc_types/
-WORKDIR /app/quickrtc_types
-RUN npm install
-COPY quickrtc_types/ ./
-RUN npm run build
+# Copy package.json only (skip package-lock.json to avoid npm bugs)
+COPY package.json ./
 
-# ============================================================================
-# Build quickrtc_server (depends on quickrtc_types)
-# This is the slow step - mediasoup compiles C++ worker
-# ============================================================================
-WORKDIR /app
-COPY quickrtc_server/package*.json ./quickrtc_server/
-WORKDIR /app/quickrtc_server
+# Install dependencies (mediasoup will compile here)
 RUN npm install
-COPY quickrtc_server/ ./
-RUN npm run build
 
-# ============================================================================
-# Build example server
-# ============================================================================
-WORKDIR /app/server
-COPY quickrtc-example/server/package*.json ./
-RUN npm install
-COPY quickrtc-example/server/src ./src
-COPY quickrtc-example/server/tsconfig.json ./
+# Copy source files
+COPY src ./src
+COPY tsconfig.json ./
+
+# Build TypeScript
 RUN npm run build
 
 # ============================================================================
@@ -48,12 +33,10 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copy only what's needed
-COPY --from=builder /app/quickrtc_types ./quickrtc_types
-COPY --from=builder /app/quickrtc_server ./quickrtc_server
-COPY --from=builder /app/server ./server
-
-WORKDIR /app/server
+# Copy built app and node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
 
 # Environment
 ENV NODE_ENV=production

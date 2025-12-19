@@ -1,0 +1,99 @@
+# QuickRTC Example - Google Cloud (GCE) Docker Compose
+# 
+# This configuration is optimized for Google Compute Engine deployment
+# with full WebRTC support (UDP ports exposed)
+#
+# Usage:
+#   1. Set environment variables or create .env file
+#   2. docker-compose -f docker-compose.gcloud.yml up -d
+#
+# Required environment variables:
+#   - DOMAIN: Your domain name (e.g., quickrtc.example.com)
+#   - EMAIL: Email for Let's Encrypt SSL certificate
+#   - ANNOUNCED_IP: Public IP of the GCE instance
+
+services:
+  # ===========================================================================
+  # Backend - Node.js + MediaSoup Server
+  # ===========================================================================
+  server:
+    image: gcr.io/${GCP_PROJECT_ID:-your-project}/quickrtc-server:${IMAGE_TAG:-latest}
+    container_name: quickrtc-server
+    restart: always
+    network_mode: host
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - USE_SSL=false
+      # REQUIRED: Set to your GCE instance's public IP
+      - ANNOUNCED_IP=${ANNOUNCED_IP}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Frontend - React App served by Nginx
+  # ===========================================================================
+  client:
+    image: gcr.io/${GCP_PROJECT_ID:-your-project}/quickrtc-client:${IMAGE_TAG:-latest}
+    container_name: quickrtc-client
+    restart: always
+    ports:
+      - "8080:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      server:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Nginx Reverse Proxy with Let's Encrypt SSL
+  # ===========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: quickrtc-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.gcloud.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - client
+    command: '/bin/sh -c ''while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g "daemon off;"'''
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Certbot for Let's Encrypt SSL Certificate Management
+  # ===========================================================================
+  certbot:
+    image: certbot/certbot
+    container_name: quickrtc-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    depends_on:
+      - nginx

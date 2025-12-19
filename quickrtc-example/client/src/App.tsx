@@ -7,7 +7,8 @@ import type {
 } from "quickrtc-react-client";
 import { io, Socket } from "socket.io-client";
 
-const SERVER_URL = `https://${window.location.hostname}`;
+// Use same protocol as the page (works for both HTTP and HTTPS)
+const SERVER_URL = `${window.location.protocol}//${window.location.host}`;
 
 // ============================================================================
 // TYPES
