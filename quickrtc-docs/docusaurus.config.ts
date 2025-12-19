@@ -90,6 +90,10 @@ const config: Config = {
               label: "Server SDK",
               to: "/docs/server/overview",
             },
+            {
+              label: "Deployment",
+              to: "/docs/deployment/overview",
+            },
           ],
         },
         {

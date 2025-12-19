@@ -27,6 +27,18 @@ const sidebars: SidebarsConfig = {
         'react/overview',
       ],
     },
+    {
+      type: 'category',
+      label: 'Deployment',
+      collapsed: false,
+      items: [
+        'deployment/overview',
+        'deployment/docker',
+        'deployment/gcp',
+        'deployment/aws',
+        'deployment/manual',
+      ],
+    },
   ],
 };
 
