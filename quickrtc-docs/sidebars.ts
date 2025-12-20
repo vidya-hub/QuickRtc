@@ -5,6 +5,15 @@ const sidebars: SidebarsConfig = {
     'intro',
     {
       type: 'category',
+      label: 'Concepts',
+      collapsed: false,
+      items: [
+        'concepts/mediasoup',
+        'concepts/quickrtc-architecture',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Client SDK',
       collapsed: false,
       items: [
