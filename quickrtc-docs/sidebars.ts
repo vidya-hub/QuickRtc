@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'concepts/mediasoup',
         'concepts/quickrtc-architecture',
+        'concepts/network-configuration',
       ],
     },
     {

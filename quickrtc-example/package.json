@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "setup": "npm install && npm run generate-certs && cd server && npm install && cd ../client && npm install",
-    "generate-certs": "mkdir -p certs && openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost'",
+    "generate-certs": "mkdir -p certs && openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:192.168.29.46'",
     "dev": "npx concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev"

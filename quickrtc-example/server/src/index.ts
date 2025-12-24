@@ -26,8 +26,9 @@ const getAnnouncedIp = (): string | null => {
   if (process.env.ANNOUNCED_IP) {
     return process.env.ANNOUNCED_IP;
   }
-  // Return null to let mediasoup auto-detect
-  return null;
+  // For local network development, use the machine's local IP
+  // This must match the IP that clients connect to
+  return "192.168.29.46";
 };
 
 const app = express();
@@ -102,6 +103,9 @@ const io = new SocketIOServer(server, {
 // Create QuickRTC server
 const listenIp = getListenIp();
 const announcedIp = getAnnouncedIp();
+console.log("listenIp ", listenIp);
+console.log("announcedIp ", announcedIp);
+
 const quickrtc = new QuickRTCServer({
   httpServer: server,
   socketServer: io,
@@ -128,7 +132,9 @@ quickrtc.on("conferenceCreated", (e) =>
   console.log(`Conference created: ${e.detail.conference.id}`)
 );
 quickrtc.on("participantJoined", (e) => {
-  const info = (e.detail.participant as { participantInfo?: Record<string, unknown> }).participantInfo;
+  const info = (
+    e.detail.participant as { participantInfo?: Record<string, unknown> }
+  ).participantInfo;
   console.log(
     `${e.detail.participant.name} joined`,
     info ? `(info: ${JSON.stringify(info)})` : ""
