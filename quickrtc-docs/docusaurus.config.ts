@@ -66,7 +66,7 @@ const config: Config = {
           position: "right",
         },
         {
-          href: "https://www.npmjs.com/package/quickrtc-client",
+          href: "https://www.npmjs.com/package/quickrtc-react-client",
           label: "npm",
           position: "right",
         },
