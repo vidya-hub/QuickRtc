@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -12,8 +12,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _participantNameController = TextEditingController();
   final _serverUrlController = TextEditingController(
     // Use 10.0.2.2 for Android emulator, or your computer's IP for real device
-    // Change this to your computer's IP address (e.g., https://192.168.1.x:3443)
-    text: 'https://10.0.2.2:3443',
+    // Change this to your computer's IP address (e.g., https://192.168.1.x:3000)
+    text: 'https://192.168.29.46:3000',
   );
 
   @override

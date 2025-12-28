@@ -7,8 +7,9 @@ import type {
 } from "quickrtc-react-client";
 import { io, Socket } from "socket.io-client";
 
-// Use same protocol as the page (works for both HTTP and HTTPS)
-const SERVER_URL = `${window.location.protocol}//${window.location.host}`;
+// Server URL - use environment variable or fallback to localhost:3000 for dev
+const SERVER_URL =
+  import.meta.env.VITE_SERVER_URL || "https://192.168.29.46:3000";
 
 // ============================================================================
 // TYPES
@@ -94,7 +95,11 @@ export default function App() {
         // New participant
         return [
           ...prev,
-          { id: data.participantId, name: data.participantName, streams: data.streams },
+          {
+            id: data.participantId,
+            name: data.participantName,
+            streams: data.streams,
+          },
         ];
       });
     };
@@ -440,7 +445,7 @@ export default function App() {
         {/* ================================================================== */}
         <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">
           <span className="absolute top-2 left-2 bg-black/60 text-white text-sm px-2 py-1 rounded z-10">
-            You {!hasVideo && !hasScreenShare && "(No video)"}
+            You {!hasVideo && !hasScreenShare && "(No )"}
           </span>
 
           {localVideo ? (
@@ -483,7 +488,9 @@ export default function App() {
         {/* ================================================================== */}
         {remoteParticipants.map((participant) => {
           const video = participant.streams.find((s) => s.type === "video");
-          const screen = participant.streams.find((s) => s.type === "screenshare");
+          const screen = participant.streams.find(
+            (s) => s.type === "screenshare"
+          );
           const audio = participant.streams.find((s) => s.type === "audio");
           const hasNoVideo = !video && !screen;
 

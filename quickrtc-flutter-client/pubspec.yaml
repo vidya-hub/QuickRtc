@@ -14,8 +14,10 @@ dependencies:
   # State Management
   provider: ^6.1.1
 
-  # WebRTC - using latest version with Flutter v2 embedding support
-  flutter_webrtc: ^1.2.1
+  # WebRTC & MediaSoup (local bundled version)
+  flutter_webrtc: ^0.12.5+hotfix.1
+  mediasoup_client_flutter:
+    path: ./mediasoup_client
 
   # Socket.IO
   socket_io_client: ^2.0.3+1
@@ -36,6 +38,3 @@ dev_dependencies:
   build_runner: ^2.4.7
   freezed: ^2.4.6
   json_serializable: ^6.7.1
-
-flutter:
-  # No assets or fonts needed for this package

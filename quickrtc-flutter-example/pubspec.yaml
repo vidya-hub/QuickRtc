@@ -15,13 +15,8 @@ dependencies:
   quickrtc_flutter_client:
     path: ../quickrtc-flutter-client
 
-  # State Management
-  provider: ^6.1.1
-
-  # WebRTC - using latest version with Flutter v2 embedding support
-  flutter_webrtc: ^1.2.1
-
-  # Socket.IO
+  # WebRTC and Socket.IO - must match versions from quickrtc_flutter_client
+  flutter_webrtc: ^0.12.5+hotfix.1
   socket_io_client: ^2.0.3+1
 
   # Utilities
