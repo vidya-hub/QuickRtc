@@ -265,6 +265,9 @@ class SocketEventController extends EnhancedEventEmitter {
             // Get producer info to include streamType
             const producerInfo = conference?.getProducerInfo(producerId);
             const streamType = producerInfo?.streamType as "audio" | "video" | "screenshare" | undefined;
+            
+            console.log(`[CONSUME] producerId: ${producerId}, kind: ${consumerResponse.kind}, producerInfo.streamType: ${producerInfo?.streamType}, final streamType: ${streamType || consumerResponse.kind}`);
+            
             consumerParams.push({
               ...consumerResponse,
               targetParticipantId,
@@ -449,6 +452,14 @@ class SocketEventController extends EnhancedEventEmitter {
           this.mediasoupController.workerService.mediasoupConfig
             .transportConfig,
       });
+      
+      // Log ICE candidates being sent to client
+      console.log(`[ICE] Transport created for ${participantId} (${direction})`);
+      console.log(`[ICE] ID: ${transport?.id}`);
+      console.log(`[ICE] ICE Parameters:`, JSON.stringify(transport?.iceParameters, null, 2));
+      console.log(`[ICE] ICE Candidates:`, JSON.stringify(transport?.iceCandidates, null, 2));
+      console.log(`[ICE] DTLS Parameters:`, JSON.stringify(transport?.dtlsParameters, null, 2));
+      
       this.emit("transportCreated", transport);
       callback({
         status: "ok",
@@ -478,6 +489,10 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({ status: "error", error: "Missing required parameters" });
       return;
     }
+    
+    console.log(`[DTLS] Connect transport for ${participantId} (${direction})`);
+    console.log(`[DTLS] DTLS Parameters from client:`, JSON.stringify(dtlsParameters, null, 2));
+    
     try {
       await this.mediasoupController?.connectTransport({
         conferenceId,
@@ -485,6 +500,9 @@ class SocketEventController extends EnhancedEventEmitter {
         dtlsParameters: dtlsParameters,
         direction: direction,
       });
+      
+      console.log(`[DTLS] Transport connected successfully for ${participantId} (${direction})`);
+      
       this.emit("transportConnected", {
         conferenceId,
         participantId,
@@ -492,7 +510,7 @@ class SocketEventController extends EnhancedEventEmitter {
       });
       callback({ status: "ok" });
     } catch (error) {
-      console.error("Error connecting transport:", error);
+      console.error(`[DTLS] Error connecting transport for ${participantId} (${direction}):`, error);
       callback({ status: "error", error: (error as Error).message });
     }
   }
@@ -509,6 +527,9 @@ class SocketEventController extends EnhancedEventEmitter {
       rtpParameters, 
       appData: { participantId, streamType: streamType || kind } 
     };
+    
+    console.log(`[PRODUCE] Received produce request - kind: ${kind}, streamType: ${streamType}, appData.streamType: ${producerOptions.appData.streamType}`);
+    
     try {
       if (!transportId || !kind || !rtpParameters) {
         callback({

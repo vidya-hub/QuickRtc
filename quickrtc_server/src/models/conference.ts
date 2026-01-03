@@ -256,10 +256,12 @@ class MediasoupConference implements Conference {
       const mediasoupParticipant = participant as MediasoupParticipant;
       const producer = mediasoupParticipant.getProducerById(producerId);
       if (producer) {
+        const appData = producer.appData as any;
+        console.log(`[getProducerInfo] producerId: ${producerId}, kind: ${producer.kind}, appData:`, appData);
         return {
           id: producer.id,
           kind: producer.kind as "audio" | "video",
-          streamType: (producer.appData as any)?.streamType,
+          streamType: appData?.streamType,
         };
       }
     }

@@ -30,6 +30,9 @@ library quickrtc_flutter_client;
 export 'package:flutter_webrtc/flutter_webrtc.dart';
 export 'package:socket_io_client/socket_io_client.dart';
 
+// Platform interface (for screen capture service)
+export 'platform/quickrtc_platform.dart';
+
 // New Event-Driven API (recommended)
 export 'quickrtc.dart';
 export 'types.dart';

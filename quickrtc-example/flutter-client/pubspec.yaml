@@ -1,0 +1,34 @@
+name: quickrtc_flutter_example
+description: Example Flutter application demonstrating QuickRTC client usage
+publish_to: "none"
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # QuickRTC Client
+  quickrtc_flutter_client:
+    path: ../../quickrtc-flutter-client
+
+  # WebRTC and Socket.IO - must match versions from quickrtc_flutter_client
+  flutter_webrtc: ^0.12.5+hotfix.1
+  socket_io_client: ^2.0.3+1
+
+  # State Management
+  provider: ^6.1.1
+
+  # Utilities
+  logger: ^2.0.2+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true

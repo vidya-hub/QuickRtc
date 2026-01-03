@@ -7,6 +7,17 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.10.0"
 
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.quickrtc.flutter_client
+        pluginClass: QuickRtcFlutterClientPlugin
+      ios:
+        pluginClass: QuickRtcFlutterClientPlugin
+      macos:
+        pluginClass: QuickRtcFlutterClientPlugin
+
 dependencies:
   flutter:
     sdk: flutter
@@ -14,10 +25,14 @@ dependencies:
   # State Management
   provider: ^6.1.1
 
-  # WebRTC & MediaSoup (local bundled version)
+  # WebRTC & MediaSoup (bundled inside lib/src/mediasoup)
   flutter_webrtc: ^0.12.5+hotfix.1
-  mediasoup_client_flutter:
-    path: ./mediasoup_client
+  
+  # MediaSoup dependencies (required for bundled mediasoup)
+  events2: ^1.0.0
+  sdp_transform: ^0.3.2
+  h264_profile_level_id: ^0.2.0
+  collection: ^1.17.0
 
   # Socket.IO
   socket_io_client: ^2.0.3+1

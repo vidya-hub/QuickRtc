@@ -1,6 +1,10 @@
 import 'dart:async';
-import 'package:logger/logger.dart';
-import 'package:mediasoup_client_flutter/mediasoup_client_flutter.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:logger/logger.dart' as app_logger;
+import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
+import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 
 import 'package:quickrtc_flutter_client/types.dart';
 
@@ -36,7 +40,7 @@ import 'package:quickrtc_flutter_client/types.dart';
 class QuickRTC {
   // Configuration
   final QuickRTCConfig _config;
-  final Logger _logger = Logger();
+  final app_logger.Logger _logger = app_logger.Logger();
 
   // Mediasoup
   Device? _device;
@@ -326,13 +330,17 @@ class QuickRTC {
     _sendTransport!.on('produce', (Map data) async {
       _log('Send transport produce', data['kind']);
       try {
+        final appData = data['appData'] as Map<String, dynamic>? ?? {};
+        final streamType = appData['streamType'] as String?;
+
         final response = await _emitWithAck('produce', {
           'conferenceId': _conferenceId,
           'participantId': _participantId,
           'transportId': _sendTransport!.id,
           'kind': data['kind'],
           'rtpParameters': data['rtpParameters'].toMap(),
-          'appData': data['appData'] ?? {},
+          'appData': appData,
+          'streamType': streamType, // Send streamType as top-level param
         });
 
         if (response['status'] == 'ok') {
@@ -648,6 +656,331 @@ class QuickRTC {
   }
 
   // ========================================================================
+  // LOCAL MEDIA
+  // ========================================================================
+
+  /// Get local media (camera, microphone, screen share)
+  ///
+  /// This is a static method that can be called without joining a conference.
+  /// Use it to preview media before joining or to manage media independently.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Get audio and video
+  /// final media = await QuickRTC.getLocalMedia(MediaConfig.audioVideo());
+  ///
+  /// // Get screen share only
+  /// final screen = await QuickRTC.getLocalMedia(MediaConfig.screenShareOnly());
+  ///
+  /// // Get with custom config
+  /// final media = await QuickRTC.getLocalMedia(MediaConfig(
+  ///   audio: true,
+  ///   video: true,
+  ///   audioConfig: AudioConfig(echoCancellation: true),
+  ///   videoConfig: VideoConfig.hd,
+  /// ));
+  ///
+  /// // Later, produce the media
+  /// final streams = await rtc.produce(ProduceInput.fromTracksWithTypes(media.tracksWithTypes));
+  /// ```
+  static Future<LocalMedia> getLocalMedia(MediaConfig config) async {
+    MediaStream? cameraStream;
+    MediaStream? screenStream;
+    MediaStreamTrack? audioTrack;
+    MediaStreamTrack? videoTrack;
+    MediaStreamTrack? screenshareTrack;
+    MediaStreamTrack? screenshareAudioTrack;
+    final capturedTypes = <MediaType>{};
+
+    try {
+      // Get camera/microphone media
+      if (config.audio || config.video) {
+        final constraints = <String, dynamic>{};
+
+        if (config.audio) {
+          constraints['audio'] = config.audioConfig?.toConstraints() ?? true;
+        }
+
+        if (config.video) {
+          constraints['video'] = config.videoConfig?.toConstraints() ??
+              {
+                'facingMode': 'user',
+                'width': 1280,
+                'height': 720,
+              };
+        }
+
+        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        if (config.audio) {
+          final audioTracks = cameraStream.getAudioTracks();
+          if (audioTracks.isNotEmpty) {
+            audioTrack = audioTracks.first;
+            capturedTypes.add(MediaType.audio);
+          }
+        }
+
+        if (config.video) {
+          final videoTracks = cameraStream.getVideoTracks();
+          if (videoTracks.isNotEmpty) {
+            videoTrack = videoTracks.first;
+            capturedTypes.add(MediaType.video);
+          }
+        }
+      }
+
+      // Get screen share media
+      if (config.screenshare) {
+        screenStream = await _getScreenShareStream(config.screenshareConfig);
+
+        final videoTracks = screenStream.getVideoTracks();
+        if (videoTracks.isNotEmpty) {
+          screenshareTrack = videoTracks.first;
+          capturedTypes.add(MediaType.screenshare);
+        }
+
+        // Check for system audio (if captured)
+        final audioTracks = screenStream.getAudioTracks();
+        if (audioTracks.isNotEmpty) {
+          screenshareAudioTrack = audioTracks.first;
+        }
+      }
+
+      // Create combined stream with all tracks
+      final combinedStream =
+          await createLocalMediaStream('quickrtc_local_media');
+      if (audioTrack != null) combinedStream.addTrack(audioTrack);
+      if (videoTrack != null) combinedStream.addTrack(videoTrack);
+      // Note: screenshare tracks are kept in separate stream for better management
+
+      return LocalMedia(
+        stream: combinedStream,
+        audioTrack: audioTrack,
+        videoTrack: videoTrack,
+        screenshareTrack: screenshareTrack,
+        screenshareAudioTrack: screenshareAudioTrack,
+        screenshareStream: screenStream,
+        capturedTypes: capturedTypes,
+      );
+    } catch (e) {
+      // Cleanup on error
+      cameraStream?.dispose();
+      screenStream?.dispose();
+      rethrow;
+    }
+  }
+
+  /// Get screen share stream with platform-specific handling
+  static Future<MediaStream> _getScreenShareStream(
+      ScreenShareConfig? config) async {
+    final effectiveConfig = config ?? ScreenShareConfig.defaultConfig;
+
+    // Build constraints based on platform
+    final constraints = <String, dynamic>{
+      'video': {
+        ...effectiveConfig.toConstraints(),
+        'cursor': 'always',
+      },
+    };
+
+    // Add audio constraints for system audio capture
+    if (effectiveConfig.includeSystemAudio) {
+      constraints['audio'] = {
+        'mandatory': {
+          'chromeMediaSource': 'desktop',
+        },
+      };
+    }
+
+    // Platform-specific screen capture
+    if (WebRTC.platformIsDesktop) {
+      // Desktop platforms (macOS, Windows, Linux)
+      return await _getDesktopScreenShare(effectiveConfig);
+    } else if (WebRTC.platformIsWeb) {
+      // Web platform
+      return await navigator.mediaDevices.getDisplayMedia(constraints);
+    } else if (WebRTC.platformIsMobile) {
+      // Mobile platforms (iOS, Android)
+      return await _getMobileScreenShare(effectiveConfig);
+    } else {
+      // Fallback
+      return await navigator.mediaDevices.getDisplayMedia(constraints);
+    }
+  }
+
+  /// Get screen share on desktop platforms
+  static Future<MediaStream> _getDesktopScreenShare(
+      ScreenShareConfig config) async {
+    // On desktop, we need to get sources first, then use getUserMedia
+    // getDisplayMedia on desktop flutter_webrtc requires a sourceId
+
+    // Get available sources (screens and windows)
+    final sources = await desktopCapturer.getSources(
+      types: config.preferWindow
+          ? [SourceType.Window, SourceType.Screen]
+          : [SourceType.Screen, SourceType.Window],
+    );
+
+    if (sources.isEmpty) {
+      throw Exception(
+          'No screen share sources available. Please grant screen recording permission in System Preferences > Privacy & Security > Screen Recording');
+    }
+
+    // Use the first screen source
+    final source = sources.first;
+
+    // On macOS/desktop, we must use getUserMedia with the sourceId
+    // getDisplayMedia doesn't work the same way on desktop
+    final constraints = <String, dynamic>{
+      'audio': false,
+      'video': {
+        'mandatory': {
+          'sourceId': source.id,
+          'frameRate': config.frameRate ?? 30,
+          'minWidth': config.width ?? 1280,
+          'minHeight': config.height ?? 720,
+        },
+      },
+    };
+
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  /// Get screen share on mobile platforms
+  static Future<MediaStream> _getMobileScreenShare(
+      ScreenShareConfig config) async {
+    // On Android 10+, we MUST start a foreground service BEFORE calling getDisplayMedia
+    // This is required by the MediaProjection API
+    if (!kIsWeb && Platform.isAndroid) {
+      final serviceStarted = await QuickRTCPlatform.startScreenCaptureService();
+      if (!serviceStarted) {
+        throw Exception('Failed to start screen capture foreground service. '
+            'Screen sharing requires a foreground service on Android 10+.');
+      }
+      // Small delay to ensure the service is fully started
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    try {
+      // Mobile screen share using flutter_webrtc's built-in support
+      // This uses ReplayKit on iOS and MediaProjection on Android
+      final constraints = <String, dynamic>{
+        'video': {
+          ...config.toConstraints(),
+        },
+      };
+
+      // On mobile, system audio capture might be available through the screen capture API
+      if (config.includeSystemAudio) {
+        constraints['audio'] = true;
+      }
+
+      return await navigator.mediaDevices.getDisplayMedia(constraints);
+    } catch (e) {
+      // If screen capture fails, stop the foreground service
+      if (!kIsWeb && Platform.isAndroid) {
+        await QuickRTCPlatform.stopScreenCaptureService();
+      }
+      rethrow;
+    }
+  }
+
+  /// Get available screen share sources (desktop only)
+  ///
+  /// Returns a list of available screens and windows that can be shared.
+  /// Use this to build a source picker UI.
+  static Future<List<DesktopCapturerSource>> getScreenShareSources({
+    bool includeScreens = true,
+    bool includeWindows = true,
+  }) async {
+    if (!WebRTC.platformIsDesktop) {
+      return [];
+    }
+
+    final types = <SourceType>[];
+    if (includeScreens) types.add(SourceType.Screen);
+    if (includeWindows) types.add(SourceType.Window);
+
+    return await desktopCapturer.getSources(types: types);
+  }
+
+  /// Get screen share from a specific source (desktop only)
+  ///
+  /// Use with [getScreenShareSources] to let users pick their source.
+  static Future<MediaStream> getScreenShareFromSource(
+    DesktopCapturerSource source, {
+    ScreenShareConfig? config,
+  }) async {
+    final effectiveConfig = config ?? ScreenShareConfig.defaultConfig;
+
+    final constraints = <String, dynamic>{
+      'video': {
+        'deviceId': {'exact': source.id},
+        'mandatory': {
+          'frameRate': effectiveConfig.frameRate ?? 30,
+        },
+      },
+    };
+
+    if (effectiveConfig.width != null) {
+      (constraints['video'] as Map)['mandatory']['width'] =
+          effectiveConfig.width;
+    }
+    if (effectiveConfig.height != null) {
+      (constraints['video'] as Map)['mandatory']['height'] =
+          effectiveConfig.height;
+    }
+
+    if (effectiveConfig.includeSystemAudio) {
+      constraints['audio'] = {
+        'deviceId': {'exact': source.id},
+      };
+    }
+
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  /// Switch camera between front and back (mobile only)
+  ///
+  /// Returns the new video track after switching.
+  static Future<MediaStreamTrack?> switchCamera(
+      MediaStreamTrack currentTrack) async {
+    if (!WebRTC.platformIsMobile) {
+      throw Exception('switchCamera is only available on mobile platforms');
+    }
+
+    try {
+      await Helper.switchCamera(currentTrack);
+      return currentTrack;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Get available media devices
+  static Future<List<MediaDeviceInfo>> getMediaDevices() async {
+    return await navigator.mediaDevices.enumerateDevices();
+  }
+
+  /// Get available audio input devices (microphones)
+  static Future<List<MediaDeviceInfo>> getAudioInputDevices() async {
+    final devices = await getMediaDevices();
+    return devices.where((d) => d.kind == 'audioinput').toList();
+  }
+
+  /// Get available video input devices (cameras)
+  static Future<List<MediaDeviceInfo>> getVideoInputDevices() async {
+    final devices = await getMediaDevices();
+    return devices.where((d) => d.kind == 'videoinput').toList();
+  }
+
+  /// Get available audio output devices (speakers)
+  static Future<List<MediaDeviceInfo>> getAudioOutputDevices() async {
+    final devices = await getMediaDevices();
+    return devices.where((d) => d.kind == 'audiooutput').toList();
+  }
+
+  // ========================================================================
   // CONSUMING (Internal - auto-handled)
   // ========================================================================
 
@@ -733,12 +1066,34 @@ class QuickRTC {
                 ? StreamType.audio
                 : StreamType.video);
 
+        // Log detailed track info
+        final track = consumer.track;
+        _log(
+            'Consumer created - id: ${consumer.id}, producerId: ${consumerParams.producerId}, kind: ${consumerParams.kind}, consumerParams.streamType: ${consumerParams.streamType}, resolved streamType: ${streamType.value}');
+        _log(
+            'Consumer track details - trackId: ${track.id}, label: ${track.label}, kind: ${track.kind}, streamId: ${consumer.stream.id}');
+
+        // For video streams, create a dedicated MediaStream with only this consumer's track
+        // This is necessary because mediasoup-client groups all tracks from a peer
+        // into a single MediaStream, which causes issues when rendering multiple video streams
+        // For audio, we can use the original stream since audio doesn't have this problem
+        MediaStream streamToUse;
+        if (consumerParams.kind == 'video') {
+          final dedicatedStream =
+              await createLocalMediaStream('consumer_${consumer.id}');
+          dedicatedStream.addTrack(track);
+          streamToUse = dedicatedStream;
+        } else {
+          // For audio, use the original consumer stream
+          streamToUse = consumer.stream;
+        }
+
         // Store consumer info
         final consumerInfo = ConsumerInfo(
           id: consumer.id,
           type: streamType,
           consumer: consumer,
-          stream: consumer.stream,
+          stream: streamToUse,
           producerId: consumerParams.producerId,
           participantId: participantId,
           participantName: participantName,
@@ -749,7 +1104,7 @@ class QuickRTC {
         streams.add(RemoteStream(
           id: consumer.id,
           type: streamType,
-          stream: consumer.stream,
+          stream: streamToUse,
           producerId: consumerParams.producerId,
           participantId: participantId,
           participantName: participantName,
@@ -968,6 +1323,66 @@ class QuickRTC {
           ),
         );
       }
+    });
+
+    // Audio muted
+    socket.on('audioMuted', (data) {
+      _log('Socket: audioMuted', data);
+      final mutedData = data as Map<String, dynamic>;
+      final participantId = mutedData['participantId'] as String;
+
+      _emit(
+        'streamPaused',
+        StreamPausedEvent(
+          participantId: participantId,
+          type: StreamType.audio,
+        ),
+      );
+    });
+
+    // Audio unmuted
+    socket.on('audioUnmuted', (data) {
+      _log('Socket: audioUnmuted', data);
+      final mutedData = data as Map<String, dynamic>;
+      final participantId = mutedData['participantId'] as String;
+
+      _emit(
+        'streamResumed',
+        StreamResumedEvent(
+          participantId: participantId,
+          type: StreamType.audio,
+        ),
+      );
+    });
+
+    // Video muted
+    socket.on('videoMuted', (data) {
+      _log('Socket: videoMuted', data);
+      final mutedData = data as Map<String, dynamic>;
+      final participantId = mutedData['participantId'] as String;
+
+      _emit(
+        'streamPaused',
+        StreamPausedEvent(
+          participantId: participantId,
+          type: StreamType.video,
+        ),
+      );
+    });
+
+    // Video unmuted
+    socket.on('videoUnmuted', (data) {
+      _log('Socket: videoUnmuted', data);
+      final mutedData = data as Map<String, dynamic>;
+      final participantId = mutedData['participantId'] as String;
+
+      _emit(
+        'streamResumed',
+        StreamResumedEvent(
+          participantId: participantId,
+          type: StreamType.video,
+        ),
+      );
     });
 
     // Socket disconnect

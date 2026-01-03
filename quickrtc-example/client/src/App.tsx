@@ -9,7 +9,7 @@ import { io, Socket } from "socket.io-client";
 
 // Server URL - use environment variable or fallback to localhost:3000 for dev
 const SERVER_URL =
-  import.meta.env.VITE_SERVER_URL || "https://192.168.29.46:3000";
+  import.meta.env.VITE_SERVER_URL || "https://192.168.1.2:3000";
 
 // ============================================================================
 // TYPES

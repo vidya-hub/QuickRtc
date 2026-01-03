@@ -1,4 +1,5 @@
-import 'package:mediasoup_client_flutter/mediasoup_client_flutter.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 // ============================================================================
@@ -47,6 +48,327 @@ class JoinConfig {
     required this.participantName,
     this.participantInfo,
   });
+}
+
+// ============================================================================
+// MEDIA TYPES
+// ============================================================================
+
+/// Media types for getLocalMedia
+enum MediaType {
+  /// Microphone audio
+  audio,
+
+  /// Camera video
+  video,
+
+  /// Screen/window share (includes system audio on supported platforms)
+  screenshare,
+}
+
+/// Extension for MediaType
+extension MediaTypeExtension on MediaType {
+  String get value {
+    switch (this) {
+      case MediaType.audio:
+        return 'audio';
+      case MediaType.video:
+        return 'video';
+      case MediaType.screenshare:
+        return 'screenshare';
+    }
+  }
+}
+
+/// Configuration for getLocalMedia
+class MediaConfig {
+  /// Whether to capture audio (microphone)
+  final bool audio;
+
+  /// Whether to capture video (camera)
+  final bool video;
+
+  /// Whether to capture screen share
+  final bool screenshare;
+
+  /// Audio constraints (optional)
+  final AudioConfig? audioConfig;
+
+  /// Video constraints (optional)
+  final VideoConfig? videoConfig;
+
+  /// Screen share constraints (optional)
+  final ScreenShareConfig? screenshareConfig;
+
+  const MediaConfig({
+    this.audio = false,
+    this.video = false,
+    this.screenshare = false,
+    this.audioConfig,
+    this.videoConfig,
+    this.screenshareConfig,
+  });
+
+  /// Create config for audio only
+  static MediaConfig audioOnly({AudioConfig? config}) =>
+      MediaConfig(audio: true, audioConfig: config);
+
+  /// Create config for video only
+  static MediaConfig videoOnly({VideoConfig? config}) =>
+      MediaConfig(video: true, videoConfig: config);
+
+  /// Create config for audio and video
+  static MediaConfig audioVideo(
+          {AudioConfig? audioConfig, VideoConfig? videoConfig}) =>
+      MediaConfig(
+          audio: true,
+          video: true,
+          audioConfig: audioConfig,
+          videoConfig: videoConfig);
+
+  /// Create config for screen share only
+  static MediaConfig screenShareOnly({ScreenShareConfig? config}) =>
+      MediaConfig(screenshare: true, screenshareConfig: config);
+
+  /// Create config for screen share with audio
+  static MediaConfig screenShareWithAudio({
+    ScreenShareConfig? screenshareConfig,
+    AudioConfig? audioConfig,
+  }) =>
+      MediaConfig(
+        audio: true,
+        screenshare: true,
+        audioConfig: audioConfig,
+        screenshareConfig: screenshareConfig,
+      );
+}
+
+/// Audio configuration
+class AudioConfig {
+  /// Enable echo cancellation
+  final bool? echoCancellation;
+
+  /// Enable noise suppression
+  final bool? noiseSuppression;
+
+  /// Enable auto gain control
+  final bool? autoGainControl;
+
+  /// Specific device ID to use
+  final String? deviceId;
+
+  const AudioConfig({
+    this.echoCancellation,
+    this.noiseSuppression,
+    this.autoGainControl,
+    this.deviceId,
+  });
+
+  Map<String, dynamic> toConstraints() {
+    final constraints = <String, dynamic>{};
+    if (echoCancellation != null)
+      constraints['echoCancellation'] = echoCancellation;
+    if (noiseSuppression != null)
+      constraints['noiseSuppression'] = noiseSuppression;
+    if (autoGainControl != null)
+      constraints['autoGainControl'] = autoGainControl;
+    if (deviceId != null) constraints['deviceId'] = deviceId;
+    return constraints.isEmpty ? {'optional': []} : constraints;
+  }
+}
+
+/// Video configuration
+class VideoConfig {
+  /// Preferred width
+  final int? width;
+
+  /// Preferred height
+  final int? height;
+
+  /// Preferred frame rate
+  final int? frameRate;
+
+  /// Facing mode ('user' for front camera, 'environment' for back camera)
+  final String? facingMode;
+
+  /// Specific device ID to use
+  final String? deviceId;
+
+  const VideoConfig({
+    this.width,
+    this.height,
+    this.frameRate,
+    this.facingMode,
+    this.deviceId,
+  });
+
+  /// Front camera preset (720p)
+  static const VideoConfig frontCamera = VideoConfig(
+    facingMode: 'user',
+    width: 1280,
+    height: 720,
+  );
+
+  /// Back camera preset (720p)
+  static const VideoConfig backCamera = VideoConfig(
+    facingMode: 'environment',
+    width: 1280,
+    height: 720,
+  );
+
+  /// HD preset (720p)
+  static const VideoConfig hd = VideoConfig(width: 1280, height: 720);
+
+  /// Full HD preset (1080p)
+  static const VideoConfig fullHd = VideoConfig(width: 1920, height: 1080);
+
+  /// 4K preset
+  static const VideoConfig uhd4k = VideoConfig(width: 3840, height: 2160);
+
+  Map<String, dynamic> toConstraints() {
+    final constraints = <String, dynamic>{};
+    if (width != null) constraints['width'] = width;
+    if (height != null) constraints['height'] = height;
+    if (frameRate != null) constraints['frameRate'] = frameRate;
+    if (facingMode != null) constraints['facingMode'] = facingMode;
+    if (deviceId != null) constraints['deviceId'] = deviceId;
+    return constraints.isEmpty ? {'optional': []} : constraints;
+  }
+}
+
+/// Screen share configuration
+class ScreenShareConfig {
+  /// Preferred width
+  final int? width;
+
+  /// Preferred height
+  final int? height;
+
+  /// Preferred frame rate
+  final int? frameRate;
+
+  /// Include system audio (supported on some platforms)
+  final bool includeSystemAudio;
+
+  /// For desktop: prefer window capture over full screen
+  final bool preferWindow;
+
+  const ScreenShareConfig({
+    this.width,
+    this.height,
+    this.frameRate,
+    this.includeSystemAudio = false,
+    this.preferWindow = false,
+  });
+
+  /// Default screen share config (1080p, 30fps)
+  static const ScreenShareConfig defaultConfig = ScreenShareConfig(
+    width: 1920,
+    height: 1080,
+    frameRate: 30,
+  );
+
+  /// High quality screen share (1080p, 60fps)
+  static const ScreenShareConfig highQuality = ScreenShareConfig(
+    width: 1920,
+    height: 1080,
+    frameRate: 60,
+  );
+
+  Map<String, dynamic> toConstraints() {
+    final constraints = <String, dynamic>{};
+    if (width != null) constraints['width'] = width;
+    if (height != null) constraints['height'] = height;
+    if (frameRate != null) constraints['frameRate'] = frameRate;
+    return constraints;
+  }
+}
+
+/// Result from getLocalMedia containing streams and tracks
+class LocalMedia {
+  /// The MediaStream containing all tracks
+  final MediaStream stream;
+
+  /// Audio track (if requested and available)
+  final MediaStreamTrack? audioTrack;
+
+  /// Video track (if requested and available)
+  final MediaStreamTrack? videoTrack;
+
+  /// Screen share video track (if requested and available)
+  final MediaStreamTrack? screenshareTrack;
+
+  /// Screen share audio track (if available - system audio)
+  final MediaStreamTrack? screenshareAudioTrack;
+
+  /// Stream for screen share (separate from camera stream)
+  final MediaStream? screenshareStream;
+
+  /// The media types that were successfully captured
+  final Set<MediaType> capturedTypes;
+
+  const LocalMedia({
+    required this.stream,
+    this.audioTrack,
+    this.videoTrack,
+    this.screenshareTrack,
+    this.screenshareAudioTrack,
+    this.screenshareStream,
+    required this.capturedTypes,
+  });
+
+  /// Get all video tracks (camera + screenshare)
+  List<MediaStreamTrack> get allVideoTracks {
+    final tracks = <MediaStreamTrack>[];
+    if (videoTrack != null) tracks.add(videoTrack!);
+    if (screenshareTrack != null) tracks.add(screenshareTrack!);
+    return tracks;
+  }
+
+  /// Get all audio tracks (mic + system audio)
+  List<MediaStreamTrack> get allAudioTracks {
+    final tracks = <MediaStreamTrack>[];
+    if (audioTrack != null) tracks.add(audioTrack!);
+    if (screenshareAudioTrack != null) tracks.add(screenshareAudioTrack!);
+    return tracks;
+  }
+
+  /// Get all tracks
+  List<MediaStreamTrack> get allTracks {
+    return [...allAudioTracks, ...allVideoTracks];
+  }
+
+  /// Get tracks with their types for producing
+  List<TrackWithType> get tracksWithTypes {
+    final result = <TrackWithType>[];
+    if (audioTrack != null) {
+      result.add(TrackWithType(track: audioTrack!, type: StreamType.audio));
+    }
+    if (videoTrack != null) {
+      result.add(TrackWithType(track: videoTrack!, type: StreamType.video));
+    }
+    if (screenshareTrack != null) {
+      result.add(TrackWithType(
+          track: screenshareTrack!, type: StreamType.screenshare));
+    }
+    // Note: screenshareAudioTrack is typically mixed with the screenshare
+    return result;
+  }
+
+  /// Dispose all streams and tracks
+  Future<void> dispose() async {
+    for (final track in stream.getTracks()) {
+      track.stop();
+    }
+    await stream.dispose();
+
+    if (screenshareStream != null) {
+      for (final track in screenshareStream!.getTracks()) {
+        track.stop();
+      }
+      await screenshareStream!.dispose();
+    }
+  }
 }
 
 // ============================================================================
@@ -352,6 +674,28 @@ class LocalStreamEndedEvent {
 
   const LocalStreamEndedEvent({
     required this.streamId,
+    required this.type,
+  });
+}
+
+/// Stream paused event (remote participant muted audio/video)
+class StreamPausedEvent {
+  final String participantId;
+  final StreamType type;
+
+  const StreamPausedEvent({
+    required this.participantId,
+    required this.type,
+  });
+}
+
+/// Stream resumed event (remote participant unmuted audio/video)
+class StreamResumedEvent {
+  final String participantId;
+  final StreamType type;
+
+  const StreamResumedEvent({
+    required this.participantId,
     required this.type,
   });
 }
