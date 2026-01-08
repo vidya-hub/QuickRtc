@@ -1,8 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart'
-    hide ConferenceProvider;
+import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 /// Connection status for the conference
@@ -18,36 +16,41 @@ enum ConferenceStatus {
 class RemoteParticipantState {
   final String id;
   final String name;
-  final Map<String, RemoteStream> streams;
-  final Map<String, RTCVideoRenderer> renderers;
+  final Map<String, RTCVideoRenderer> videoRenderers;
+  final Map<String, RTCVideoRenderer> audioRenderers;
+  final bool hasAudio;
+  final bool hasVideo;
 
   RemoteParticipantState({
     required this.id,
     required this.name,
-    Map<String, RemoteStream>? streams,
-    Map<String, RTCVideoRenderer>? renderers,
-  })  : streams = streams ?? {},
-        renderers = renderers ?? {};
-
-  bool get hasAudio => streams.values.any((s) => s.type == StreamType.audio);
-  bool get hasVideo => streams.values.any((s) => s.type == StreamType.video);
+    Map<String, RTCVideoRenderer>? videoRenderers,
+    Map<String, RTCVideoRenderer>? audioRenderers,
+    this.hasAudio = false,
+    this.hasVideo = false,
+  })  : videoRenderers = videoRenderers ?? {},
+        audioRenderers = audioRenderers ?? {};
 
   RemoteParticipantState copyWith({
     String? id,
     String? name,
-    Map<String, RemoteStream>? streams,
-    Map<String, RTCVideoRenderer>? renderers,
+    Map<String, RTCVideoRenderer>? videoRenderers,
+    Map<String, RTCVideoRenderer>? audioRenderers,
+    bool? hasAudio,
+    bool? hasVideo,
   }) {
     return RemoteParticipantState(
       id: id ?? this.id,
       name: name ?? this.name,
-      streams: streams ?? this.streams,
-      renderers: renderers ?? this.renderers,
+      videoRenderers: videoRenderers ?? this.videoRenderers,
+      audioRenderers: audioRenderers ?? this.audioRenderers,
+      hasAudio: hasAudio ?? this.hasAudio,
+      hasVideo: hasVideo ?? this.hasVideo,
     );
   }
 }
 
-/// Conference provider using ChangeNotifier
+/// Conference provider using the QuickRTCController API
 class ConferenceProvider extends ChangeNotifier {
   // Connection state
   ConferenceStatus _status = ConferenceStatus.initial;
@@ -56,8 +59,8 @@ class ConferenceProvider extends ChangeNotifier {
   String? _participantName;
 
   // Media state
-  bool _audioEnabled = true;
-  bool _videoEnabled = true;
+  bool _audioEnabled = false;
+  bool _videoEnabled = false;
   bool _isScreenSharing = false;
   bool _isFullScreen = false;
 
@@ -65,17 +68,15 @@ class ConferenceProvider extends ChangeNotifier {
   RTCVideoRenderer? _localRenderer;
   RTCVideoRenderer? _screenShareRenderer;
 
-  // Streams
-  MediaStream? _localStream;
-  LocalMedia? _screenShareMedia;
-  final Map<String, LocalStream> _localStreams = {};
-
   // Remote participants
   final Map<String, RemoteParticipantState> _remoteParticipants = {};
 
-  // Internal
-  QuickRTC? _rtc;
+  // QuickRTC controller
+  QuickRTCController? _controller;
   io.Socket? _socket;
+
+  // Local media stream
+  MediaStream? _localStream;
 
   // Getters
   ConferenceStatus get status => _status;
@@ -88,9 +89,6 @@ class ConferenceProvider extends ChangeNotifier {
   bool get isFullScreen => _isFullScreen;
   RTCVideoRenderer? get localRenderer => _localRenderer;
   RTCVideoRenderer? get screenShareRenderer => _screenShareRenderer;
-  MediaStream? get localStream => _localStream;
-  LocalMedia? get screenShareMedia => _screenShareMedia;
-  Map<String, LocalStream> get localStreams => Map.unmodifiable(_localStreams);
   Map<String, RemoteParticipantState> get remoteParticipants =>
       Map.unmodifiable(_remoteParticipants);
 
@@ -132,70 +130,40 @@ class ConferenceProvider extends ChangeNotifier {
       );
 
       // Wait for socket connection
-      final socketCompleter = Completer<void>();
-
-      _socket!.onConnect((_) {
-        debugPrint('Socket connected!');
-        if (!socketCompleter.isCompleted) socketCompleter.complete();
-      });
-
-      _socket!.onConnectError((data) {
-        debugPrint('Socket connect error: $data');
-        if (!socketCompleter.isCompleted) {
-          socketCompleter.completeError('Connection failed: $data');
-        }
-      });
-
-      _socket!.onError((data) {
-        debugPrint('Socket error: $data');
-      });
-
-      _socket!.connect();
-
-      await socketCompleter.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          throw Exception('Connection timeout - server at $serverUrl');
-        },
-      );
-
-      // Create QuickRTC instance
-      _rtc = QuickRTC(QuickRTCConfig(
-        socket: _socket!,
-        debug: true,
-      ));
-
-      // Setup event listeners
-      _setupEventListeners();
-
-      // Join conference
-      await _rtc!.join(JoinConfig(
-        conferenceId: conferenceId,
-        participantName: participantName,
-      ));
-
-      // Get local media
-      final mediaConstraints = {
-        'audio': true,
-        'video': {'facingMode': 'user', 'width': 1280, 'height': 720},
-      };
-      _localStream = await Helper.openCamera(mediaConstraints);
-      _localRenderer!.srcObject = _localStream;
-
-      debugPrint('Local stream set: ${_localStream?.id}');
-      debugPrint('Local renderer srcObject: ${_localRenderer?.srcObject?.id}');
-
-      // Notify to update UI with local video
-      notifyListeners();
-
-      // Produce media
-      final tracks = _localStream!.getTracks();
-      final localStreams = await _rtc!.produce(ProduceInput.fromTracks(tracks));
-
-      for (final stream in localStreams) {
-        _localStreams[stream.id] = stream;
+      final socketConnected = await _waitForSocketConnection();
+      if (!socketConnected) {
+        throw Exception('Failed to connect to server');
       }
 
+      // Create QuickRTC controller
+      _controller = QuickRTCController(
+        socket: _socket!,
+        debug: true,
+      );
+
+      // Set up state listener
+      _controller!.addListener(_onControllerStateChanged);
+
+      // Join the room
+      await _controller!.joinMeeting(
+        conferenceId: conferenceId,
+        participantName: participantName,
+      );
+
+      // Get local media and produce
+      final localMedia = await QuickRTCStatic.getLocalMedia(
+        MediaConfig.audioVideo(videoConfig: VideoConfig.frontCamera),
+      );
+      _localStream = localMedia.stream;
+      _localRenderer!.srcObject = _localStream;
+
+      // Produce media
+      await _controller!.produce(
+        ProduceInput.fromTracksWithTypes(localMedia.tracksWithTypes),
+      );
+
+      _audioEnabled = true;
+      _videoEnabled = true;
       _status = ConferenceStatus.connected;
       notifyListeners();
     } catch (e, stackTrace) {
@@ -207,151 +175,128 @@ class ConferenceProvider extends ChangeNotifier {
     }
   }
 
-  void _setupEventListeners() {
-    _rtc!.on<NewParticipantEvent>('newParticipant', (event) {
-      _onParticipantJoined(
-        event.participantId,
-        event.participantName,
-        event.streams,
-      );
+  Future<bool> _waitForSocketConnection() async {
+    final completer = Completer<bool>();
+
+    _socket!.onConnect((_) {
+      debugPrint('Socket connected!');
+      if (!completer.isCompleted) completer.complete(true);
     });
 
-    _rtc!.on<ParticipantLeftEvent>('participantLeft', (event) {
-      _onParticipantLeft(event.participantId);
+    _socket!.onConnectError((data) {
+      debugPrint('Socket connect error: $data');
+      if (!completer.isCompleted) completer.complete(false);
     });
 
-    _rtc!.on<StreamAddedEvent>('streamAdded', (event) {
-      _onStreamAdded(event);
+    _socket!.onError((data) {
+      debugPrint('Socket error: $data');
     });
 
-    _rtc!.on<StreamRemovedEvent>('streamRemoved', (event) {
-      _onStreamRemoved(event.participantId, event.streamId);
-    });
+    _socket!.connect();
 
-    _rtc!.on<DisconnectedEvent>('disconnected', (event) {
-      _status = ConferenceStatus.disconnected;
-      _errorMessage = 'Disconnected: ${event.reason}';
-      notifyListeners();
-    });
-
-    _rtc!.on<ErrorEvent>('error', (event) {
-      _status = ConferenceStatus.error;
-      _errorMessage = event.message;
-      notifyListeners();
-    });
+    return completer.future.timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => false,
+    );
   }
 
-  Future<void> _onParticipantJoined(
-    String participantId,
-    String participantName,
-    List<RemoteStream> streams,
-  ) async {
-    debugPrint(
-        'Participant joined: $participantName with ${streams.length} streams');
+  void _onControllerStateChanged() {
+    if (_controller == null) return;
 
-    _remoteParticipants[participantId] = RemoteParticipantState(
-      id: participantId,
-      name: participantName,
-    );
+    final state = _controller!.state;
 
-    // Process streams
-    for (final stream in streams) {
-      await _addStreamToParticipant(participantId, stream);
+    // Handle errors
+    if (state.hasError && state.error != _errorMessage) {
+      _errorMessage = state.error;
+      notifyListeners();
     }
 
-    notifyListeners();
+    // Handle disconnection
+    if (state.isDisconnected && _status == ConferenceStatus.connected) {
+      _status = ConferenceStatus.disconnected;
+      _errorMessage = 'Disconnected from conference';
+      notifyListeners();
+    }
+
+    // Update remote participants from state
+    _updateRemoteParticipants(state);
   }
 
-  Future<void> _onParticipantLeft(String participantId) async {
-    final participant = _remoteParticipants.remove(participantId);
-    if (participant != null) {
-      for (final renderer in participant.renderers.values) {
-        await renderer.dispose();
+  Future<void> _updateRemoteParticipants(QuickRTCState state) async {
+    final currentParticipantIds = <String>{};
+
+    for (final participant in state.participantList) {
+      currentParticipantIds.add(participant.id);
+
+      var localParticipant = _remoteParticipants[participant.id];
+      if (localParticipant == null) {
+        // New participant
+        localParticipant = RemoteParticipantState(
+          id: participant.id,
+          name: participant.name,
+        );
+        _remoteParticipants[participant.id] = localParticipant;
+      }
+
+      // Update streams
+      for (final stream in participant.streams) {
+        final currentLocal = _remoteParticipants[participant.id];
+        if (currentLocal == null) continue;
+
+        if (stream.type == StreamType.audio) {
+          if (!currentLocal.audioRenderers.containsKey(stream.id)) {
+            final renderer = RTCVideoRenderer();
+            await renderer.initialize();
+            renderer.srcObject = stream.stream;
+
+            final updatedAudioRenderers =
+                Map<String, RTCVideoRenderer>.from(currentLocal.audioRenderers);
+            updatedAudioRenderers[stream.id] = renderer;
+
+            _remoteParticipants[participant.id] = currentLocal.copyWith(
+              audioRenderers: updatedAudioRenderers,
+              hasAudio: true,
+            );
+          }
+        } else {
+          // Video or screenshare
+          if (!currentLocal.videoRenderers.containsKey(stream.id)) {
+            final renderer = RTCVideoRenderer();
+            await renderer.initialize();
+            renderer.srcObject = stream.stream;
+
+            final updatedVideoRenderers =
+                Map<String, RTCVideoRenderer>.from(currentLocal.videoRenderers);
+            updatedVideoRenderers[stream.id] = renderer;
+
+            _remoteParticipants[participant.id] = currentLocal.copyWith(
+              videoRenderers: updatedVideoRenderers,
+              hasVideo: true,
+            );
+          }
+        }
       }
     }
-    notifyListeners();
-  }
 
-  Future<void> _onStreamAdded(RemoteStream stream) async {
-    debugPrint('Stream added: ${stream.id} from ${stream.participantId}');
-    await _addStreamToParticipant(stream.participantId, stream);
-    notifyListeners();
-  }
-
-  Future<void> _addStreamToParticipant(
-    String participantId,
-    RemoteStream stream,
-  ) async {
-    var participant = _remoteParticipants[participantId];
-    if (participant == null) {
-      debugPrint('Participant not found for stream: $participantId');
-      return;
+    // Remove participants that left
+    final toRemove = <String>[];
+    for (final id in _remoteParticipants.keys) {
+      if (!currentParticipantIds.contains(id)) {
+        toRemove.add(id);
+      }
     }
 
-    // Log video tracks in the stream
-    final videoTracks = stream.stream?.getVideoTracks() ?? [];
-    final audioTracks = stream.stream?.getAudioTracks() ?? [];
-    debugPrint(
-        '[_addStreamToParticipant] stream.id: ${stream.id}, stream.type: ${stream.type}, stream.stream?.id: ${stream.stream?.id}, videoTracks: ${videoTracks.length}, audioTracks: ${audioTracks.length}');
-    for (final track in videoTracks) {
-      debugPrint(
-          '  -> Video track: id=${track.id}, label=${track.label}, enabled=${track.enabled}');
+    for (final id in toRemove) {
+      final participant = _remoteParticipants.remove(id);
+      if (participant != null) {
+        for (final renderer in participant.videoRenderers.values) {
+          renderer.dispose();
+        }
+        for (final renderer in participant.audioRenderers.values) {
+          renderer.dispose();
+        }
+      }
     }
-    for (final track in audioTracks) {
-      debugPrint(
-          '  -> Audio track: id=${track.id}, label=${track.label}, enabled=${track.enabled}');
-    }
-
-    final updatedStreams = Map<String, RemoteStream>.from(participant.streams);
-    final updatedRenderers =
-        Map<String, RTCVideoRenderer>.from(participant.renderers);
-
-    updatedStreams[stream.id] = stream;
-
-    if (stream.type == StreamType.video ||
-        stream.type == StreamType.screenshare) {
-      final renderer = RTCVideoRenderer();
-      await renderer.initialize();
-      renderer.srcObject = stream.stream;
-      updatedRenderers[stream.id] = renderer;
-
-      debugPrint(
-          'Created renderer for stream ${stream.id} (type: ${stream.type}), srcObject: ${renderer.srcObject?.id}');
-    } else if (stream.type == StreamType.audio) {
-      // For audio streams, create a dedicated audio renderer
-      // The renderer needs to be attached to an RTCVideoView (even invisible) for playback on web
-      final audioRenderer = RTCVideoRenderer();
-      await audioRenderer.initialize();
-      audioRenderer.srcObject = stream.stream;
-      // Store in renderers so it doesn't get garbage collected and audio keeps playing
-      updatedRenderers[stream.id] = audioRenderer;
-
-      debugPrint(
-          'Created audio renderer for stream ${stream.id}, srcObject: ${stream.stream?.id}, audioTracks: ${stream.stream?.getAudioTracks().length}');
-    }
-
-    _remoteParticipants[participantId] = participant.copyWith(
-      streams: updatedStreams,
-      renderers: updatedRenderers,
-    );
-  }
-
-  Future<void> _onStreamRemoved(String participantId, String streamId) async {
-    final participant = _remoteParticipants[participantId];
-    if (participant == null) return;
-
-    final updatedStreams = Map<String, RemoteStream>.from(participant.streams);
-    final updatedRenderers =
-        Map<String, RTCVideoRenderer>.from(participant.renderers);
-
-    updatedStreams.remove(streamId);
-    final renderer = updatedRenderers.remove(streamId);
-    await renderer?.dispose();
-
-    _remoteParticipants[participantId] = participant.copyWith(
-      streams: updatedStreams,
-      renderers: updatedRenderers,
-    );
 
     notifyListeners();
   }
@@ -359,11 +304,8 @@ class ConferenceProvider extends ChangeNotifier {
   /// Leave the conference
   Future<void> leaveConference() async {
     try {
-      // Stop screen sharing if active
-      if (_isScreenSharing) {
-        await stopScreenShare();
-      }
-      await _rtc?.leave();
+      _controller?.removeListener(_onControllerStateChanged);
+      await _controller?.leaveMeeting();
     } catch (e) {
       debugPrint('Error leaving: $e');
     }
@@ -375,8 +317,8 @@ class ConferenceProvider extends ChangeNotifier {
     _conferenceId = null;
     _participantName = null;
     _errorMessage = null;
-    _audioEnabled = true;
-    _videoEnabled = true;
+    _audioEnabled = false;
+    _videoEnabled = false;
     _isScreenSharing = false;
     _isFullScreen = false;
 
@@ -384,12 +326,20 @@ class ConferenceProvider extends ChangeNotifier {
   }
 
   Future<void> _cleanup() async {
-    _localStream?.dispose();
-    await _screenShareMedia?.dispose();
+    _controller?.dispose();
+    _controller = null;
+
     _socket?.disconnect();
+    _socket = null;
+
+    _localStream?.dispose();
+    _localStream = null;
 
     for (final participant in _remoteParticipants.values) {
-      for (final renderer in participant.renderers.values) {
+      for (final renderer in participant.videoRenderers.values) {
+        await renderer.dispose();
+      }
+      for (final renderer in participant.audioRenderers.values) {
         await renderer.dispose();
       }
     }
@@ -399,154 +349,103 @@ class ConferenceProvider extends ChangeNotifier {
     await _screenShareRenderer?.dispose();
     _localRenderer = null;
     _screenShareRenderer = null;
-    _localStream = null;
-    _screenShareMedia = null;
-    _localStreams.clear();
   }
 
   /// Toggle audio (mute/unmute)
   Future<void> toggleAudio() async {
-    // Update state immediately for UI responsiveness
-    _audioEnabled = !_audioEnabled;
-    debugPrint('toggleAudio: audioEnabled now $_audioEnabled');
-    notifyListeners();
+    if (_localStream == null) return;
 
-    // Then update the actual tracks if available
-    if (_localStream != null) {
+    try {
       final audioTracks = _localStream!.getAudioTracks();
+      if (audioTracks.isEmpty) return;
+
+      _audioEnabled = !_audioEnabled;
+
       for (final track in audioTracks) {
         track.enabled = _audioEnabled;
       }
 
-      try {
-        final audioStream = _localStreams.values
-            .where((s) => s.type == StreamType.audio)
-            .firstOrNull;
-
-        if (audioStream != null) {
-          if (_audioEnabled) {
-            await audioStream.resume();
-          } else {
-            await audioStream.pause();
-          }
+      // Also pause/resume the producer on the server
+      final audioStream = _controller?.state.localAudioStream;
+      if (audioStream != null) {
+        if (_audioEnabled) {
+          await audioStream.resume();
+        } else {
+          await audioStream.pause();
         }
-      } catch (e) {
-        debugPrint('toggleAudio: error pausing/resuming stream: $e');
       }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('toggleAudio error: $e');
     }
   }
 
   /// Toggle video (on/off)
   Future<void> toggleVideo() async {
-    // Update state immediately for UI responsiveness
-    _videoEnabled = !_videoEnabled;
-    debugPrint('toggleVideo: videoEnabled now $_videoEnabled');
-    notifyListeners();
+    if (_localStream == null) return;
 
-    // Then update the actual tracks if available
-    if (_localStream != null) {
+    try {
       final videoTracks = _localStream!.getVideoTracks();
+      if (videoTracks.isEmpty) return;
+
+      _videoEnabled = !_videoEnabled;
+
       for (final track in videoTracks) {
         track.enabled = _videoEnabled;
       }
 
-      try {
-        final videoStream = _localStreams.values
-            .where((s) => s.type == StreamType.video)
-            .firstOrNull;
-
-        if (videoStream != null) {
-          if (_videoEnabled) {
-            await videoStream.resume();
-          } else {
-            await videoStream.pause();
-          }
+      // Also pause/resume the producer on the server
+      final videoStream = _controller?.state.localVideoStream;
+      if (videoStream != null) {
+        if (_videoEnabled) {
+          await videoStream.resume();
+        } else {
+          await videoStream.pause();
         }
-      } catch (e) {
-        debugPrint('toggleVideo: error pausing/resuming stream: $e');
       }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('toggleVideo error: $e');
     }
   }
 
   /// Toggle screen sharing
   Future<void> toggleScreenShare() async {
-    if (!isConnected || _rtc == null) return;
+    if (_controller == null || !_controller!.state.isConnected) return;
 
-    if (_isScreenSharing) {
-      await stopScreenShare();
-    } else {
-      await startScreenShare();
-    }
-  }
-
-  Future<void> startScreenShare() async {
     try {
-      // Get screen share media using QuickRTC's static method
-      _screenShareMedia = await QuickRTC.getLocalMedia(
-        MediaConfig.screenShareOnly(
-          config: ScreenShareConfig.defaultConfig,
-        ),
-      );
+      if (_isScreenSharing) {
+        // Stop screen sharing
+        final screenshareStream = _controller?.state.localScreenshareStream;
+        if (screenshareStream != null) {
+          await screenshareStream.stop();
+        }
+        _screenShareRenderer?.srcObject = null;
+        _isScreenSharing = false;
+      } else {
+        // Start screen sharing
+        final screenMedia = await QuickRTCStatic.getLocalMedia(
+          MediaConfig.screenShareOnly(config: ScreenShareConfig.defaultConfig),
+        );
 
-      if (_screenShareMedia?.screenshareTrack == null) {
-        throw Exception('Failed to get screen share track');
+        if (screenMedia.screenshareTrack != null) {
+          _screenShareRenderer?.srcObject = screenMedia.screenshareStream;
+
+          await _controller!.produce(
+            ProduceInput.fromTrack(
+              screenMedia.screenshareTrack!,
+              type: StreamType.screenshare,
+            ),
+          );
+
+          _isScreenSharing = true;
+        }
       }
-
-      // Set up renderer for local preview
-      if (_screenShareMedia?.screenshareStream != null) {
-        _screenShareRenderer!.srcObject = _screenShareMedia!.screenshareStream;
-      }
-
-      // Produce the screen share track with explicit screenshare type
-      final localStreams = await _rtc!.produce(
-        ProduceInput.fromTrack(
-          _screenShareMedia!.screenshareTrack!,
-          type: StreamType.screenshare,
-        ),
-      );
-
-      // Store the produced streams
-      for (final stream in localStreams) {
-        _localStreams[stream.id] = stream;
-      }
-
-      // Listen for when the user stops sharing via system UI
-      _screenShareMedia!.screenshareTrack!.onEnded = () {
-        debugPrint('Screen share ended externally');
-        stopScreenShare();
-      };
-
-      _isScreenSharing = true;
       notifyListeners();
     } catch (e) {
-      debugPrint('Error starting screen share: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> stopScreenShare() async {
-    try {
-      // Find and stop screen share streams
-      final screenShareStreams = _localStreams.entries
-          .where((e) => e.value.type == StreamType.screenshare)
-          .toList();
-
-      for (final entry in screenShareStreams) {
-        await entry.value.stop();
-        _localStreams.remove(entry.key);
-      }
-
-      // Clear the renderer
-      _screenShareRenderer?.srcObject = null;
-
-      // Dispose screen share media
-      await _screenShareMedia?.dispose();
-      _screenShareMedia = null;
-
-      _isScreenSharing = false;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error stopping screen share: $e');
+      debugPrint('toggleScreenShare error: $e');
     }
   }
 

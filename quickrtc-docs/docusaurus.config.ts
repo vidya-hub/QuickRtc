@@ -24,13 +24,18 @@ const config: Config = {
     locales: ["en"],
   },
 
+  // Enable Mermaid for diagrams
+  markdown: {
+    mermaid: true,
+  },
+  themes: ["@docusaurus/theme-mermaid"],
+
   presets: [
     [
       "classic",
       {
         docs: {
           sidebarPath: "./sidebars.ts",
-          editUrl: "https://github.com/vidya-hub/QuickRtc/tree/main/docs/",
         },
         blog: false,
         theme: {
@@ -129,6 +134,9 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismThemes.vsDark,
       additionalLanguages: ["bash", "typescript", "json"],
+    },
+    mermaid: {
+      theme: { light: "default", dark: "dark" },
     },
   } satisfies Preset.ThemeConfig,
 };

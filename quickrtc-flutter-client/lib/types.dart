@@ -1,3 +1,4 @@
+import 'package:equatable/equatable.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
@@ -537,7 +538,7 @@ class LocalStream {
 }
 
 /// Remote stream from a participant
-class RemoteStream {
+class RemoteStream extends Equatable {
   /// Unique stream ID (consumer ID)
   final String id;
 
@@ -564,6 +565,29 @@ class RemoteStream {
     required this.participantId,
     required this.participantName,
   });
+
+  /// Create a copy with the given fields replaced
+  RemoteStream copyWith({
+    String? id,
+    StreamType? type,
+    MediaStream? stream,
+    String? producerId,
+    String? participantId,
+    String? participantName,
+  }) {
+    return RemoteStream(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      stream: stream ?? this.stream,
+      producerId: producerId ?? this.producerId,
+      participantId: participantId ?? this.participantId,
+      participantName: participantName ?? this.participantName,
+    );
+  }
+
+  @override
+  List<Object?> get props =>
+      [id, type, producerId, participantId, participantName];
 }
 
 // ============================================================================
@@ -571,7 +595,7 @@ class RemoteStream {
 // ============================================================================
 
 /// Participant information
-class Participant {
+class Participant extends Equatable {
   /// Participant ID
   final String id;
 
@@ -586,6 +610,123 @@ class Participant {
     required this.name,
     this.info = const {},
   });
+
+  /// Create a copy with the given fields replaced
+  Participant copyWith({
+    String? id,
+    String? name,
+    Map<String, dynamic>? info,
+  }) {
+    return Participant(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      info: info ?? this.info,
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, info];
+}
+
+/// Remote participant with their streams
+///
+/// This class represents a remote participant in the conference,
+/// including their identity and all their media streams.
+class RemoteParticipant extends Equatable {
+  /// Participant ID
+  final String id;
+
+  /// Display name
+  final String name;
+
+  /// Extra participant info (permissions, metadata, etc.)
+  final Map<String, dynamic> info;
+
+  /// List of streams from this participant
+  final List<RemoteStream> streams;
+
+  const RemoteParticipant({
+    required this.id,
+    required this.name,
+    this.info = const {},
+    this.streams = const [],
+  });
+
+  /// Create from a Participant
+  factory RemoteParticipant.fromParticipant(
+    Participant participant, {
+    List<RemoteStream> streams = const [],
+  }) {
+    return RemoteParticipant(
+      id: participant.id,
+      name: participant.name,
+      info: participant.info,
+      streams: streams,
+    );
+  }
+
+  /// Get audio stream (null if not available)
+  RemoteStream? get audioStream => streams.cast<RemoteStream?>().firstWhere(
+        (s) => s?.type == StreamType.audio,
+        orElse: () => null,
+      );
+
+  /// Get video stream (null if not available)
+  RemoteStream? get videoStream => streams.cast<RemoteStream?>().firstWhere(
+        (s) => s?.type == StreamType.video,
+        orElse: () => null,
+      );
+
+  /// Get screenshare stream (null if not available)
+  RemoteStream? get screenshareStream =>
+      streams.cast<RemoteStream?>().firstWhere(
+            (s) => s?.type == StreamType.screenshare,
+            orElse: () => null,
+          );
+
+  /// Whether participant has audio
+  bool get hasAudio => audioStream != null;
+
+  /// Whether participant has video
+  bool get hasVideo => videoStream != null;
+
+  /// Whether participant is sharing screen
+  bool get hasScreenshare => screenshareStream != null;
+
+  /// Create a copy with the given fields replaced
+  RemoteParticipant copyWith({
+    String? id,
+    String? name,
+    Map<String, dynamic>? info,
+    List<RemoteStream>? streams,
+  }) {
+    return RemoteParticipant(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      info: info ?? this.info,
+      streams: streams ?? this.streams,
+    );
+  }
+
+  /// Add a stream to this participant
+  RemoteParticipant addStream(RemoteStream stream) {
+    return copyWith(streams: [...streams, stream]);
+  }
+
+  /// Remove a stream from this participant by ID
+  RemoteParticipant removeStream(String streamId) {
+    return copyWith(
+      streams: streams.where((s) => s.id != streamId).toList(),
+    );
+  }
+
+  @override
+  List<Object?> get props => [id, name, info, streams];
+
+  @override
+  String toString() {
+    return 'RemoteParticipant(id: $id, name: $name, streams: ${streams.length})';
+  }
 }
 
 // ============================================================================

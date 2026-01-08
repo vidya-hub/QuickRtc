@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart'
-    hide ConferenceProvider;
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../providers/conference_provider.dart';
 import '../utils/responsive.dart';
@@ -406,15 +405,10 @@ class _ConferenceView extends StatelessWidget {
 
     // Add remote participants' tiles
     for (final participant in provider.remoteParticipants.values) {
-      bool hasVideoTile = false;
-      for (final entry in participant.renderers.entries) {
-        final stream = participant.streams[entry.key];
-        // Skip audio streams - they don't need visible tiles
-        if (stream?.type == StreamType.audio) {
-          continue;
-        }
-        hasVideoTile = true;
-        final isScreenShare = stream?.type == StreamType.screenshare;
+      // Add video tiles
+      for (final entry in participant.videoRenderers.entries) {
+        // Check if this looks like a screenshare (based on stream id containing 'screen')
+        final isScreenShare = entry.key.toLowerCase().contains('screen');
         tiles.add(_RemoteVideoTile(
           renderer: entry.value,
           name:
@@ -424,7 +418,7 @@ class _ConferenceView extends StatelessWidget {
         ));
       }
       // Show avatar if participant has no video tiles
-      if (!hasVideoTile) {
+      if (participant.videoRenderers.isEmpty) {
         tiles.add(_RemoteAvatarTile(
           name: participant.name,
           hasAudio: participant.hasAudio,
@@ -437,12 +431,7 @@ class _ConferenceView extends StatelessWidget {
     // Collect audio renderers that need to be in the widget tree for playback
     final audioRenderers = <RTCVideoRenderer>[];
     for (final participant in provider.remoteParticipants.values) {
-      for (final entry in participant.renderers.entries) {
-        final stream = participant.streams[entry.key];
-        if (stream?.type == StreamType.audio) {
-          audioRenderers.add(entry.value);
-        }
-      }
+      audioRenderers.addAll(participant.audioRenderers.values);
     }
 
     return Stack(

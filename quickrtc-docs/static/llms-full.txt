@@ -1,0 +1,774 @@
+# QuickRTC - Complete Documentation
+
+> Production-ready WebRTC conferencing SDK built on mediasoup
+
+## Overview
+
+QuickRTC is a WebRTC conferencing SDK that simplifies building real-time video and audio applications. It abstracts the complexity of WebRTC, mediasoup, and signaling into a clean, event-driven API.
+
+### Why QuickRTC?
+
+- **No WebRTC expertise required**: The SDK handles all WebRTC complexity internally
+- **Automatic stream management**: Remote streams are auto-consumed and ready to use
+- **Event-driven architecture**: Simple pub/sub pattern for handling participants and streams
+- **Modular design**: Use only what you need (client, server, or React bindings)
+- **TypeScript first**: Full type safety and excellent IDE support
+- **Production tested**: Built for real-world applications with proper error handling
+
+---
+
+## Architecture
+
+QuickRTC uses a Selective Forwarding Unit (SFU) architecture powered by mediasoup:
+
+```
+┌─────────────┐     ┌─────────────────────┐     ┌─────────────┐
+│   Client A  │────▶│   QuickRTC Server   │◀────│   Client B  │
+│  (Producer) │     │   (mediasoup SFU)   │     │  (Consumer) │
+└─────────────┘     └─────────────────────┘     └─────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │    Client C     │
+                    │   (Consumer)    │
+                    └─────────────────┘
+```
+
+### Key Concepts
+
+1. **Conference**: A room where participants can share media
+2. **Participant**: A user in a conference
+3. **Producer**: A media track being sent to the server
+4. **Consumer**: A media track being received from the server
+5. **Stream**: A MediaStream containing audio or video
+
+---
+
+## Packages
+
+### quickrtc-client
+
+Core JavaScript/TypeScript client SDK.
+
+**Installation:**
+```bash
+npm install quickrtc-client socket.io-client
+```
+
+**CDN:**
+```html
+<script src="https://unpkg.com/quickrtc-client/dist/index.umd.js"></script>
+```
+
+### quickrtc-server
+
+Node.js server with mediasoup integration.
+
+**Installation:**
+```bash
+npm install quickrtc-server
+```
+
+**Requirements:**
+- Node.js 18+
+- Linux, macOS, or Windows with WSL
+- HTTPS certificates (WebRTC requires secure contexts)
+
+### quickrtc-react-client
+
+React hooks and components.
+
+**Installation:**
+```bash
+npm install quickrtc-react-client
+```
+
+**Peer Dependencies:**
+- React 18+
+- quickrtc-client
+
+---
+
+## Server SDK
+
+### QuickRTCServer
+
+The main server class that handles WebRTC signaling and media routing.
+
+```typescript
+import { QuickRTCServer } from "quickrtc-server";
+import express from "express";
+import { createServer } from "https";
+import { readFileSync } from "fs";
+import { Server as SocketIOServer } from "socket.io";
+
+const app = express();
+
+const httpsServer = createServer({
+  key: readFileSync("./certs/key.pem"),
+  cert: readFileSync("./certs/cert.pem"),
+}, app);
+
+const io = new SocketIOServer(httpsServer, {
+  cors: { origin: "*" },
+});
+
+const mediaServer = new QuickRTCServer({
+  httpServer: httpsServer,
+  socketServer: io,
+  // Optional configuration
+  mediasoupSettings: {
+    worker: {
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999,
+    },
+    router: {
+      mediaCodecs: [
+        {
+          kind: "audio",
+          mimeType: "audio/opus",
+          clockRate: 48000,
+          channels: 2,
+        },
+        {
+          kind: "video",
+          mimeType: "video/VP8",
+          clockRate: 90000,
+        },
+      ],
+    },
+  },
+});
+
+await mediaServer.start();
+
+httpsServer.listen(3000, () => {
+  console.log("QuickRTC server running on https://localhost:3000");
+});
+```
+
+### Server Configuration
+
+```typescript
+interface QuickRTCServerConfig {
+  httpServer: https.Server;
+  socketServer: SocketIOServer;
+  mediasoupSettings?: {
+    worker?: {
+      rtcMinPort?: number;  // Default: 40000
+      rtcMaxPort?: number;  // Default: 49999
+      logLevel?: string;    // Default: "warn"
+    };
+    router?: {
+      mediaCodecs?: MediaCodec[];
+    };
+    webRtcTransport?: {
+      listenIps?: TransportListenIp[];
+      enableUdp?: boolean;
+      enableTcp?: boolean;
+    };
+  };
+}
+```
+
+### Server Events
+
+```typescript
+mediaServer.on("conferenceCreated", ({ conferenceId }) => {
+  console.log(`Conference ${conferenceId} created`);
+});
+
+mediaServer.on("conferenceEmpty", ({ conferenceId }) => {
+  console.log(`Conference ${conferenceId} is now empty`);
+});
+
+mediaServer.on("participantJoined", ({ conferenceId, participantId, participantName }) => {
+  console.log(`${participantName} joined ${conferenceId}`);
+});
+
+mediaServer.on("participantLeft", ({ conferenceId, participantId }) => {
+  console.log(`Participant ${participantId} left ${conferenceId}`);
+});
+```
+
+---
+
+## Client SDK
+
+### QuickRTC Class
+
+The main client class for connecting to conferences.
+
+```typescript
+import { QuickRTC } from "quickrtc-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://your-server.com");
+
+const rtc = new QuickRTC({
+  socket,
+  debug: true,  // Enable debug logging
+});
+```
+
+### Configuration
+
+```typescript
+interface QuickRTCConfig {
+  socket: Socket;           // Socket.IO client instance (required)
+  maxParticipants?: number; // Maximum participants (0 = unlimited)
+  debug?: boolean;          // Enable debug logging
+}
+```
+
+### Methods
+
+#### join(config)
+
+Join a conference room.
+
+```typescript
+interface JoinConfig {
+  conferenceId: string;                    // Room identifier
+  participantName: string;                 // Display name
+  participantId?: string;                  // Custom ID (auto-generated if not provided)
+  conferenceName?: string;                 // Optional room name
+  participantInfo?: Record<string, any>;   // Custom metadata
+}
+
+await rtc.join({
+  conferenceId: "meeting-123",
+  participantName: "John Doe",
+  participantInfo: {
+    role: "host",
+    avatar: "https://example.com/avatar.jpg",
+  },
+});
+```
+
+#### leave()
+
+Leave the current conference.
+
+```typescript
+await rtc.leave();
+```
+
+#### produce(input)
+
+Share media tracks with other participants.
+
+```typescript
+// Single track
+const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+const [localStream] = await rtc.produce(stream.getVideoTracks()[0]);
+
+// Multiple tracks
+const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+  video: true, 
+  audio: true 
+});
+const localStreams = await rtc.produce(mediaStream.getTracks());
+
+// With type hint (for screen share)
+const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+const [screenShare] = await rtc.produce({
+  track: screenStream.getVideoTracks()[0],
+  type: "screenshare",
+});
+
+// Multiple with type hints
+const streams = await rtc.produce([
+  { track: videoTrack, type: "video" },
+  { track: audioTrack, type: "audio" },
+  { track: screenTrack, type: "screenshare" },
+]);
+```
+
+#### pause(streamId)
+
+Pause a local stream (stops sending media but keeps the producer).
+
+```typescript
+await rtc.pause(localStream.id);
+// or
+await localStream.pause();
+```
+
+#### resume(streamId)
+
+Resume a paused stream.
+
+```typescript
+await rtc.resume(localStream.id);
+// or
+await localStream.resume();
+```
+
+#### stop(streamId)
+
+Stop and remove a local stream completely.
+
+```typescript
+await rtc.stop(localStream.id);
+// or
+await localStream.stop();
+```
+
+### Events
+
+#### connected
+
+Fired when successfully joined a conference.
+
+```typescript
+rtc.on("connected", ({ conferenceId, participantId }) => {
+  console.log(`Joined ${conferenceId} as ${participantId}`);
+});
+```
+
+#### disconnected
+
+Fired when disconnected from the conference.
+
+```typescript
+rtc.on("disconnected", ({ reason }) => {
+  console.log(`Disconnected: ${reason}`);
+});
+```
+
+#### newParticipant
+
+Fired when a new participant joins with their existing streams.
+
+```typescript
+rtc.on("newParticipant", ({ 
+  participantId, 
+  participantName, 
+  participantInfo, 
+  streams 
+}) => {
+  console.log(`${participantName} joined`);
+  
+  // Streams are auto-consumed and ready to use
+  streams.forEach(stream => {
+    const video = document.createElement("video");
+    video.srcObject = stream.stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    document.body.appendChild(video);
+  });
+});
+```
+
+#### participantLeft
+
+Fired when a participant leaves.
+
+```typescript
+rtc.on("participantLeft", ({ participantId }) => {
+  console.log(`Participant ${participantId} left`);
+  // Clean up their video elements
+});
+```
+
+#### streamAdded
+
+Fired when an existing participant adds a new stream.
+
+```typescript
+rtc.on("streamAdded", (remoteStream) => {
+  console.log(`${remoteStream.participantName} added ${remoteStream.type}`);
+  
+  const video = document.createElement("video");
+  video.srcObject = remoteStream.stream;
+  video.autoplay = true;
+  document.body.appendChild(video);
+});
+```
+
+#### streamRemoved
+
+Fired when a participant removes a stream.
+
+```typescript
+rtc.on("streamRemoved", ({ participantId, streamId, type }) => {
+  console.log(`Stream ${streamId} (${type}) removed`);
+  // Remove the video element
+});
+```
+
+#### localStreamEnded
+
+Fired when a local track ends externally (e.g., user clicks "Stop sharing" in browser).
+
+```typescript
+rtc.on("localStreamEnded", ({ streamId, type }) => {
+  if (type === "screenshare") {
+    console.log("Screen share ended by user");
+    // Update UI to show screen share stopped
+  }
+});
+```
+
+#### error
+
+Fired when an error occurs.
+
+```typescript
+rtc.on("error", ({ message, error }) => {
+  console.error("QuickRTC error:", message, error);
+});
+```
+
+### Properties
+
+```typescript
+rtc.isConnected      // boolean - Connection status
+rtc.conferenceId     // string | null - Current conference ID
+rtc.participantId    // string | null - Your participant ID
+rtc.participantName  // string | null - Your display name
+rtc.localStreams     // Map<string, LocalStream> - Your streams
+rtc.remoteStreams    // Map<string, RemoteStream> - Remote streams
+rtc.participants     // Map<string, Participant> - Remote participants
+```
+
+---
+
+## React SDK
+
+### useQuickRTC Hook
+
+The main hook for QuickRTC integration in React.
+
+```typescript
+import { useQuickRTC } from "quickrtc-react-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://your-server.com");
+
+function VideoRoom() {
+  const {
+    rtc,              // QuickRTC instance
+    isConnected,      // boolean
+    conferenceId,     // string | null
+    participantId,    // string | null
+    localStreams,     // LocalStream[]
+    remoteStreams,    // RemoteStream[]
+    participants,     // Participant[]
+    join,             // (config) => Promise<void>
+    leave,            // () => Promise<void>
+    produce,          // (tracks) => Promise<LocalStream[]>
+    pause,            // (streamId) => Promise<void>
+    resume,           // (streamId) => Promise<void>
+    stop,             // (streamId) => Promise<void>
+  } = useQuickRTC({ socket });
+
+  const handleJoin = async () => {
+    await join({
+      conferenceId: "room-123",
+      participantName: "Alice",
+    });
+  };
+
+  const handleShare = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    await produce(stream.getTracks());
+  };
+
+  return (
+    <div>
+      {!isConnected ? (
+        <button onClick={handleJoin}>Join Room</button>
+      ) : (
+        <>
+          <button onClick={handleShare}>Share Camera</button>
+          <button onClick={leave}>Leave</button>
+        </>
+      )}
+    </div>
+  );
+}
+```
+
+### QuickRTCVideo Component
+
+A video component for rendering streams.
+
+```typescript
+import { QuickRTCVideo } from "quickrtc-react-client";
+
+function RemoteVideos({ streams }) {
+  return (
+    <div className="video-grid">
+      {streams.map(stream => (
+        <QuickRTCVideo
+          key={stream.id}
+          stream={stream.stream}
+          muted={stream.type === "audio"}  // Mute audio elements to prevent echo
+          autoPlay
+          playsInline
+          className="remote-video"
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+### Complete React Example
+
+```typescript
+import { useState, useEffect } from "react";
+import { useQuickRTC, QuickRTCVideo } from "quickrtc-react-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://your-server.com");
+
+function VideoConference() {
+  const {
+    isConnected,
+    localStreams,
+    remoteStreams,
+    participants,
+    join,
+    leave,
+    produce,
+    stop,
+  } = useQuickRTC({ socket });
+
+  const [isSharing, setIsSharing] = useState(false);
+
+  const handleJoin = async () => {
+    await join({
+      conferenceId: "demo-room",
+      participantName: "User",
+    });
+  };
+
+  const toggleCamera = async () => {
+    if (isSharing) {
+      // Stop all local streams
+      for (const stream of localStreams) {
+        await stop(stream.id);
+      }
+      setIsSharing(false);
+    } else {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      await produce(mediaStream.getTracks());
+      setIsSharing(true);
+    }
+  };
+
+  return (
+    <div className="conference">
+      <div className="controls">
+        {!isConnected ? (
+          <button onClick={handleJoin}>Join</button>
+        ) : (
+          <>
+            <button onClick={toggleCamera}>
+              {isSharing ? "Stop Camera" : "Start Camera"}
+            </button>
+            <button onClick={leave}>Leave</button>
+          </>
+        )}
+      </div>
+
+      <div className="participants">
+        <p>{participants.length + 1} participants</p>
+      </div>
+
+      <div className="video-grid">
+        {/* Local video */}
+        {localStreams
+          .filter(s => s.type === "video")
+          .map(stream => (
+            <div key={stream.id} className="video-container local">
+              <QuickRTCVideo stream={stream.stream} muted />
+              <span className="label">You</span>
+            </div>
+          ))}
+
+        {/* Remote videos */}
+        {remoteStreams
+          .filter(s => s.type === "video")
+          .map(stream => (
+            <div key={stream.id} className="video-container">
+              <QuickRTCVideo stream={stream.stream} />
+              <span className="label">{stream.participantName}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+export default VideoConference;
+```
+
+---
+
+## Deployment
+
+### Requirements
+
+- **HTTPS**: WebRTC requires secure contexts
+- **Ports**: UDP/TCP ports for media (default: 40000-49999)
+- **TURN Server**: Recommended for NAT traversal in production
+
+### Docker
+
+```dockerfile
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+EXPOSE 3000
+EXPOSE 40000-49999/udp
+
+CMD ["node", "server.js"]
+```
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+services:
+  quickrtc:
+    build: .
+    ports:
+      - "3000:3000"
+      - "40000-49999:40000-49999/udp"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./certs:/app/certs:ro
+```
+
+### Cloud Deployment
+
+#### AWS EC2
+
+1. Launch EC2 instance (t3.medium or larger)
+2. Configure Security Group:
+   - TCP 3000 (HTTPS)
+   - UDP 40000-49999 (WebRTC media)
+3. Set up SSL certificates (Let's Encrypt or ACM)
+4. Configure announced IP:
+
+```typescript
+const server = new QuickRTCServer({
+  httpServer,
+  socketServer: io,
+  mediasoupSettings: {
+    webRtcTransport: {
+      listenIps: [
+        {
+          ip: "0.0.0.0",
+          announcedIp: "YOUR_PUBLIC_IP",
+        },
+      ],
+    },
+  },
+});
+```
+
+#### Google Cloud Platform
+
+1. Create Compute Engine instance
+2. Configure firewall rules for ports
+3. Use external IP as announcedIp
+
+### TURN Server Setup
+
+For production, use a TURN server for reliable connectivity:
+
+```typescript
+// Client-side ICE configuration
+const socket = io("https://your-server.com");
+const rtc = new QuickRTC({
+  socket,
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    {
+      urls: "turn:your-turn-server.com:3478",
+      username: "user",
+      credential: "password",
+    },
+  ],
+});
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Cannot produce - not connected"
+Ensure you've called `join()` before `produce()`.
+
+#### No video/audio from remote participants
+Check that remote participants have actually called `produce()`.
+
+#### Connection fails behind NAT
+Set up a TURN server for production deployments.
+
+#### "Permission denied" for camera/microphone
+The user must grant permission. Handle the error:
+
+```typescript
+try {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+} catch (error) {
+  if (error.name === "NotAllowedError") {
+    alert("Please allow camera access");
+  }
+}
+```
+
+### Debug Mode
+
+Enable debug logging:
+
+```typescript
+const rtc = new QuickRTC({
+  socket,
+  debug: true,
+});
+```
+
+---
+
+## Browser Support
+
+- Chrome 74+
+- Firefox 66+
+- Safari 14.1+
+- Edge 79+
+
+---
+
+## Links
+
+- **Website**: https://quickrtc.dev
+- **Documentation**: https://quickrtc.dev/docs/getting-started
+- **GitHub**: https://github.com/vidya-hub/QuickRtc
+- **npm (client)**: https://www.npmjs.com/package/quickrtc-client
+- **npm (server)**: https://www.npmjs.com/package/quickrtc-server
+- **npm (react)**: https://www.npmjs.com/package/quickrtc-react-client
+
+## License
+
+MIT License - Copyright (c) QuickRTC

@@ -2,27 +2,45 @@
 ///
 /// A Flutter WebRTC client library built on MediaSoup for real-time video conferencing.
 ///
-/// ## Quick Start (New Event-Driven API)
+/// ## Quick Start (Controller-Based API)
 ///
 /// ```dart
 /// import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 /// import 'package:socket_io_client/socket_io_client.dart' as io;
 ///
-/// // Create socket and QuickRTC instance
+/// // Create socket and controller
 /// final socket = io.io('https://your-server.com');
-/// final rtc = QuickRTC(QuickRTCConfig(socket: socket));
+/// final controller = QuickRTCController(socket: socket);
 ///
-/// // Listen for events
-/// rtc.on<NewParticipantEvent>('newParticipant', (event) {
-///   print('${event.participantName} joined');
-/// });
+/// // Wrap your app with QuickRTCProvider
+/// QuickRTCProvider(
+///   controller: controller,
+///   child: MyApp(),
+/// )
 ///
-/// // Join and produce media
-/// await rtc.join(JoinConfig(conferenceId: 'room-123', participantName: 'Alice'));
-/// final streams = await rtc.produce(ProduceInput.fromTracks(mediaTracks));
+/// // Use QuickRTCBuilder to react to state changes
+/// QuickRTCBuilder(
+///   buildWhen: (prev, curr) => prev.participants != curr.participants,
+///   builder: (context, state) {
+///     return ParticipantGrid(participants: state.participantList);
+///   },
+/// )
+///
+/// // Join and produce media (high-level API)
+/// await controller.joinMeeting(conferenceId: 'room-123', participantName: 'Alice');
+/// await controller.enableMedia(); // Enables camera and microphone
+///
+/// // Or use low-level API for more control
+/// final media = await QuickRTCStatic.getLocalMedia(MediaConfig.audioVideo());
+/// await controller.produce(ProduceInput.fromTracksWithTypes(media.tracksWithTypes));
+///
+/// // Control media
+/// await controller.toggleCamera();
+/// await controller.toggleMicrophone();
+/// await controller.startScreenShare();
 ///
 /// // Leave
-/// await rtc.leave();
+/// await controller.leaveMeeting();
 /// ```
 library quickrtc_flutter_client;
 
@@ -33,29 +51,19 @@ export 'package:socket_io_client/socket_io_client.dart';
 // Platform interface (for screen capture service)
 export 'platform/quickrtc_platform.dart';
 
-// New Event-Driven API (recommended)
-export 'quickrtc.dart';
+// Controller API (new)
+export 'src/controller/quickrtc_controller.dart';
+export 'src/controller/quickrtc_static.dart';
+
+// Types
 export 'types.dart';
 
-// Legacy Provider-based API (for backward compatibility)
-// Models
-export 'models/conference_config.dart';
-export 'models/conference_state.dart';
-export 'models/local_stream_info.dart';
-export 'models/remote_participant.dart';
-export 'models/transport_options.dart';
-export 'models/consumer_params.dart';
-export 'models/participant_info.dart';
-export 'models/socket_response.dart';
-
-// Providers
-export 'providers/conference_provider.dart';
-
-// Services (optionally exposed for advanced usage)
-export 'services/device_service.dart';
-export 'services/socket_service.dart';
-export 'services/stream_service.dart';
+// State management
+export 'state/quick_rtc_state.dart';
 
 // Widgets
+export 'widgets/quick_rtc_provider.dart';
+export 'widgets/quick_rtc_builder.dart';
+export 'widgets/quick_rtc_listener.dart';
+export 'widgets/quick_rtc_consumer.dart';
 export 'widgets/rtc_video_renderer_widget.dart';
-export 'widgets/quick_rtc_provider_widget.dart';

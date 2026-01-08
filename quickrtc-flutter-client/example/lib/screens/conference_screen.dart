@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
-import '../utils/responsive.dart';
+import 'package:quickrtc_flutter_client_example/utils/responsive.dart';
 
 class ConferenceScreen extends StatefulWidget {
   const ConferenceScreen({super.key});
@@ -13,8 +13,8 @@ class ConferenceScreen extends StatefulWidget {
 }
 
 class _ConferenceScreenState extends State<ConferenceScreen> {
-  // QuickRTC instance
-  QuickRTC? _rtc;
+  // QuickRTC controller
+  QuickRTCController? _controller;
   io.Socket? _socket;
 
   // Local media
@@ -28,7 +28,6 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
   // State
   bool _isJoining = false;
-  bool _isConnected = false;
   String? _error;
   bool _audioEnabled = true;
   bool _videoEnabled = true;
@@ -36,11 +35,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   String? _conferenceId;
   String? _participantName;
 
-  // Local streams from QuickRTC
-  final Map<String, LocalStream> _localStreams = {};
-
-  // Remote participants and their streams
-  final Map<String, _RemoteParticipant> _remoteParticipants = {};
+  // Remote participant renderers
+  final Map<String, RTCVideoRenderer> _remoteRenderers = {};
 
   @override
   void initState() {
@@ -115,38 +111,33 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
         },
       );
 
-      // Create QuickRTC instance
-      _rtc = QuickRTC(QuickRTCConfig(
+      // Create QuickRTC controller
+      _controller = QuickRTCController(
         socket: _socket!,
         debug: true,
-      ));
+      );
 
-      // Setup event listeners
-      _setupEventListeners();
+      // Listen to state changes for handling errors and disconnection
+      _controller!.addListener(_onStateChanged);
 
-      // Join conference
-      await _rtc!.join(JoinConfig(
+      // Join meeting using high-level API
+      await _controller!.joinMeeting(
         conferenceId: conferenceId,
         participantName: participantName,
-      ));
+      );
 
-      setState(() => _isConnected = true);
-
-      // Get local media using the new API
-      final localMedia = await QuickRTC.getLocalMedia(MediaConfig.audioVideo(
+      // Get local media using the static API
+      final localMedia =
+          await QuickRTCStatic.getLocalMedia(MediaConfig.audioVideo(
         videoConfig: VideoConfig.frontCamera,
       ));
       _localStream = localMedia.stream;
       _localRenderer.srcObject = _localStream;
 
       // Produce media using tracks with types
-      final localStreams = await _rtc!.produce(
+      await _controller!.produce(
         ProduceInput.fromTracksWithTypes(localMedia.tracksWithTypes),
       );
-
-      for (final stream in localStreams) {
-        _localStreams[stream.id] = stream;
-      }
 
       setState(() {});
     } catch (e, stackTrace) {
@@ -158,82 +149,63 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     }
   }
 
-  void _setupEventListeners() {
-    _rtc!.on<NewParticipantEvent>('newParticipant', (event) {
-      setState(() {
-        final participant = _remoteParticipants.putIfAbsent(
-          event.participantId,
-          () => _RemoteParticipant(
-            id: event.participantId,
-            name: event.participantName,
-          ),
-        );
+  void _onStateChanged() {
+    if (!mounted || _controller == null) return;
 
-        for (final stream in event.streams) {
-          participant.addStream(stream);
-        }
-      });
-    });
+    final state = _controller!.state;
 
-    _rtc!.on<ParticipantLeftEvent>('participantLeft', (event) {
-      setState(() {
-        final participant = _remoteParticipants.remove(event.participantId);
-        participant?.dispose();
-      });
-    });
+    // Handle errors
+    if (state.hasError && state.error != _error) {
+      setState(() => _error = state.error);
+    }
 
-    _rtc!.on<StreamAddedEvent>('streamAdded', (event) {
-      setState(() {
-        final participant = _remoteParticipants[event.participantId];
-        participant?.addStream(event);
-      });
-    });
+    // Handle disconnection
+    if (state.isDisconnected && _error == null) {
+      setState(() => _error = 'Disconnected from conference');
+    }
 
-    _rtc!.on<StreamRemovedEvent>('streamRemoved', (event) {
-      setState(() {
-        final participant = _remoteParticipants[event.participantId];
-        participant?.removeStream(event.streamId);
-      });
-    });
+    // Update remote renderers when participants change
+    _updateRemoteRenderers(state);
 
-    _rtc!.on<StreamPausedEvent>('streamPaused', (event) {
-      setState(() {
-        final participant = _remoteParticipants[event.participantId];
-        if (participant != null) {
-          if (event.type == StreamType.audio) {
-            participant.audioEnabled = false;
-          } else if (event.type == StreamType.video) {
-            participant.videoEnabled = false;
+    // Trigger rebuild to update UI
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _updateRemoteRenderers(QuickRTCState state) async {
+    // Get all current remote video streams
+    final currentStreamIds = <String>{};
+
+    for (final participant in state.participantList) {
+      for (final stream in participant.streams) {
+        if (stream.type == StreamType.video ||
+            stream.type == StreamType.screenshare) {
+          currentStreamIds.add(stream.id);
+
+          // Create renderer if not exists
+          if (!_remoteRenderers.containsKey(stream.id)) {
+            final renderer = RTCVideoRenderer();
+            await renderer.initialize();
+            renderer.srcObject = stream.stream;
+            _remoteRenderers[stream.id] = renderer;
           }
         }
-      });
-    });
+      }
+    }
 
-    _rtc!.on<StreamResumedEvent>('streamResumed', (event) {
-      setState(() {
-        final participant = _remoteParticipants[event.participantId];
-        if (participant != null) {
-          if (event.type == StreamType.audio) {
-            participant.audioEnabled = true;
-          } else if (event.type == StreamType.video) {
-            participant.videoEnabled = true;
-          }
-        }
-      });
-    });
+    // Remove renderers for streams that no longer exist
+    final toRemove = <String>[];
+    for (final streamId in _remoteRenderers.keys) {
+      if (!currentStreamIds.contains(streamId)) {
+        toRemove.add(streamId);
+      }
+    }
 
-    _rtc!.on<DisconnectedEvent>('disconnected', (event) {
-      setState(() {
-        _isConnected = false;
-        _error = 'Disconnected: ${event.reason}';
-      });
-    });
-
-    _rtc!.on<ErrorEvent>('error', (event) {
-      setState(() {
-        _error = event.message;
-      });
-    });
+    for (final streamId in toRemove) {
+      final renderer = _remoteRenderers.remove(streamId);
+      renderer?.dispose();
+    }
   }
 
   Future<void> _toggleAudio() async {
@@ -248,9 +220,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       track.enabled = _audioEnabled;
     }
 
-    final audioStream = _localStreams.values
-        .where((s) => s.type == StreamType.audio)
-        .firstOrNull;
+    final audioStream = _controller?.state.localAudioStream;
 
     if (audioStream != null) {
       if (_audioEnabled) {
@@ -273,9 +243,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       track.enabled = _videoEnabled;
     }
 
-    final videoStream = _localStreams.values
-        .where((s) => s.type == StreamType.video)
-        .firstOrNull;
+    final videoStream = _controller?.state.localVideoStream;
 
     if (videoStream != null) {
       if (_videoEnabled) {
@@ -287,7 +255,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   }
 
   Future<void> _toggleScreenShare() async {
-    if (!_isConnected) return;
+    if (_controller == null || !_controller!.state.isConnected) return;
 
     if (_isScreenSharing) {
       // Stop screen sharing
@@ -300,8 +268,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
   Future<void> _startScreenShare() async {
     try {
-      // Get screen share media
-      _screenShareMedia = await QuickRTC.getLocalMedia(
+      // Get screen share media using static API
+      _screenShareMedia = await QuickRTCStatic.getLocalMedia(
         MediaConfig.screenShareOnly(
           config: ScreenShareConfig.defaultConfig,
         ),
@@ -317,16 +285,12 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       }
 
       // Produce the screen share track
-      final screenStreams = await _rtc!.produce(
+      await _controller!.produce(
         ProduceInput.fromTrack(
           _screenShareMedia!.screenshareTrack!,
           type: StreamType.screenshare,
         ),
       );
-
-      for (final stream in screenStreams) {
-        _localStreams[stream.id] = stream;
-      }
 
       // Listen for screen share ended (e.g., user clicked "Stop sharing" in browser)
       _screenShareMedia!.screenshareTrack!.onEnded = () {
@@ -351,13 +315,9 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   Future<void> _stopScreenShare() async {
     try {
       // Find and stop screen share streams
-      final screenShareStreams = _localStreams.entries
-          .where((e) => e.value.type == StreamType.screenshare)
-          .toList();
-
-      for (final entry in screenShareStreams) {
-        await entry.value.stop();
-        _localStreams.remove(entry.key);
+      final screenshareStream = _controller?.state.localScreenshareStream;
+      if (screenshareStream != null) {
+        await screenshareStream.stop();
       }
 
       // Dispose screen share media
@@ -382,7 +342,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
   Future<void> _leaveConference() async {
     try {
-      await _rtc?.leave();
+      _controller?.removeListener(_onStateChanged);
+      await _controller?.leaveMeeting();
     } catch (e) {
       debugPrint('Error leaving: $e');
     }
@@ -390,9 +351,11 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     _localStream?.dispose();
     _socket?.disconnect();
 
-    for (final participant in _remoteParticipants.values) {
-      participant.dispose();
+    // Dispose all remote renderers
+    for (final renderer in _remoteRenderers.values) {
+      renderer.dispose();
     }
+    _remoteRenderers.clear();
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
@@ -417,6 +380,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   Widget build(BuildContext context) {
     return ResponsiveBuilder(
       builder: (context, responsive) {
+        final isConnected = _controller?.state.isConnected ?? false;
+
         return Scaffold(
           backgroundColor: Colors.black,
           appBar: _isFullScreen
@@ -424,38 +389,38 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
               : AppBar(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
-                  title: _buildAppBarTitle(),
+                  title: _buildAppBarTitle(isConnected),
                   actions: _buildAppBarActions(responsive),
                 ),
           body: SafeArea(
-            child: _buildBody(responsive),
+            child: _buildBody(responsive, isConnected),
           ),
         );
       },
     );
   }
 
-  Widget _buildAppBarTitle() {
+  Widget _buildAppBarTitle(bool isConnected) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: _isConnected ? Colors.green : Colors.orange,
+            color: isConnected ? Colors.green : Colors.orange,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                _isConnected ? Icons.circle : Icons.circle_outlined,
+                isConnected ? Icons.circle : Icons.circle_outlined,
                 size: 8,
                 color: Colors.white,
               ),
               const SizedBox(width: 4),
               Text(
-                _isConnected ? 'Live' : 'Connecting',
+                isConnected ? 'Live' : 'Connecting',
                 style: const TextStyle(fontSize: 12, color: Colors.white),
               ),
             ],
@@ -498,7 +463,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     ];
   }
 
-  Widget _buildBody(Responsive responsive) {
+  Widget _buildBody(Responsive responsive, bool isConnected) {
     if (_isJoining) {
       return _buildLoadingState();
     }
@@ -507,7 +472,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       return _buildErrorState(responsive);
     }
 
-    if (!_isConnected) {
+    if (!isConnected) {
       return _buildNotConnectedState();
     }
 
@@ -614,22 +579,27 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   }
 
   Widget _buildConferenceView(Responsive responsive) {
-    final totalParticipants = _remoteParticipants.length + 1; // +1 for local
+    final state = _controller!.state;
+    final totalParticipants = state.participantCount + 1; // +1 for local
 
     // Choose layout based on screen size and participant count
     if (responsive.isMobile || (responsive.isTablet && responsive.isPortrait)) {
-      return _buildMobileLayout(responsive, totalParticipants);
+      return _buildMobileLayout(responsive, totalParticipants, state);
     } else {
-      return _buildDesktopLayout(responsive, totalParticipants);
+      return _buildDesktopLayout(responsive, totalParticipants, state);
     }
   }
 
-  Widget _buildMobileLayout(Responsive responsive, int totalParticipants) {
+  Widget _buildMobileLayout(
+    Responsive responsive,
+    int totalParticipants,
+    QuickRTCState state,
+  ) {
     return Column(
       children: [
         // Video grid
         Expanded(
-          child: _buildVideoGrid(responsive, totalParticipants),
+          child: _buildVideoGrid(responsive, totalParticipants, state),
         ),
         // Controls
         _buildControlsBar(responsive),
@@ -637,7 +607,11 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     );
   }
 
-  Widget _buildDesktopLayout(Responsive responsive, int totalParticipants) {
+  Widget _buildDesktopLayout(
+    Responsive responsive,
+    int totalParticipants,
+    QuickRTCState state,
+  ) {
     return Row(
       children: [
         // Main video area
@@ -645,7 +619,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
           child: Column(
             children: [
               Expanded(
-                child: _buildVideoGrid(responsive, totalParticipants),
+                child: _buildVideoGrid(responsive, totalParticipants, state),
               ),
               _buildControlsBar(responsive),
             ],
@@ -656,22 +630,37 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
           Container(
             width: 300,
             color: const Color(0xFF1E1E1E),
-            child: _buildSidePanel(),
+            child: _buildSidePanel(state),
           ),
       ],
     );
   }
 
-  Widget _buildVideoGrid(Responsive responsive, int totalParticipants) {
-    final participants = [
-      _LocalParticipantWrapper(
+  Widget _buildVideoGrid(
+    Responsive responsive,
+    int totalParticipants,
+    QuickRTCState state,
+  ) {
+    // Build list of participants for the grid
+    final participantWidgets = <Widget>[
+      // Local participant first
+      _LocalVideoTile(
         renderer: _localRenderer,
         name: _participantName ?? 'You',
         audioEnabled: _audioEnabled,
         videoEnabled: _videoEnabled,
       ),
-      ..._remoteParticipants.values,
     ];
+
+    // Add remote participants
+    for (final participant in state.participantList) {
+      participantWidgets.add(
+        _RemoteParticipantTile(
+          participant: participant,
+          renderers: _remoteRenderers,
+        ),
+      );
+    }
 
     // Calculate grid dimensions
     final crossAxisCount = _calculateGridColumns(
@@ -688,21 +677,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
           crossAxisSpacing: responsive.value(mobile: 4.0, tablet: 8.0),
           mainAxisSpacing: responsive.value(mobile: 4.0, tablet: 8.0),
         ),
-        itemCount: participants.length,
-        itemBuilder: (context, index) {
-          final participant = participants[index];
-          if (participant is _LocalParticipantWrapper) {
-            return _LocalVideoTile(
-              renderer: participant.renderer,
-              name: participant.name,
-              audioEnabled: participant.audioEnabled,
-              videoEnabled: participant.videoEnabled,
-            );
-          } else if (participant is _RemoteParticipant) {
-            return _RemoteParticipantTile(participant: participant);
-          }
-          return const SizedBox();
-        },
+        itemCount: participantWidgets.length,
+        itemBuilder: (context, index) => participantWidgets[index],
       ),
     );
   }
@@ -785,7 +761,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     );
   }
 
-  Widget _buildSidePanel() {
+  Widget _buildSidePanel(QuickRTCState state) {
     return Column(
       children: [
         Container(
@@ -800,7 +776,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
               const Icon(Icons.people, color: Colors.white, size: 20),
               const SizedBox(width: 8),
               Text(
-                'Participants (${_remoteParticipants.length + 1})',
+                'Participants (${state.participantCount + 1})',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
@@ -819,12 +795,12 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
                 audioEnabled: _audioEnabled,
                 videoEnabled: _videoEnabled,
               ),
-              ..._remoteParticipants.values.map(
+              ...state.participantList.map(
                 (p) => _ParticipantListItem(
                   name: p.name,
                   isLocal: false,
-                  audioEnabled: p.audioEnabled,
-                  videoEnabled: p.videoEnabled,
+                  audioEnabled: p.hasAudio,
+                  videoEnabled: p.hasVideo,
                 ),
               ),
             ],
@@ -836,101 +812,19 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
   @override
   void dispose() {
+    _controller?.removeListener(_onStateChanged);
     _localRenderer.dispose();
     _screenShareRenderer.dispose();
     _localStream?.dispose();
     _screenShareMedia?.dispose();
     _socket?.disconnect();
 
-    for (final participant in _remoteParticipants.values) {
-      participant.dispose();
+    for (final renderer in _remoteRenderers.values) {
+      renderer.dispose();
     }
 
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
-  }
-}
-
-// Helper wrapper for local participant in grid
-class _LocalParticipantWrapper {
-  final RTCVideoRenderer renderer;
-  final String name;
-  final bool audioEnabled;
-  final bool videoEnabled;
-
-  _LocalParticipantWrapper({
-    required this.renderer,
-    required this.name,
-    required this.audioEnabled,
-    required this.videoEnabled,
-  });
-}
-
-/// Remote participant state manager
-class _RemoteParticipant {
-  final String id;
-  final String name;
-  final Map<String, RemoteStream> streams = {};
-  final Map<String, RTCVideoRenderer> renderers = {};
-
-  /// Whether audio is enabled (not muted/paused)
-  bool audioEnabled = true;
-
-  /// Whether video is enabled (not muted/paused)
-  bool videoEnabled = true;
-
-  MediaStream? get videoStream {
-    final videoStreamEntry = streams.entries
-        .where((e) =>
-            e.value.type == StreamType.video ||
-            e.value.type == StreamType.screenshare)
-        .firstOrNull;
-    return videoStreamEntry?.value.stream;
-  }
-
-  bool get hasAudio => streams.values.any((s) => s.type == StreamType.audio);
-  bool get hasVideo => streams.values.any((s) => s.type == StreamType.video);
-
-  _RemoteParticipant({required this.id, required this.name});
-
-  Future<void> addStream(RemoteStream stream) async {
-    streams[stream.id] = stream;
-
-    // When a stream is added, mark it as enabled
-    if (stream.type == StreamType.audio) {
-      audioEnabled = true;
-    } else if (stream.type == StreamType.video ||
-        stream.type == StreamType.screenshare) {
-      videoEnabled = true;
-      final renderer = RTCVideoRenderer();
-      await renderer.initialize();
-      renderer.srcObject = stream.stream;
-      renderers[stream.id] = renderer;
-    }
-  }
-
-  void removeStream(String streamId) {
-    final stream = streams.remove(streamId);
-    final renderer = renderers.remove(streamId);
-    renderer?.dispose();
-
-    // When a stream is removed, check if any streams of that type remain
-    if (stream != null) {
-      if (stream.type == StreamType.audio) {
-        audioEnabled = hasAudio;
-      } else if (stream.type == StreamType.video ||
-          stream.type == StreamType.screenshare) {
-        videoEnabled = hasVideo;
-      }
-    }
-  }
-
-  void dispose() {
-    for (final renderer in renderers.values) {
-      renderer.dispose();
-    }
-    renderers.clear();
-    streams.clear();
   }
 }
 
@@ -1030,15 +924,27 @@ class _LocalVideoTile extends StatelessWidget {
 
 /// Remote participant video tile
 class _RemoteParticipantTile extends StatelessWidget {
-  final _RemoteParticipant participant;
+  final RemoteParticipant participant;
+  final Map<String, RTCVideoRenderer> renderers;
 
-  const _RemoteParticipantTile({required this.participant});
+  const _RemoteParticipantTile({
+    required this.participant,
+    required this.renderers,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final videoRenderer = participant.renderers.values.firstOrNull;
-    // Show video only if we have a renderer AND video is enabled (not paused)
-    final showVideo = videoRenderer != null && participant.videoEnabled;
+    // Find the video or screenshare stream renderer
+    RTCVideoRenderer? videoRenderer;
+    for (final stream in participant.streams) {
+      if (stream.type == StreamType.video ||
+          stream.type == StreamType.screenshare) {
+        videoRenderer = renderers[stream.id];
+        if (videoRenderer != null) break;
+      }
+    }
+
+    final showVideo = videoRenderer != null && participant.hasVideo;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -1095,8 +1001,8 @@ class _RemoteParticipantTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Show mic off icon if audio is disabled (muted/paused)
-                    if (!participant.audioEnabled)
+                    // Show mic off icon if audio is not available
+                    if (!participant.hasAudio)
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(

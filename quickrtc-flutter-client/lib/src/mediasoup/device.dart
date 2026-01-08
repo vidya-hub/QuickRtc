@@ -9,17 +9,6 @@ import 'handlers/handler_interface.dart';
 
 Logger _logger = Logger('Device');
 
-/// Default ICE servers for STUN/TURN
-/// These help with NAT traversal, especially on mobile devices
-final List<RTCIceServer> _defaultIceServers = [
-  RTCIceServer(
-    urls: ['stun:stun.l.google.com:19302'],
-  ),
-  RTCIceServer(
-    urls: ['stun:stun1.l.google.com:19302'],
-  ),
-];
-
 class Device {
   // Loaded flag.
   bool _loaded = false;
@@ -276,7 +265,7 @@ class Device {
       sctpParameters: data['sctpParameters'] != null
           ? SctpParameters.fromMap(data['sctpParameters'])
           : null,
-      iceServers: iceServers ?? _defaultIceServers,
+      iceServers: iceServers ?? const <RTCIceServer>[],
       appData: data['appData'] ?? <String, dynamic>{},
       proprietaryConstraints: Map<String, dynamic>.from({
         'optional': [
@@ -334,6 +323,7 @@ class Device {
     Map data, {
     Function? consumerCallback,
     Function? dataConsumerCallback,
+    List<RTCIceServer>? iceServers,
   }) {
     return createRecvTransport(
       id: data['id'],
@@ -345,7 +335,7 @@ class Device {
       sctpParameters: data['sctpParameters'] != null
           ? SctpParameters.fromMap(data['sctpParameters'])
           : null,
-      iceServers: [],
+      iceServers: iceServers ?? const <RTCIceServer>[],
       appData: data['appData'] ?? {},
       proprietaryConstraints: Map<String, dynamic>.from({
         'optional': [
