@@ -67,3 +67,4 @@ export 'widgets/quick_rtc_builder.dart';
 export 'widgets/quick_rtc_listener.dart';
 export 'widgets/quick_rtc_consumer.dart';
 export 'widgets/rtc_video_renderer_widget.dart';
+export 'widgets/screen_select_dialog.dart';

@@ -12,6 +12,9 @@ A Flutter WebRTC client library built on MediaSoup for real-time video conferenc
   s.source_files = 'Classes/**/*'
   s.dependency 'FlutterMacOS'
   s.platform = :osx, '10.14'
+  
+  # Required frameworks for screen capture
+  s.frameworks = 'CoreGraphics', 'AVFoundation', 'AppKit'
 
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'

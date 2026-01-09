@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -412,7 +412,10 @@ class ConferenceProvider extends ChangeNotifier {
   }
 
   /// Toggle screen sharing
-  Future<void> toggleScreenShare() async {
+  ///
+  /// On desktop platforms, pass [context] to show a picker dialog.
+  /// Without context, it will auto-select the first screen.
+  Future<void> toggleScreenShare([BuildContext? context]) async {
     if (_controller == null || !_controller!.state.isConnected) return;
 
     try {
@@ -426,9 +429,21 @@ class ConferenceProvider extends ChangeNotifier {
         _isScreenSharing = false;
       } else {
         // Start screen sharing
-        final screenMedia = await QuickRTCStatic.getLocalMedia(
-          MediaConfig.screenShareOnly(config: ScreenShareConfig.defaultConfig),
-        );
+        LocalMedia screenMedia;
+
+        // On desktop, use picker if context is provided
+        if (context != null && WebRTC.platformIsDesktop) {
+          screenMedia = await QuickRTCStatic.getScreenShareWithPicker(
+            context,
+            config: ScreenShareConfig.defaultConfig,
+          );
+        } else {
+          // Auto-select on mobile or when no context
+          screenMedia = await QuickRTCStatic.getLocalMedia(
+            MediaConfig.screenShareOnly(
+                config: ScreenShareConfig.defaultConfig),
+          );
+        }
 
         if (screenMedia.screenshareTrack != null) {
           _screenShareRenderer?.srcObject = screenMedia.screenshareStream;
@@ -444,8 +459,14 @@ class ConferenceProvider extends ChangeNotifier {
         }
       }
       notifyListeners();
+    } on ScreenCapturePermissionException catch (e) {
+      debugPrint('Screen capture permission error: $e');
+      _errorMessage = e.message;
+      notifyListeners();
     } catch (e) {
       debugPrint('toggleScreenShare error: $e');
+      _errorMessage = 'Failed to share screen: $e';
+      notifyListeners();
     }
   }
 

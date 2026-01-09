@@ -28,7 +28,7 @@ const getAnnouncedIp = (): string | null => {
   }
   // For local network development, use the machine's local IP
   // This must match the IP that clients connect to
-  return "192.168.1.7";
+  return "10.94.48.226";
 };
 
 const app = express();

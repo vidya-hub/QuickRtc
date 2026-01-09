@@ -14,7 +14,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _conferenceIdController = TextEditingController();
   final _participantNameController = TextEditingController();
   final _serverUrlController = TextEditingController(
-    text: 'https://192.168.1.2:3000',
+    text: 'https://10.94.48.226:3000',
   );
 
   // ignore: prefer_final_fields - will be used for loading state

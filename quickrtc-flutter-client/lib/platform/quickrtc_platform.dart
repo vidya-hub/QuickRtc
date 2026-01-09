@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -6,8 +7,9 @@ import 'package:flutter/services.dart';
 /// On Android, this starts/stops a foreground service required for
 /// MediaProjection API (screen capture) on Android 10+.
 ///
-/// On iOS/macOS, this is a no-op as those platforms handle screen capture
-/// permissions differently (ReplayKit/ScreenCaptureKit).
+/// On iOS/macOS, this handles screen capture permissions differently:
+/// - macOS: Uses CGRequestScreenCaptureAccess for permission
+/// - iOS: Uses ReplayKit
 class QuickRTCPlatform {
   static const MethodChannel _channel =
       MethodChannel('quickrtc_flutter_client');
@@ -88,6 +90,117 @@ class QuickRTCPlatform {
       return false;
     } on MissingPluginException {
       return true;
+    }
+  }
+
+  /// Check if screen capture permission is granted (macOS only).
+  ///
+  /// On macOS 10.15+, this uses CGPreflightScreenCaptureAccess.
+  /// On other platforms, returns true.
+  static Future<bool> checkScreenCapturePermission() async {
+    if (kIsWeb) {
+      return true;
+    }
+
+    // Only macOS has this specific permission check
+    if (!Platform.isMacOS) {
+      return true;
+    }
+
+    try {
+      final result =
+          await _channel.invokeMethod<bool>('checkScreenCapturePermission');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('Failed to check screen capture permission: ${e.message}');
+      return false;
+    } on MissingPluginException {
+      debugPrint('QuickRTC platform plugin not available');
+      return true;
+    }
+  }
+
+  /// Request screen capture permission (macOS only).
+  ///
+  /// On macOS 10.15+, this uses CGRequestScreenCaptureAccess which shows
+  /// the system permission dialog. Note that this dialog only appears once
+  /// per app install. If the user denies permission, they must manually
+  /// enable it in System Preferences > Security & Privacy > Screen Recording.
+  ///
+  /// On other platforms, returns true.
+  static Future<bool> requestScreenCapturePermission() async {
+    if (kIsWeb) {
+      return true;
+    }
+
+    // Only macOS has this specific permission request
+    if (!Platform.isMacOS) {
+      return true;
+    }
+
+    try {
+      final result =
+          await _channel.invokeMethod<bool>('requestScreenCapturePermission');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('Failed to request screen capture permission: ${e.message}');
+      return false;
+    } on MissingPluginException {
+      debugPrint('QuickRTC platform plugin not available');
+      return true;
+    }
+  }
+
+  /// Open System Preferences to Screen Recording settings (macOS only).
+  ///
+  /// This is useful when the user has denied permission and needs to
+  /// manually enable it.
+  static Future<void> openScreenCaptureSettings() async {
+    if (kIsWeb || !Platform.isMacOS) {
+      return;
+    }
+
+    try {
+      await _channel.invokeMethod<void>('openScreenCaptureSettings');
+    } on PlatformException catch (e) {
+      debugPrint('Failed to open screen capture settings: ${e.message}');
+    } on MissingPluginException {
+      debugPrint('QuickRTC platform plugin not available');
+    }
+  }
+
+  /// Show native screen picker dialog (macOS only).
+  ///
+  /// Displays a native macOS window with preview thumbnails of available
+  /// screens and windows. The user can select which source to share.
+  ///
+  /// Returns a map with the selected source info:
+  /// - `id`: The source ID (display ID for screens, window ID for windows)
+  /// - `name`: Human-readable name of the source
+  /// - `type`: Either "screen" or "window"
+  /// - `displayId`: (optional) CGDirectDisplayID for screen sources
+  /// - `windowId`: (optional) CGWindowID for window sources
+  ///
+  /// Returns null if the user cancels or closes the picker.
+  ///
+  /// On non-macOS platforms, returns null.
+  static Future<Map<String, dynamic>?> showScreenPicker() async {
+    if (kIsWeb || !Platform.isMacOS) {
+      return null;
+    }
+
+    try {
+      final result = await _channel.invokeMethod<Map>('showScreenPicker');
+      if (result == null) {
+        return null;
+      }
+      return Map<String, dynamic>.from(result);
+    } on PlatformException catch (e) {
+      debugPrint('Failed to show screen picker: ${e.message}');
+      return null;
+    } on MissingPluginException {
+      debugPrint('QuickRTC platform plugin not available');
+      return null;
     }
   }
 

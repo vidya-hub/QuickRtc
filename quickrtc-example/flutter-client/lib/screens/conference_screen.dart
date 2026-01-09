@@ -522,7 +522,7 @@ class _ConferenceView extends StatelessWidget {
                   ? null
                   : (provider.isScreenSharing ? 'Stop Share' : 'Share'),
               isActive: provider.isScreenSharing,
-              onPressed: () => provider.toggleScreenShare(),
+              onPressed: () => provider.toggleScreenShare(context),
             ),
             SizedBox(width: responsive.value(mobile: 16.0, tablet: 32.0)),
             _ControlButton(
