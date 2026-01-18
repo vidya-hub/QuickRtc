@@ -77,6 +77,20 @@ mixin QuickRTCMediaMixin {
     }
   }
 
+  /// Toggle camera pause state
+  ///
+  /// If paused, resumes. If active, pauses.
+  Future<void> toggleCameraPause() async {
+    final videoStream = state.localVideoStream;
+    if (videoStream != null) {
+      if (videoStream.paused) {
+        await resumeCamera();
+      } else {
+        await pauseCamera();
+      }
+    }
+  }
+
   // ============================================================================
   // HIGH-LEVEL: Microphone Control
   // ============================================================================
@@ -135,6 +149,20 @@ mixin QuickRTCMediaMixin {
     final audioStream = state.localAudioStream;
     if (audioStream != null && audioStream.paused) {
       await resumeStream(audioStream.id);
+    }
+  }
+
+  /// Toggle microphone mute state
+  ///
+  /// If muted, unmutes. If unmuted, mutes.
+  Future<void> toggleMicrophoneMute() async {
+    final audioStream = state.localAudioStream;
+    if (audioStream != null) {
+      if (audioStream.paused) {
+        await unmuteMicrophone();
+      } else {
+        await muteMicrophone();
+      }
     }
   }
 

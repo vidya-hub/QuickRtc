@@ -116,6 +116,26 @@ class SocketEventController extends EnhancedEventEmitter {
       );
 
       socket.on(
+        "pauseProducer",
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.pauseProducer(socketEventData, socket, callback);
+        }
+      );
+
+      socket.on(
+        "unpauseProducer",
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.unpauseProducer(socketEventData, socket, callback);
+        }
+      );
+
+      socket.on(
         "closeConsumer",
         async (
           socketEventData: CloseConsumerRequest,
@@ -349,6 +369,92 @@ class SocketEventController extends EnhancedEventEmitter {
       this.emit("producerClosed", producerClosedData);
     } catch (error) {
       console.error("Error closing producer:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  private async pauseProducer(
+    socketEventData: ProducerControlRequest,
+    socket: Socket,
+    callback: (response: SocketResponse) => void
+  ) {
+    const { conferenceId, participantId, extraData } = socketEventData;
+    const producerId = extraData?.producerId;
+
+    if (!producerId) {
+      callback({ status: "error", error: "Missing producerId" });
+      return;
+    }
+
+    try {
+      const kind = await this.mediasoupController?.pauseProducer({
+        conferenceId,
+        participantId,
+        producerId,
+      });
+      callback({ status: "ok" });
+
+      // Broadcast mute event to other participants
+      if (kind === "audio") {
+        const mutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("audioMuted", mutedData);
+        this.emit("audioMuted", mutedData);
+      } else if (kind === "video") {
+        const mutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("videoMuted", mutedData);
+        this.emit("videoMuted", mutedData);
+      }
+    } catch (error) {
+      console.error("Error pausing producer:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  private async unpauseProducer(
+    socketEventData: ProducerControlRequest,
+    socket: Socket,
+    callback: (response: SocketResponse) => void
+  ) {
+    const { conferenceId, participantId, extraData } = socketEventData;
+    const producerId = extraData?.producerId;
+
+    if (!producerId) {
+      callback({ status: "error", error: "Missing producerId" });
+      return;
+    }
+
+    try {
+      const kind = await this.mediasoupController?.resumeProducer({
+        conferenceId,
+        participantId,
+        producerId,
+      });
+      callback({ status: "ok" });
+
+      // Broadcast unmute event to other participants
+      if (kind === "audio") {
+        const unmutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("audioUnmuted", unmutedData);
+        this.emit("audioUnmuted", unmutedData);
+      } else if (kind === "video") {
+        const unmutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("videoUnmuted", unmutedData);
+        this.emit("videoUnmuted", unmutedData);
+      }
+    } catch (error) {
+      console.error("Error unpausing producer:", error);
       callback({ status: "error", error: (error as Error).message });
     }
   }

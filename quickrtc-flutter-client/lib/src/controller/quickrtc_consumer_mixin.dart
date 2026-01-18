@@ -193,7 +193,11 @@ mixin QuickRTCConsumerMixin {
     final consumerInfo = consumers.remove(consumerId);
     if (consumerInfo != null) {
       consumedProducerIds.remove(consumerInfo.producerId);
-      await consumerInfo.consumer.close();
+      try {
+        await consumerInfo.consumer.close();
+      } catch (_) {
+        // Ignore errors - peer connection may already be closed
+      }
     }
   }
 
@@ -206,15 +210,23 @@ mixin QuickRTCConsumerMixin {
     for (final entry in consumersToRemove) {
       final info = entry.value;
       consumedProducerIds.remove(info.producerId);
-      await info.consumer.close();
+      try {
+        await info.consumer.close();
+      } catch (_) {
+        // Ignore errors - peer connection may already be closed
+      }
       consumers.remove(entry.key);
     }
   }
 
-  /// Close all consumers
+  /// Close all consumers (defensive - ignores errors during cleanup)
   Future<void> closeAllConsumers() async {
     for (final consumer in consumers.values) {
-      await consumer.consumer.close();
+      try {
+        await consumer.consumer.close();
+      } catch (_) {
+        // Ignore errors during cleanup - peer connection may already be closed
+      }
     }
     consumers.clear();
     consumedProducerIds.clear();

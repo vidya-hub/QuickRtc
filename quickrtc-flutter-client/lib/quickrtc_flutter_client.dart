@@ -68,3 +68,8 @@ export 'widgets/quick_rtc_listener.dart';
 export 'widgets/quick_rtc_consumer.dart';
 export 'widgets/rtc_video_renderer_widget.dart';
 export 'widgets/screen_select_dialog.dart';
+
+// New widgets (enhanced)
+export 'widgets/quick_rtc_theme.dart';
+export 'widgets/quick_rtc_media_renderer.dart';
+export 'widgets/quick_rtc_audio_renderer.dart';

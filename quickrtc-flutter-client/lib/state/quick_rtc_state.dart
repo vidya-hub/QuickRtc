@@ -31,6 +31,11 @@ enum ConnectionStatus {
 /// )
 /// ```
 class QuickRTCState extends Equatable {
+  /// Version counter - increments on every state change to ensure inequality
+  /// This solves issues where nested objects (like MediaStream) don't properly
+  /// compare, causing Equatable to incorrectly report states as equal.
+  final int version;
+
   /// Current connection status
   final ConnectionStatus status;
 
@@ -53,6 +58,7 @@ class QuickRTCState extends Equatable {
   final String? error;
 
   const QuickRTCState({
+    this.version = 0,
     this.status = ConnectionStatus.disconnected,
     this.conferenceId,
     this.participantId,
@@ -124,6 +130,9 @@ class QuickRTCState extends Equatable {
   /// Whether local video is paused
   bool get isLocalVideoPaused => localVideoStream?.paused ?? true;
 
+  /// Whether local screenshare is paused
+  bool get isLocalScreensharePaused => localScreenshareStream?.paused ?? true;
+
   // ============================================================================
   // COPY WITH
   // ============================================================================
@@ -133,6 +142,9 @@ class QuickRTCState extends Equatable {
   /// Use [clearError] to explicitly clear the error field.
   /// Use [clearConferenceId], [clearParticipantId], [clearParticipantName]
   /// to explicitly clear those fields.
+  ///
+  /// Note: The version is automatically incremented on every copyWith call
+  /// to ensure state changes are always detected.
   QuickRTCState copyWith({
     ConnectionStatus? status,
     String? conferenceId,
@@ -147,6 +159,7 @@ class QuickRTCState extends Equatable {
     bool clearParticipantName = false,
   }) {
     return QuickRTCState(
+      version: version + 1, // Always increment version
       status: status ?? this.status,
       conferenceId:
           clearConferenceId ? null : (conferenceId ?? this.conferenceId),
@@ -163,6 +176,7 @@ class QuickRTCState extends Equatable {
 
   @override
   List<Object?> get props => [
+        version, // Include version to ensure state changes are always detected
         status,
         conferenceId,
         participantId,
@@ -175,6 +189,7 @@ class QuickRTCState extends Equatable {
   @override
   String toString() {
     return 'QuickRTCState('
+        'version: $version, '
         'status: $status, '
         'conferenceId: $conferenceId, '
         'participantId: $participantId, '

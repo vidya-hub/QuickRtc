@@ -627,7 +627,8 @@ class Transport extends EnhancedEventEmitter {
 
     _closed = true;
 
-    // TODO: close task handler.
+    // Close the FlexQueue to prevent pending tasks from running after handler is closed
+    _flexQueue.close();
 
     // Close the handler.
     await _handler.close();

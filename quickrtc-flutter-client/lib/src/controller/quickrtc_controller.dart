@@ -101,12 +101,24 @@ class QuickRTCController extends ChangeNotifier
   @override
   QuickRTCState get state => _state;
 
+  bool _isDisposed = false;
+
   /// Update state and notify listeners
   @override
   void updateState(QuickRTCState newState) {
+    log('updateState called',
+        'old participants: ${_state.participants.length}, new: ${newState.participants.length}');
+    log('States equal?', _state == newState);
+
     if (_state != newState) {
       _state = newState;
+      // Only notify if not disposed
+      if (_isDisposed) return;
+      log('Notifying listeners',
+          'hasListeners check skipped, using _isDisposed');
       notifyListeners();
+    } else {
+      log('State unchanged', 'NOT notifying listeners');
     }
   }
 
@@ -269,6 +281,15 @@ class QuickRTCController extends ChangeNotifier
   /// Whether screen is being shared
   bool get hasLocalScreenshare => _state.hasLocalScreenshare;
 
+  /// Whether local audio is muted (paused)
+  bool get isAudioMuted => _state.isLocalAudioPaused;
+
+  /// Whether local video is paused
+  bool get isVideoPaused => _state.isLocalVideoPaused;
+
+  /// Whether local screenshare is paused
+  bool get isScreensharePaused => _state.isLocalScreensharePaused;
+
   // ============================================================================
   // HIGH-LEVEL: Meeting Lifecycle
   // ============================================================================
@@ -357,19 +378,26 @@ class QuickRTCController extends ChangeNotifier
     log('Leaving meeting');
 
     try {
-      await closeAllProducers();
-      await closeAllConsumers();
-      closeTransports();
-
+      // Notify server first (while connections are still active)
       await emitWithAck('leaveConference', {
         'conferenceId': _conferenceId,
         'participantId': _participantId,
       });
     } catch (error) {
-      log('Error during leave', error);
-    } finally {
-      cleanup();
+      log('Error notifying server of leave', error);
     }
+
+    // Close transports first - this closes the peer connection
+    // which will automatically clean up all producers/consumers
+    closeTransports();
+
+    // Just clear the collections - don't try to close individual
+    // producers/consumers as the peer connection is already gone
+    _producers.clear();
+    _consumers.clear();
+    _consumedProducerIds.clear();
+
+    cleanup();
   }
 
   /// Clear the current error
@@ -390,7 +418,11 @@ class QuickRTCController extends ChangeNotifier
 
     _conferenceId = null;
     _participantId = null;
+    _producers.clear();
+    _consumers.clear();
     _consumedProducerIds.clear();
+    _pendingProducers.clear();
+    _pendingConsumers.clear();
     _device = null;
     _sendTransport = null;
     _recvTransport = null;
@@ -458,9 +490,13 @@ class QuickRTCController extends ChangeNotifier
 
   @override
   void dispose() {
+    _isDisposed = true;
+    // Disconnect if still connected
     if (_state.isConnected) {
       leaveMeeting();
     }
+    // Clear state before disposing to prevent socket handlers from triggering
+    _state = const QuickRTCState();
     super.dispose();
   }
 }

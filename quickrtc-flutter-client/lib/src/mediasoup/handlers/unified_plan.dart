@@ -249,12 +249,21 @@ class UnifiedPlan extends HandlerInterface {
     // Store in the map.
     _mapMidTransceiver[localId] = transceiver;
 
-    final MediaStream? stream = _pc!
+    MediaStream? stream = _pc!
         .getRemoteStreams()
         .firstWhereOrNull((e) => e?.id == options.rtpParameters.rtcp!.cname);
 
+    // On Android, getRemoteStreams() may not immediately have the stream after
+    // SDP negotiation. In this case, create a local MediaStream and add the track.
+    // This is a workaround for Android WebRTC timing issues with existing streams.
     if (stream == null) {
-      throw ('Stream not found');
+      _logger.debug(
+          'receive() | Stream not found in getRemoteStreams(), creating fallback stream');
+
+      // Create a fallback stream with the track
+      stream = await createLocalMediaStream(
+          'fallback_${options.trackId}_${DateTime.now().millisecondsSinceEpoch}');
+      stream.addTrack(transceiver.receiver.track!);
     }
 
     return HandlerReceiveResult(
@@ -328,9 +337,9 @@ class UnifiedPlan extends HandlerInterface {
 
     if (options.track != null) {
       _logger.debug(
-          'replaceTrack() [localId:${options.localId}, track.id${options.track.id}');
+          'replaceTrack() [localId:${options.localId}, track.id:${options.track!.id}]');
     } else {
-      _logger.debug('replaceTrack() [localId:${options.localId}, no track');
+      _logger.debug('replaceTrack() [localId:${options.localId}, no track]');
     }
 
     RTCRtpTransceiver? transceiver = _mapMidTransceiver[options.localId];
@@ -340,7 +349,9 @@ class UnifiedPlan extends HandlerInterface {
     }
 
     await transceiver.sender.replaceTrack(options.track);
-    _mapMidTransceiver.remove(options.localId);
+    // Note: Do NOT remove the transceiver from the map here.
+    // The transceiver is still valid and needed for future track replacements
+    // (e.g., when resuming camera after pausing).
   }
 
   @override

@@ -158,10 +158,18 @@ mixin QuickRTCTransportMixin {
     });
   }
 
-  /// Close transports
+  /// Close transports (defensive - ignores errors during cleanup)
   void closeTransports() {
-    sendTransport?.close();
-    recvTransport?.close();
+    try {
+      sendTransport?.close();
+    } catch (_) {
+      // Ignore errors during cleanup
+    }
+    try {
+      recvTransport?.close();
+    } catch (_) {
+      // Ignore errors during cleanup
+    }
     sendTransport = null;
     recvTransport = null;
   }

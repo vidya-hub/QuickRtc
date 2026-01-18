@@ -100,7 +100,10 @@ class Producer extends EnhancedEventEmitter {
   RTCRtpSender? rtpSender;
 
   /// Local track.
-  final MediaStreamTrack track;
+  MediaStreamTrack _track;
+
+  /// Get the current track.
+  MediaStreamTrack get track => _track;
 
   /// Producer kind.
   late String kind;
@@ -151,7 +154,7 @@ class Producer extends EnhancedEventEmitter {
     required this.id,
     required this.localId,
     this.rtpSender,
-    required this.track,
+    required MediaStreamTrack track,
     required this.rtpParameters,
     required this.stopTracks,
     required this.disableTrackOnPause,
@@ -160,13 +163,14 @@ class Producer extends EnhancedEventEmitter {
     required this.stream,
     required this.source,
     this.closed = false,
-  })  : observer = EnhancedEventEmitter(),
+  })  : _track = track,
+        observer = EnhancedEventEmitter(),
         super() {
     _logger.debug('constructor()');
 
-    kind = track.kind!;
+    kind = _track.kind!;
 
-    paused = disableTrackOnPause ? !track.enabled : false;
+    paused = disableTrackOnPause ? !_track.enabled : false;
     maxSpatialLayer = null;
   }
 
@@ -174,7 +178,7 @@ class Producer extends EnhancedEventEmitter {
     required this.id,
     required this.localId,
     this.rtpSender,
-    required this.track,
+    required MediaStreamTrack track,
     required this.rtpParameters,
     required this.stopTracks,
     required this.disableTrackOnPause,
@@ -187,7 +191,8 @@ class Producer extends EnhancedEventEmitter {
     required this.paused,
     required this.observer,
     required this.kind,
-  }) : super() {
+  })  : _track = track,
+        super() {
     _logger.debug('copy()');
   }
 
@@ -316,7 +321,7 @@ class Producer extends EnhancedEventEmitter {
 
     if (zeroRtpOnPause) {
       safeEmitAsFuture('@replacetrack', {
-        '_track': track,
+        'track': track,
       }).catchError((error, stackTrace) {});
     }
 
@@ -342,7 +347,7 @@ class Producer extends EnhancedEventEmitter {
 
     if (zeroRtpOnPause) {
       safeEmitAsFuture('@replacetrack', {
-        '_track': track,
+        'track': track,
       }).catchError((error, stackTrace) {});
     }
 
@@ -353,48 +358,51 @@ class Producer extends EnhancedEventEmitter {
   }
 
   /// Replaces the current track with a new one.
-  Future<void> replaceTrack(MediaStreamTrack track) async {
-    _logger.debug('replcaeTrack() ${track.toString()}');
+  Future<void> replaceTrack(MediaStreamTrack newTrack) async {
+    _logger.debug('replaceTrack() ${newTrack.toString()}');
 
     if (closed) {
-      // Thus must be done here. Otherwise there is no chance to stop the given track.
+      // This must be done here. Otherwise there is no chance to stop the given track.
       if (stopTracks) {
         try {
-          track.stop();
+          newTrack.stop();
         } catch (error) {}
       }
       throw 'closed';
     }
 
-    // flutter_webrtc, как получить состояние? : )
-    // else if (track != null && track.readyState == 'ended'))
-
     // Do nothing if this is the same track as the current handled one.
-    if (track == this.track) {
+    if (newTrack == _track) {
       _logger.debug('replaceTrack() | same track, ignored.');
-
       return;
     }
 
-    if (zeroRtpOnPause || paused) {
-      await safeEmitAsFuture('@replacetrack', {
-        'track': track,
-      });
+    // Always emit @replacetrack to update the RTCRtpSender's track.
+    // This is necessary for both pause/resume scenarios and track switching.
+    await safeEmitAsFuture('@replacetrack', {
+      'track': newTrack,
+    });
+
+    // Stop the previous track (but don't dispose the stream - we're just replacing the track).
+    try {
+      _track.onEnded = null;
+      if (stopTracks) {
+        _track.stop();
+      }
+    } catch (error) {
+      _logger.warn('replaceTrack() | failed to stop previous track: $error');
     }
 
-    // Destroy the previous track.
-    _destroyTrack();
-
     // Set the new track.
-    track = track;
+    _track = newTrack;
 
     // If this Producer was paused/resumed and the state of the new
     // track does not match, fix it.
     if (disableTrackOnPause) {
       if (!paused) {
-        track.enabled = true;
-      } else if (paused) {
-        track.enabled = false;
+        _track.enabled = true;
+      } else {
+        _track.enabled = false;
       }
     }
 
@@ -438,15 +446,15 @@ class Producer extends EnhancedEventEmitter {
   }
 
   void _handleTrack() {
-    track.onEnded = _onTrackEnded;
+    _track.onEnded = _onTrackEnded;
   }
 
   void _destroyTrack() {
     try {
-      track.onEnded = null;
+      _track.onEnded = null;
 
       if (stopTracks) {
-        track.stop();
+        _track.stop();
         stream.dispose();
       }
     } catch (error) {}

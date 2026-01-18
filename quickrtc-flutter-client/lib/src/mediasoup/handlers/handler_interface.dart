@@ -189,11 +189,11 @@ class HandlerReceiveDataChannelOptions {
 
 class ReplaceTrackOptions {
   final String localId;
-  final MediaStreamTrack track;
+  final MediaStreamTrack? track;
 
   const ReplaceTrackOptions({
     required this.localId,
-    required this.track,
+    this.track,
   });
 }
 

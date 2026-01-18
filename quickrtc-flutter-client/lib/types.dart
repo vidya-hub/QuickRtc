@@ -557,6 +557,9 @@ class RemoteStream extends Equatable {
   /// Participant name
   final String participantName;
 
+  /// Whether the stream is paused (muted by remote participant)
+  final bool paused;
+
   const RemoteStream({
     required this.id,
     required this.type,
@@ -564,6 +567,7 @@ class RemoteStream extends Equatable {
     required this.producerId,
     required this.participantId,
     required this.participantName,
+    this.paused = false,
   });
 
   /// Create a copy with the given fields replaced
@@ -574,6 +578,7 @@ class RemoteStream extends Equatable {
     String? producerId,
     String? participantId,
     String? participantName,
+    bool? paused,
   }) {
     return RemoteStream(
       id: id ?? this.id,
@@ -582,12 +587,13 @@ class RemoteStream extends Equatable {
       producerId: producerId ?? this.producerId,
       participantId: participantId ?? this.participantId,
       participantName: participantName ?? this.participantName,
+      paused: paused ?? this.paused,
     );
   }
 
   @override
   List<Object?> get props =>
-      [id, type, producerId, participantId, participantName];
+      [id, type, producerId, participantId, participantName, paused];
 }
 
 // ============================================================================
@@ -692,6 +698,15 @@ class RemoteParticipant extends Equatable {
 
   /// Whether participant is sharing screen
   bool get hasScreenshare => screenshareStream != null;
+
+  /// Whether audio stream is muted (paused by remote participant)
+  bool get isAudioMuted => audioStream?.paused ?? true;
+
+  /// Whether video stream is muted (paused by remote participant)
+  bool get isVideoMuted => videoStream?.paused ?? true;
+
+  /// Whether screenshare stream is paused
+  bool get isScreensharePaused => screenshareStream?.paused ?? true;
 
   /// Create a copy with the given fields replaced
   RemoteParticipant copyWith({
@@ -849,10 +864,14 @@ class StreamResumedEvent {
 class ProducerInfo {
   final String id;
   final StreamType type;
-  final MediaStreamTrack track;
+  MediaStreamTrack track; // Mutable - can be replaced on resume after stop
   final Producer producer;
-  final MediaStream stream;
+  MediaStream stream; // Mutable - can be replaced on resume after stop
   bool paused;
+
+  /// Stores the original track settings for re-acquisition on resume
+  /// Only used for video tracks that were stopped (not just paused)
+  Map<String, dynamic>? stoppedTrackSettings;
 
   ProducerInfo({
     required this.id,
@@ -861,6 +880,7 @@ class ProducerInfo {
     required this.producer,
     required this.stream,
     this.paused = false,
+    this.stoppedTrackSettings,
   });
 }
 

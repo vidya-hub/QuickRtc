@@ -54,11 +54,25 @@ class FlexTaskRemove extends FlexTask {
 
 class FlexQueue {
   bool isBusy = false;
+  bool _closed = false;
   final List<FlexTask> taskQueue = [];
 
+  /// Clear all pending tasks and mark the queue as closed.
+  /// After calling this, no new tasks will be executed.
+  void close() {
+    _closed = true;
+    taskQueue.clear();
+  }
+
   void addTask(FlexTask task) async {
+    // Don't add tasks if the queue is closed
+    if (_closed) {
+      return;
+    }
+
     if (task is FlexTaskRemove) {
-      final int index = taskQueue.indexWhere((FlexTask qTask) => qTask.id == task.id);
+      final int index =
+          taskQueue.indexWhere((FlexTask qTask) => qTask.id == task.id);
       if (index != -1) {
         taskQueue.removeAt(index);
         return;
@@ -73,10 +87,25 @@ class FlexQueue {
   }
 
   Future<void> _runTask() async {
+    // Don't run tasks if the queue is closed
+    if (_closed) {
+      taskQueue.clear();
+      isBusy = false;
+      return;
+    }
+
     if (!isBusy) {
       if (taskQueue.isNotEmpty) {
         isBusy = true;
         final FlexTask task = taskQueue.removeAt(0);
+
+        // Check again if closed before executing
+        if (_closed) {
+          isBusy = false;
+          taskQueue.clear();
+          return;
+        }
+
         try {
           if (task.argument == null) {
             final result = await task.execFun();

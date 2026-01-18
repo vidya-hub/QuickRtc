@@ -228,12 +228,16 @@ class MediasoupParticipant implements Participant {
     }
   }
 
-  public resumeProducer(producerId: string): void {
+  public resumeProducer(producerId: string): "audio" | "video" | null {
     const userProducers = this.producers.get(this.id);
     if (userProducers && userProducers[producerId]) {
       const producer = userProducers[producerId];
+      const mediaState = this.getMediaState(producerId);
+      const kind = mediaState?.kind || (producer.kind as "audio" | "video");
+
       producer.resume();
       this.updateMediaState(producerId, { paused: false });
+      return kind;
     } else {
       throw new Error("Producer not found");
     }

@@ -15,15 +15,9 @@ dependencies:
   quickrtc_flutter_client:
     path: ../../quickrtc-flutter-client
 
-  # WebRTC and Socket.IO - must match versions from quickrtc_flutter_client
+  # WebRTC and Socket.IO
   flutter_webrtc: ^0.12.5+hotfix.1
   socket_io_client: ^2.0.3+1
-
-  # State Management
-  provider: ^6.1.1
-
-  # Utilities
-  logger: ^2.0.2+1
 
 dev_dependencies:
   flutter_test:

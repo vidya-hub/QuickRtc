@@ -1,9 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
-
-import '../providers/conference_provider.dart';
-import '../utils/responsive.dart';
+import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
+import 'package:socket_io_client/socket_io_client.dart' as io;
 
 class ConferenceScreen extends StatefulWidget {
   const ConferenceScreen({super.key});
@@ -13,524 +13,309 @@ class ConferenceScreen extends StatefulWidget {
 }
 
 class _ConferenceScreenState extends State<ConferenceScreen> {
-  late ConferenceProvider _provider;
-  bool _initialized = false;
+  // Resources (not reactive - managed by lifecycle)
+  io.Socket? _socket;
+  QuickRTCController? _controller;
+  MediaStream? _localStream;
+
+  // Local UI state (reactive via setState)
+  bool _isLoading = true;
+  String? _error;
+  String _meetingId = '';
+  String _userName = '';
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_initialized) {
-      _initialized = true;
-      _provider = ConferenceProvider();
+    if (_isLoading && _controller == null) _init();
+  }
 
+  Future<void> _init() async {
+    try {
       final args =
           ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-      final conferenceId = args['conferenceId'] as String;
-      final participantName = args['participantName'] as String;
+      _meetingId = args['conferenceId'] as String;
+      _userName = args['participantName'] as String;
       final serverUrl = args['serverUrl'] as String;
 
-      // Join conference after the widget is built
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _provider.joinConference(
-          conferenceId: conferenceId,
-          participantName: participantName,
-          serverUrl: serverUrl,
-        );
+      // Connect socket
+      _socket = io.io(
+          serverUrl,
+          io.OptionBuilder()
+              .setTransports(['websocket'])
+              .disableAutoConnect()
+              .disableReconnection()
+              .build());
+
+      final connected = await _connectSocket();
+      if (!connected) throw Exception('Connection failed');
+
+      // Setup controller and join
+      _controller = QuickRTCController(socket: _socket!, debug: true);
+      await _controller!
+          .joinMeeting(conferenceId: _meetingId, participantName: _userName);
+
+      // Get and publish local media
+      final media = await QuickRTCStatic.getLocalMedia(
+        MediaConfig.audioVideo(videoConfig: VideoConfig.frontCamera),
+      );
+      _localStream = media.stream;
+      await _controller!
+          .produce(ProduceInput.fromTracksWithTypes(media.tracksWithTypes));
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
       });
     }
   }
 
+  Future<bool> _connectSocket() async {
+    final completer = Completer<bool>();
+    _socket!.onConnect(
+        (_) => completer.isCompleted ? null : completer.complete(true));
+    _socket!.onConnectError(
+        (_) => completer.isCompleted ? null : completer.complete(false));
+    _socket!.connect();
+    return completer.future
+        .timeout(const Duration(seconds: 10), onTimeout: () => false);
+  }
+
+  Future<void> _leave() async {
+    await _controller?.leaveMeeting();
+    _cleanup();
+    if (mounted) Navigator.pop(context);
+  }
+
+  void _cleanup() {
+    _localStream?.dispose();
+    _localStream = null;
+    _controller?.dispose();
+    _controller = null;
+    _socket?.disconnect();
+    _socket = null;
+  }
+
   @override
   void dispose() {
-    _provider.dispose();
+    _cleanup();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use ListenableBuilder directly to ensure rebuilds happen
-    return ListenableBuilder(
-      listenable: _provider,
-      builder: (context, child) {
-        debugPrint(
-            'ListenableBuilder rebuild - audio: ${_provider.audioEnabled}, video: ${_provider.videoEnabled}');
-        return _ConferenceView(provider: _provider);
-      },
+    if (_isLoading) return _buildLoading();
+    if (_error != null) return _buildError();
+    return _buildConference();
+  }
+
+  Widget _buildLoading() {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
-}
 
-class _ConferenceView extends StatelessWidget {
-  final ConferenceProvider provider;
+  Widget _buildError() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(_error!, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back')),
+          ],
+        ),
+      ),
+    );
+  }
 
-  const _ConferenceView({required this.provider});
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint(
-        '_ConferenceView build - audioEnabled: ${provider.audioEnabled}, videoEnabled: ${provider.videoEnabled}');
-
-    // Handle fullscreen changes
-    if (provider.isFullScreen) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    } else {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  Widget _buildConference() {
+    // Guard against controller being disposed during navigation
+    if (_controller == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
     }
 
-    return ResponsiveBuilder(
-      builder: (context, responsive) {
+    // Use ListenableBuilder to listen to controller state changes
+    return ListenableBuilder(
+      listenable: _controller!,
+      builder: (context, _) {
+        // Double-check controller is still valid
+        if (_controller == null) {
+          return const SizedBox.shrink();
+        }
+
+        final state = _controller!.state;
+
+        // Show error snackbar if there's an error
+        if (state.hasError) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _controller != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                    content: Text(state.error!), backgroundColor: Colors.red),
+              );
+              _controller!.clearError();
+            }
+          });
+        }
+
         return Scaffold(
           backgroundColor: Colors.black,
-          appBar: provider.isFullScreen
-              ? null
-              : AppBar(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  title: _buildAppBarTitle(context, provider),
-                  actions: _buildAppBarActions(context, provider),
-                ),
-          body: SafeArea(
-            child: _buildBody(context, provider, responsive),
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: _buildConnectionStatus(state),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.copy, size: 20),
+                onPressed: _copyMeetingId,
+              ),
+            ],
           ),
+          body: Stack(
+            children: [
+              _buildVideoGrid(state),
+              QuickRTCAudioRenderers(participants: state.participantList),
+            ],
+          ),
+          bottomNavigationBar: _buildControls(state),
         );
       },
     );
   }
 
-  Widget _buildAppBarTitle(BuildContext context, ConferenceProvider provider) {
+  Widget _buildConnectionStatus(QuickRTCState state) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(
-            color: provider.isConnected ? Colors.green : Colors.orange,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                provider.isConnected ? Icons.circle : Icons.circle_outlined,
-                size: 8,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                provider.isConnected ? 'Live' : 'Connecting',
-                style: const TextStyle(fontSize: 12, color: Colors.white),
-              ),
-            ],
+            shape: BoxShape.circle,
+            color: state.isConnected ? Colors.green : Colors.orange,
           ),
         ),
-        if (provider.conferenceId != null) ...[
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () => _copyMeetingId(context, provider.conferenceId!),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  provider.conferenceId!,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.copy, size: 14),
-              ],
-            ),
-          ),
-        ],
+        const SizedBox(width: 8),
+        Text(_meetingId, style: const TextStyle(fontSize: 14)),
       ],
     );
   }
 
-  void _copyMeetingId(BuildContext context, String conferenceId) {
-    Clipboard.setData(ClipboardData(text: conferenceId));
+  void _copyMeetingId() {
+    Clipboard.setData(ClipboardData(text: _meetingId));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Meeting ID copied to clipboard'),
-        duration: Duration(seconds: 2),
-      ),
+          content: Text('Meeting ID copied'), duration: Duration(seconds: 1)),
     );
   }
 
-  List<Widget> _buildAppBarActions(
-    BuildContext context,
-    ConferenceProvider provider,
-  ) {
-    return [
-      IconButton(
-        icon: Icon(
-            provider.isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen),
-        onPressed: () => provider.toggleFullScreen(),
-        tooltip: provider.isFullScreen ? 'Exit fullscreen' : 'Fullscreen',
-      ),
-      IconButton(
-        icon: const Icon(Icons.call_end),
-        onPressed: () => _leaveConference(context, provider),
-        color: Colors.red,
-        tooltip: 'Leave meeting',
+  Widget _buildVideoGrid(QuickRTCState state) {
+    // Use the stream from state - it gets updated when track is replaced on resume
+    final localVideoStream = state.localVideoStream?.stream ?? _localStream;
+
+    final tiles = <Widget>[
+      // Local video
+      QuickRTCMediaRenderer(
+        key: const ValueKey('local'),
+        stream: localVideoStream,
+        mirror: true,
+        isLocal: true,
+        participantName: _userName,
+        isAudioEnabled: !state.isLocalAudioPaused,
+        isVideoEnabled: !state.isLocalVideoPaused,
+        showAudioIndicator: true,
+        showName: true,
+        showLocalLabel: true,
       ),
     ];
-  }
 
-  void _leaveConference(BuildContext context, ConferenceProvider provider) {
-    provider.leaveConference();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    Navigator.pop(context);
-  }
-
-  Widget _buildBody(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-  ) {
-    if (provider.isJoining) {
-      return _buildLoadingState();
-    }
-
-    if (provider.hasError) {
-      return _buildErrorState(context, provider, responsive);
-    }
-
-    if (!provider.isConnected) {
-      return _buildNotConnectedState();
-    }
-
-    return _buildConferenceView(context, provider, responsive);
-  }
-
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(color: Colors.white),
-          const SizedBox(height: 24),
-          const Text(
-            'Joining meeting...',
-            style: TextStyle(fontSize: 20, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Setting up your audio and video',
-            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-  ) {
-    return Center(
-      child: Padding(
-        padding: responsive.screenPadding,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: const Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: Colors.red,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Connection Failed',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                provider.errorMessage ?? 'Unknown error',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white24),
-                    ),
-                    child: const Text('Go Back'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      // Re-join with the same parameters
-                      final args = ModalRoute.of(context)!.settings.arguments
-                          as Map<String, dynamic>;
-                      provider.joinConference(
-                        conferenceId: args['conferenceId'] as String,
-                        participantName: args['participantName'] as String,
-                        serverUrl: args['serverUrl'] as String,
-                      );
-                    },
-                    child: const Text('Try Again'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNotConnectedState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wifi_off, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            'Not connected',
-            style: TextStyle(fontSize: 18, color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildConferenceView(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-  ) {
-    final totalParticipants = provider.remoteParticipants.length + 1;
-
-    if (responsive.isMobile || (responsive.isTablet && responsive.isPortrait)) {
-      return _buildMobileLayout(
-          context, provider, responsive, totalParticipants);
-    } else {
-      return _buildDesktopLayout(
-          context, provider, responsive, totalParticipants);
-    }
-  }
-
-  Widget _buildMobileLayout(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-    int totalParticipants,
-  ) {
-    return Column(
-      children: [
-        Expanded(
-          child:
-              _buildVideoGrid(context, provider, responsive, totalParticipants),
-        ),
-        _buildControlsBar(context, provider, responsive),
-      ],
-    );
-  }
-
-  Widget _buildDesktopLayout(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-    int totalParticipants,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                child: _buildVideoGrid(
-                    context, provider, responsive, totalParticipants),
-              ),
-              _buildControlsBar(context, provider, responsive),
-            ],
-          ),
-        ),
-        if (responsive.width > 1200)
-          Container(
-            width: 300,
-            color: const Color(0xFF1E1E1E),
-            child: _buildSidePanel(provider),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildVideoGrid(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-    int totalParticipants,
-  ) {
-    final tiles = <Widget>[];
-
-    debugPrint(
-        '_buildVideoGrid - localRenderer: ${provider.localRenderer != null}, srcObject: ${provider.localRenderer?.srcObject?.id}');
-
-    // Add local camera tile
-    if (provider.localRenderer != null) {
-      tiles.add(_LocalVideoTile(
-        renderer: provider.localRenderer!,
-        name: provider.participantName ?? 'You',
-        audioEnabled: provider.audioEnabled,
-        videoEnabled: provider.videoEnabled,
-      ));
-    }
-
-    // Add local screen share tile if active
-    if (provider.isScreenSharing && provider.screenShareRenderer != null) {
-      tiles.add(_LocalScreenShareTile(
-        renderer: provider.screenShareRenderer!,
-        name: '${provider.participantName ?? 'You'} (Screen)',
-      ));
-    }
-
-    // Add remote participants' tiles
-    for (final participant in provider.remoteParticipants.values) {
-      // Add video tiles
-      for (final entry in participant.videoRenderers.entries) {
-        // Check if this looks like a screenshare (based on stream id containing 'screen')
-        final isScreenShare = entry.key.toLowerCase().contains('screen');
-        tiles.add(_RemoteVideoTile(
-          renderer: entry.value,
-          name:
-              isScreenShare ? '${participant.name} (Screen)' : participant.name,
-          hasAudio: participant.hasAudio,
-          isScreenShare: isScreenShare,
+    // Remote videos
+    for (final p in state.participantList) {
+      if (p.videoStream != null) {
+        tiles.add(QuickRTCMediaRenderer(
+          key: ValueKey('video_${p.id}'),
+          remoteStream: p.videoStream,
+          participantName: p.name,
+          isAudioEnabled: p.hasAudio && !p.isAudioMuted,
+          isVideoEnabled: p.hasVideo && !p.isVideoMuted,
+          showAudioIndicator: true,
+          showName: true,
         ));
       }
-      // Show avatar if participant has no video tiles
-      if (participant.videoRenderers.isEmpty) {
-        tiles.add(_RemoteAvatarTile(
-          name: participant.name,
-          hasAudio: participant.hasAudio,
+      if (p.screenshareStream != null) {
+        tiles.add(QuickRTCMediaRenderer(
+          key: ValueKey('screen_${p.id}'),
+          remoteStream: p.screenshareStream,
+          participantName: '${p.name} (Screen)',
+          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
         ));
       }
     }
 
-    final crossAxisCount = _calculateGridColumns(responsive, tiles.length);
+    final columns = tiles.length <= 2 ? 1 : (tiles.length <= 4 ? 2 : 3);
 
-    // Collect audio renderers that need to be in the widget tree for playback
-    final audioRenderers = <RTCVideoRenderer>[];
-    for (final participant in provider.remoteParticipants.values) {
-      audioRenderers.addAll(participant.audioRenderers.values);
-    }
-
-    return Stack(
-      children: [
-        // Main video grid
-        Padding(
-          padding: EdgeInsets.all(responsive.value(mobile: 4.0, tablet: 8.0)),
-          child: GridView.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              childAspectRatio: 16 / 9,
-              crossAxisSpacing: responsive.value(mobile: 4.0, tablet: 8.0),
-              mainAxisSpacing: responsive.value(mobile: 4.0, tablet: 8.0),
-            ),
-            itemCount: tiles.length,
-            itemBuilder: (context, index) => tiles[index],
-          ),
-        ),
-        // Hidden audio players - must be in widget tree for web audio playback
-        ...audioRenderers.map((renderer) => Positioned(
-              left: -1000, // Off-screen
-              child: SizedBox(
-                width: 1,
-                height: 1,
-                child: RTCVideoView(renderer),
-              ),
-            )),
-      ],
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        childAspectRatio: 16 / 9,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: tiles.length,
+      itemBuilder: (_, i) => ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: tiles[i],
+      ),
     );
   }
 
-  int _calculateGridColumns(Responsive responsive, int count) {
-    if (count == 1) return 1;
-    if (count == 2) {
-      return responsive.isPortrait ? 1 : 2;
-    }
-    if (count <= 4) return 2;
-    if (count <= 9) return responsive.value(mobile: 2, tablet: 3, desktop: 3);
-    return responsive.value(mobile: 2, tablet: 3, desktop: 4);
-  }
-
-  Widget _buildControlsBar(
-    BuildContext context,
-    ConferenceProvider provider,
-    Responsive responsive,
-  ) {
-    final isCompact = responsive.isMobile;
-
+  Widget _buildControls(QuickRTCState state) {
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.spacing,
-        vertical: responsive.value(mobile: 12.0, tablet: 16.0),
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        border: Border(
-          top: BorderSide(color: Colors.white10),
-        ),
-      ),
+      color: const Color(0xFF1A1A1A),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: SafeArea(
         top: false,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _ControlButton(
-              icon: provider.audioEnabled ? Icons.mic : Icons.mic_off,
-              label: isCompact
-                  ? null
-                  : (provider.audioEnabled ? 'Mute' : 'Unmute'),
-              isActive: provider.audioEnabled,
-              onPressed: () => provider.toggleAudio(),
+            _ControlBtn(
+              icon: state.isLocalAudioPaused ? Icons.mic_off : Icons.mic,
+              active: !state.isLocalAudioPaused,
+              onTap: _toggleAudio,
             ),
-            SizedBox(width: responsive.value(mobile: 8.0, tablet: 16.0)),
-            _ControlButton(
-              icon: provider.videoEnabled ? Icons.videocam : Icons.videocam_off,
-              label: isCompact
-                  ? null
-                  : (provider.videoEnabled ? 'Stop Video' : 'Start Video'),
-              isActive: provider.videoEnabled,
-              onPressed: () => provider.toggleVideo(),
+            _ControlBtn(
+              icon: state.isLocalVideoPaused
+                  ? Icons.videocam_off
+                  : Icons.videocam,
+              active: !state.isLocalVideoPaused,
+              onTap: _toggleVideo,
             ),
-            SizedBox(width: responsive.value(mobile: 8.0, tablet: 16.0)),
-            _ControlButton(
-              icon: provider.isScreenSharing
+            _ControlBtn(
+              icon: state.hasLocalScreenshare
                   ? Icons.stop_screen_share
                   : Icons.screen_share,
-              label: isCompact
-                  ? null
-                  : (provider.isScreenSharing ? 'Stop Share' : 'Share'),
-              isActive: provider.isScreenSharing,
-              onPressed: () => provider.toggleScreenShare(context),
+              active: state.hasLocalScreenshare,
+              onTap: () => _toggleScreenShare(state),
             ),
-            SizedBox(width: responsive.value(mobile: 16.0, tablet: 32.0)),
-            _ControlButton(
+            _ControlBtn(
               icon: Icons.call_end,
-              label: isCompact ? null : 'Leave',
-              isActive: false,
-              isDestructive: true,
-              onPressed: () => _leaveConference(context, provider),
+              active: false,
+              destructive: true,
+              onTap: _leave,
             ),
           ],
         ),
@@ -538,550 +323,67 @@ class _ConferenceView extends StatelessWidget {
     );
   }
 
-  Widget _buildSidePanel(ConferenceProvider provider) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.white10),
-            ),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.people, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Participants (${provider.remoteParticipants.length + 1})',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(8),
-            children: [
-              _ParticipantListItem(
-                name: provider.participantName ?? 'You',
-                isLocal: true,
-                audioEnabled: provider.audioEnabled,
-                videoEnabled: provider.videoEnabled,
-              ),
-              ...provider.remoteParticipants.values.map(
-                (p) => _ParticipantListItem(
-                  name: p.name,
-                  isLocal: false,
-                  audioEnabled: p.hasAudio,
-                  videoEnabled: p.hasVideo,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+  Future<void> _toggleAudio() async {
+    await _controller?.toggleMicrophoneMute();
+  }
+
+  Future<void> _toggleVideo() async {
+    await _controller?.toggleCameraPause();
+  }
+
+  Future<void> _toggleScreenShare(QuickRTCState state) async {
+    try {
+      if (state.hasLocalScreenshare) {
+        await state.localScreenshareStream?.stop();
+      } else {
+        final media = WebRTC.platformIsDesktop
+            ? await QuickRTCStatic.getScreenShareWithPicker(context)
+            : await QuickRTCStatic.getLocalMedia(MediaConfig.screenShareOnly());
+
+        if (media.screenshareTrack != null) {
+          await _controller!.produce(ProduceInput.fromTrack(
+              media.screenshareTrack!,
+              type: StreamType.screenshare));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Screen share error: $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }
 
-/// Local video tile widget
-class _LocalVideoTile extends StatelessWidget {
-  final RTCVideoRenderer renderer;
-  final String name;
-  final bool audioEnabled;
-  final bool videoEnabled;
-
-  const _LocalVideoTile({
-    required this.renderer,
-    required this.name,
-    required this.audioEnabled,
-    required this.videoEnabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasVideoSource = renderer.srcObject != null;
-
-    debugPrint(
-        '_LocalVideoTile build - videoEnabled: $videoEnabled, hasVideoSource: $hasVideoSource, srcObject: ${renderer.srcObject?.id}');
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        color: const Color(0xFF2D2D2D),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (hasVideoSource && videoEnabled)
-              RTCVideoView(
-                renderer,
-                mirror: true,
-                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-              )
-            else
-              Center(
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.grey[700],
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : '?',
-                    style: const TextStyle(fontSize: 32, color: Colors.white),
-                  ),
-                ),
-              ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '$name (You)',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (!audioEnabled)
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.mic_off,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Local screen share tile widget
-class _LocalScreenShareTile extends StatelessWidget {
-  final RTCVideoRenderer renderer;
-  final String name;
-
-  const _LocalScreenShareTile({
-    required this.renderer,
-    required this.name,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        color: const Color(0xFF2D2D2D),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            RTCVideoView(
-              renderer,
-              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-            ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.screen_share, size: 14, color: Colors.white),
-                    SizedBox(width: 4),
-                    Text(
-                      'Screen',
-                      style: TextStyle(fontSize: 12, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Remote video tile widget
-class _RemoteVideoTile extends StatelessWidget {
-  final RTCVideoRenderer renderer;
-  final String name;
-  final bool hasAudio;
-  final bool isScreenShare;
-
-  const _RemoteVideoTile({
-    required this.renderer,
-    required this.name,
-    required this.hasAudio,
-    this.isScreenShare = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        color: const Color(0xFF2D2D2D),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            RTCVideoView(
-              renderer,
-              objectFit: isScreenShare
-                  ? RTCVideoViewObjectFit.RTCVideoViewObjectFitContain
-                  : RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-            ),
-            if (isScreenShare)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.screen_share, size: 14, color: Colors.white),
-                      SizedBox(width: 4),
-                      Text(
-                        'Screen',
-                        style: TextStyle(fontSize: 12, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (!hasAudio && !isScreenShare)
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.mic_off,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Remote avatar tile widget
-class _RemoteAvatarTile extends StatelessWidget {
-  final String name;
-  final bool hasAudio;
-
-  const _RemoteAvatarTile({
-    required this.name,
-    required this.hasAudio,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        color: const Color(0xFF2D2D2D),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: CircleAvatar(
-                radius: 40,
-                backgroundColor: Colors.grey[700],
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: const TextStyle(fontSize: 32, color: Colors.white),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (!hasAudio)
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.mic_off,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Control button widget
-class _ControlButton extends StatelessWidget {
+class _ControlBtn extends StatelessWidget {
   final IconData icon;
-  final String? label;
-  final bool isActive;
-  final bool isDestructive;
-  final VoidCallback onPressed;
+  final bool active;
+  final bool destructive;
+  final VoidCallback onTap;
 
-  const _ControlButton({
+  const _ControlBtn({
     required this.icon,
-    this.label,
-    required this.isActive,
-    this.isDestructive = false,
-    required this.onPressed,
+    required this.active,
+    this.destructive = false,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isDestructive
-        ? Colors.red
-        : isActive
-            ? Colors.white.withValues(alpha: 0.1)
-            : Colors.white.withValues(alpha: 0.2);
-
-    final iconColor = isDestructive
-        ? Colors.white
-        : isActive
-            ? Colors.white
-            : Colors.white70;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              child: Icon(icon, color: iconColor, size: 24),
-            ),
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: destructive
+              ? Colors.red
+              : (active ? Colors.white24 : Colors.white12),
+          borderRadius: BorderRadius.circular(16),
         ),
-        if (label != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            label!,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[400],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Participant list item
-class _ParticipantListItem extends StatelessWidget {
-  final String name;
-  final bool isLocal;
-  final bool audioEnabled;
-  final bool videoEnabled;
-
-  const _ParticipantListItem({
-    required this.name,
-    required this.isLocal,
-    required this.audioEnabled,
-    required this.videoEnabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.grey[700],
-            child: Text(
-              name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(fontSize: 14, color: Colors.white),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (isLocal)
-                  Text(
-                    'You',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Icon(
-            audioEnabled ? Icons.mic : Icons.mic_off,
-            size: 18,
-            color: audioEnabled ? Colors.grey[400] : Colors.red,
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            videoEnabled ? Icons.videocam : Icons.videocam_off,
-            size: 18,
-            color: videoEnabled ? Colors.grey[400] : Colors.red,
-          ),
-        ],
+        child: Icon(icon, color: Colors.white, size: 24),
       ),
     );
   }

@@ -169,41 +169,6 @@ class QuickRTCPlatform {
     }
   }
 
-  /// Show native screen picker dialog (macOS only).
-  ///
-  /// Displays a native macOS window with preview thumbnails of available
-  /// screens and windows. The user can select which source to share.
-  ///
-  /// Returns a map with the selected source info:
-  /// - `id`: The source ID (display ID for screens, window ID for windows)
-  /// - `name`: Human-readable name of the source
-  /// - `type`: Either "screen" or "window"
-  /// - `displayId`: (optional) CGDirectDisplayID for screen sources
-  /// - `windowId`: (optional) CGWindowID for window sources
-  ///
-  /// Returns null if the user cancels or closes the picker.
-  ///
-  /// On non-macOS platforms, returns null.
-  static Future<Map<String, dynamic>?> showScreenPicker() async {
-    if (kIsWeb || !Platform.isMacOS) {
-      return null;
-    }
-
-    try {
-      final result = await _channel.invokeMethod<Map>('showScreenPicker');
-      if (result == null) {
-        return null;
-      }
-      return Map<String, dynamic>.from(result);
-    } on PlatformException catch (e) {
-      debugPrint('Failed to show screen picker: ${e.message}');
-      return null;
-    } on MissingPluginException {
-      debugPrint('QuickRTC platform plugin not available');
-      return null;
-    }
-  }
-
   /// Get the platform version string
   static Future<String?> getPlatformVersion() async {
     if (kIsWeb) {

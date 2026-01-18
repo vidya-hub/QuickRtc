@@ -172,17 +172,58 @@ mixin QuickRTCSocketMixin {
       }
     });
 
-    // Audio/video muted/unmuted events (logged for now)
-    socket.on('audioMuted', (data) => log('Socket: audioMuted', data));
-    socket.on('audioUnmuted', (data) => log('Socket: audioUnmuted', data));
-    socket.on('videoMuted', (data) => log('Socket: videoMuted', data));
-    socket.on('videoUnmuted', (data) => log('Socket: videoUnmuted', data));
+    // Audio/video muted/unmuted events - update remote stream paused state
+    socket.on('audioMuted', (data) {
+      log('Socket: audioMuted', data);
+      final d = data as Map<String, dynamic>;
+      _updateRemoteStreamPausedState(
+        d['participantId'] as String,
+        StreamType.audio,
+        true,
+      );
+    });
+
+    socket.on('audioUnmuted', (data) {
+      log('Socket: audioUnmuted', data);
+      final d = data as Map<String, dynamic>;
+      _updateRemoteStreamPausedState(
+        d['participantId'] as String,
+        StreamType.audio,
+        false,
+      );
+    });
+
+    socket.on('videoMuted', (data) {
+      log('Socket: videoMuted', data);
+      final d = data as Map<String, dynamic>;
+      _updateRemoteStreamPausedState(
+        d['participantId'] as String,
+        StreamType.video,
+        true,
+      );
+    });
+
+    socket.on('videoUnmuted', (data) {
+      log('Socket: videoUnmuted', data);
+      final d = data as Map<String, dynamic>;
+      _updateRemoteStreamPausedState(
+        d['participantId'] as String,
+        StreamType.video,
+        false,
+      );
+    });
 
     // Socket disconnect
     socket.on('disconnect', (reason) {
       log('Socket: disconnected', reason);
+      // Only cleanup if still connected - if disposed, state won't be connected anymore
       if (state.isConnected) {
-        cleanup();
+        try {
+          cleanup();
+        } catch (e) {
+          // Ignore errors if controller was disposed during cleanup
+          log('Socket: cleanup error (likely disposed)', e);
+        }
       }
     });
 
@@ -207,5 +248,34 @@ mixin QuickRTCSocketMixin {
     socket.off('videoUnmuted');
     socket.off('disconnect');
     socket.off('error');
+  }
+
+  /// Update the paused state of a remote stream
+  void _updateRemoteStreamPausedState(
+    String participantId,
+    StreamType type,
+    bool paused,
+  ) {
+    final participant = state.participants[participantId];
+    if (participant == null) {
+      log('Cannot update stream pause state: participant $participantId not found');
+      return;
+    }
+
+    final updatedStreams = participant.streams.map((s) {
+      if (s.type == type) {
+        return s.copyWith(paused: paused);
+      }
+      return s;
+    }).toList();
+
+    updateState(state.copyWith(
+      participants: {
+        ...state.participants,
+        participantId: participant.copyWith(streams: updatedStreams),
+      },
+    ));
+
+    log('Updated $type stream paused=$paused for participant $participantId');
   }
 }

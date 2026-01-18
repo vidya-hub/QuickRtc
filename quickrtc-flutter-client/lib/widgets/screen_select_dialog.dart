@@ -1,13 +1,18 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 
-/// A dialog for selecting a screen or window to share.
+/// A dialog for selecting a screen to share.
 ///
 /// This dialog uses flutter_webrtc's desktopCapturer to enumerate
-/// available screens and windows with live thumbnail previews.
+/// available screens with live thumbnail previews.
+///
+/// Note: Window sharing has been removed due to macOS WebRTC limitations.
+/// Only entire screen capture is supported.
 ///
 /// Usage:
 /// ```dart
@@ -33,10 +38,7 @@ class ScreenSelectDialog extends StatefulWidget {
 }
 
 class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
-  /// Current tab: 0 = Screens, 1 = Windows
-  int _selectedTab = 0;
-
-  /// List of available sources
+  /// List of available screen sources
   List<DesktopCapturerSource> _sources = [];
 
   /// Currently selected source
@@ -75,7 +77,7 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
 
   void _setupListeners() {
     _onAddedSubscription = desktopCapturer.onAdded.stream.listen((source) {
-      if (_matchesCurrentTab(source)) {
+      if (source.type == SourceType.Screen) {
         setState(() {
           _sources.add(source);
         });
@@ -102,17 +104,6 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
     });
   }
 
-  bool _matchesCurrentTab(DesktopCapturerSource source) {
-    if (_selectedTab == 0) {
-      return source.type == SourceType.Screen;
-    } else {
-      return source.type == SourceType.Window;
-    }
-  }
-
-  SourceType get _currentSourceType =>
-      _selectedTab == 0 ? SourceType.Screen : SourceType.Window;
-
   Future<void> _loadSources() async {
     setState(() {
       _isLoading = true;
@@ -120,22 +111,20 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
     });
 
     try {
+      // Only load Screen sources (no Window sources)
       final sources = await desktopCapturer.getSources(
-        types: [_currentSourceType],
+        types: [SourceType.Screen],
       );
 
-      // Debug logging with source ID format analysis
+      // Debug logging
       debugPrint(
           'ScreenSelectDialog: ========================================');
-      debugPrint(
-          'ScreenSelectDialog: Loaded ${sources.length} sources of type $_currentSourceType');
+      debugPrint('ScreenSelectDialog: Loaded ${sources.length} screen sources');
       for (final source in sources) {
         debugPrint('ScreenSelectDialog: Source:');
         debugPrint('ScreenSelectDialog:   name="${source.name}"');
         debugPrint('ScreenSelectDialog:   id="${source.id}"');
         debugPrint('ScreenSelectDialog:   type=${source.type}');
-        debugPrint('ScreenSelectDialog:   id length=${source.id.length}');
-        debugPrint('ScreenSelectDialog:   id bytes=${source.id.codeUnits}');
       }
       debugPrint(
           'ScreenSelectDialog: ========================================');
@@ -160,18 +149,9 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
 
   Future<void> _updateThumbnails() async {
     try {
-      await desktopCapturer.updateSources(types: [_currentSourceType]);
+      await desktopCapturer.updateSources(types: [SourceType.Screen]);
     } catch (e) {
       debugPrint('Error updating thumbnails: $e');
-    }
-  }
-
-  void _onTabChanged(int index) {
-    if (_selectedTab != index) {
-      setState(() {
-        _selectedTab = index;
-      });
-      _loadSources();
     }
   }
 
@@ -208,18 +188,25 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
           children: [
             // Title
             const Text(
-              'Choose what to share',
+              'Select a screen to share',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-            // Tab bar
-            _buildTabBar(),
-            const SizedBox(height: 16),
+            // Subtitle
+            Text(
+              'Choose an entire screen to share with other participants',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
 
             // Source grid
             Expanded(
@@ -240,80 +227,19 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
     );
   }
 
-  Widget _buildTabBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildTab(0, 'Entire Screen', Icons.desktop_windows),
-          const SizedBox(width: 4),
-          _buildTab(1, 'Window', Icons.web_asset),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab(int index, String label, IconData icon) {
-    final isSelected = _selectedTab == index;
-    return Expanded(
-      child: Material(
-        color: isSelected
-            ? Theme.of(context).colorScheme.primaryContainer
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        child: InkWell(
-          onTap: () => _onTabChanged(index),
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            _selectedTab == 0 ? Icons.desktop_access_disabled : Icons.web_asset,
+            Icons.desktop_access_disabled,
             size: 64,
             color: Theme.of(context).colorScheme.outline,
           ),
           const SizedBox(height: 16),
           Text(
-            _selectedTab == 0 ? 'No screens available' : 'No windows available',
+            'No screens available',
             style: TextStyle(
               color: Theme.of(context).colorScheme.outline,
               fontSize: 16,
@@ -455,9 +381,7 @@ class _SourceTile extends StatelessWidget {
       color: Theme.of(context).colorScheme.surface,
       child: Center(
         child: Icon(
-          source.type == SourceType.Screen
-              ? Icons.desktop_windows
-              : Icons.web_asset,
+          Icons.desktop_windows,
           size: 48,
           color: Theme.of(context).colorScheme.outline,
         ),
@@ -465,3 +389,4 @@ class _SourceTile extends StatelessWidget {
     );
   }
 }
+

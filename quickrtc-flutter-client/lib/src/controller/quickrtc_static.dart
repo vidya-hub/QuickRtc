@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 import 'package:quickrtc_flutter_client/types.dart';
-import 'package:quickrtc_flutter_client/widgets/screen_select_dialog.dart';
 
 /// Exception thrown when screen capture permission is not granted
 class ScreenCapturePermissionException implements Exception {
@@ -166,11 +165,10 @@ abstract class QuickRTCStatic {
 
   /// Get screen share on desktop platforms (macOS, Windows, Linux)
   ///
-  /// If [context] is provided, shows a Flutter dialog to select the source.
-  /// Otherwise, automatically selects the first available screen.
+  /// Uses flutter_webrtc's getDisplayMedia API without custom dialogs.
   static Future<MediaStream> _getDesktopScreenShare(ScreenShareConfig config,
       [BuildContext? context]) async {
-    // On macOS, check and request screen capture permission first
+    // On macOS, check/request TCC permission first
     if (!kIsWeb && Platform.isMacOS) {
       final hasPermission =
           await QuickRTCPlatform.checkScreenCapturePermission();
@@ -189,50 +187,10 @@ abstract class QuickRTCStatic {
       }
     }
 
-    // Get the source - either from picker dialog or auto-select
-    DesktopCapturerSource? selectedSource;
-
-    if (context != null && context.mounted) {
-      // Show Flutter picker dialog
-      selectedSource = await ScreenSelectDialog.show(context);
-      if (selectedSource == null) {
-        throw Exception('Screen share cancelled by user');
-      }
-      debugPrint(
-          'QuickRTC: User selected: ${selectedSource.name} (${selectedSource.id})');
-    } else {
-      // Auto-select the first screen source
-      final sources = await desktopCapturer.getSources(
-        types: config.preferWindow
-            ? [SourceType.Window, SourceType.Screen]
-            : [SourceType.Screen, SourceType.Window],
-      );
-
-      if (sources.isEmpty) {
-        throw Exception(
-            'No screen share sources available. Please check screen recording permissions.');
-      }
-
-      // Find the best source based on preference
-      if (config.preferWindow) {
-        selectedSource = sources.firstWhere(
-          (s) => s.type == SourceType.Window,
-          orElse: () => sources.first,
-        );
-      } else {
-        selectedSource = sources.firstWhere(
-          (s) => s.type == SourceType.Screen,
-          orElse: () => sources.first,
-        );
-      }
-      debugPrint(
-          'QuickRTC: Auto-selected: ${selectedSource.name} (${selectedSource.id})');
-    }
-
-    // Create constraints with the selected source
+    // Create basic constraints without pre-selecting a source
+    // This allows flutter_webrtc to use its native picker behavior
     final constraints = <String, dynamic>{
       'video': {
-        'deviceId': {'exact': selectedSource.id},
         'mandatory': <String, dynamic>{
           'frameRate': (config.frameRate ?? 30).toDouble(),
         },
@@ -254,7 +212,7 @@ abstract class QuickRTCStatic {
     }
 
     debugPrint(
-        'QuickRTC: Using getDisplayMedia with source: ${selectedSource.id}');
+        'QuickRTC: Calling getDisplayMedia (flutter_webrtc native behavior)');
     return await navigator.mediaDevices.getDisplayMedia(constraints);
   }
 
@@ -316,43 +274,6 @@ abstract class QuickRTCStatic {
     await QuickRTCPlatform.openScreenCaptureSettings();
   }
 
-  /// Show native screen picker dialog (macOS only)
-  ///
-  /// Displays a native macOS window with preview thumbnails of available
-  /// screens and windows. The user can select which source to share.
-  ///
-  /// Returns a map with the selected source info:
-  /// - `id`: The source ID
-  /// - `name`: Human-readable name of the source
-  /// - `type`: Either "screen" or "window"
-  /// - `displayId`: (optional) Display ID for screen sources
-  /// - `windowId`: (optional) Window ID for window sources
-  ///
-  /// Returns null if the user cancels, on non-macOS platforms, or if
-  /// screen capture permission is not granted.
-  ///
-  /// Example:
-  /// ```dart
-  /// final source = await QuickRTCStatic.showScreenPicker();
-  /// if (source != null) {
-  ///   print('Selected: ${source['name']} (${source['type']})');
-  /// }
-  /// ```
-  static Future<Map<String, dynamic>?> showScreenPicker() async {
-    if (kIsWeb || !Platform.isMacOS) {
-      return null;
-    }
-
-    // Check permission first
-    final hasPermission = await QuickRTCPlatform.checkScreenCapturePermission();
-    if (!hasPermission) {
-      debugPrint('QuickRTC: Screen capture permission not granted');
-      return null;
-    }
-
-    return await QuickRTCPlatform.showScreenPicker();
-  }
-
   /// Get available screen share sources (desktop only)
   ///
   /// Returns a list of available screens and windows that can be shared.
@@ -412,43 +333,9 @@ abstract class QuickRTCStatic {
           'getScreenShareWithPicker is only available on desktop platforms');
     }
 
-    // On macOS, check and request permission first
-    if (!kIsWeb && Platform.isMacOS) {
-      final hasPermission =
-          await QuickRTCPlatform.checkScreenCapturePermission();
-      if (!hasPermission) {
-        debugPrint(
-            'QuickRTC: Screen capture permission not granted, requesting...');
-        final granted = await QuickRTCPlatform.requestScreenCapturePermission();
-        if (!granted) {
-          throw const ScreenCapturePermissionException(
-            message: 'Screen recording permission denied. '
-                'Please enable it in System Preferences > Privacy & Security > Screen Recording, '
-                'then restart the app.',
-            canRequestPermission: false,
-          );
-        }
-      }
-    }
-
-    // Show the picker dialog
-    if (!context.mounted) {
-      throw Exception('BuildContext is no longer mounted');
-    }
-
-    final selectedSource = await ScreenSelectDialog.show(context);
-    if (selectedSource == null) {
-      throw Exception('Screen share cancelled by user');
-    }
-
-    debugPrint(
-        'QuickRTC: User selected: ${selectedSource.name} (${selectedSource.id})');
-
-    // Get the stream from the selected source
-    final stream = await getScreenShareFromSource(
-      selectedSource,
-      config: config,
-    );
+    // Get the stream using flutter_webrtc's native behavior
+    final effectiveConfig = config ?? ScreenShareConfig.defaultConfig;
+    final stream = await _getDesktopScreenShare(effectiveConfig, context);
 
     // Build LocalMedia result
     final videoTracks = stream.getVideoTracks();

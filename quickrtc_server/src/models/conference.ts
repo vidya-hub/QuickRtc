@@ -192,14 +192,14 @@ class MediasoupConference implements Conference {
   ): MediasoupParticipant[] {
     return Array.from(participantsMap.values()) as MediasoupParticipant[];
   }
-  pauseProducer(participantId: string, producerId: string): void {
+  pauseProducer(participantId: string, producerId: string): "audio" | "video" | null {
     const participant = this.getParticipant(
       participantId
     ) as MediasoupParticipant;
     if (!participant) {
       throw new Error("Participant does not exist in the conference");
     }
-    participant.pauseProducer(producerId);
+    return participant.pauseProducer(producerId);
   }
   getExistingProducerIds(currentParticipantId: string): Array<{
     participantId: string;
@@ -270,14 +270,14 @@ class MediasoupConference implements Conference {
   async resumeProducer(
     participantId: string,
     producerId: string
-  ): Promise<void> {
+  ): Promise<"audio" | "video" | null> {
     const participant = this.getParticipant(
       participantId
     ) as MediasoupParticipant;
     if (!participant) {
       throw new Error("Participant does not exist in the conference");
     }
-    participant.resumeProducer(producerId);
+    return participant.resumeProducer(producerId);
   }
 
   async pauseConsumer(
