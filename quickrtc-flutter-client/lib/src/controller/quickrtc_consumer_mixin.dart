@@ -23,12 +23,23 @@ mixin QuickRTCConsumerMixin {
 
   /// Auto-consume all existing participants in the conference
   Future<void> consumeExistingParticipants() async {
-    log('Fetching and consuming existing participants...');
+    log('consumeExistingParticipants: Starting...', {
+      'conferenceId': conferenceId,
+      'participantId': participantId,
+      'recvTransportExists': recvTransport != null,
+    });
+
+    if (recvTransport == null) {
+      log('consumeExistingParticipants: No receive transport, skipping');
+      return;
+    }
 
     try {
       final response = await emitWithAck('getParticipants', {
         'conferenceId': conferenceId,
       });
+
+      log('consumeExistingParticipants: getParticipants response', response);
 
       if (response['status'] != 'ok') {
         log('Failed to get participants', response['error']);
@@ -36,6 +47,7 @@ mixin QuickRTCConsumerMixin {
       }
 
       final participantsList = response['data'] as List<dynamic>;
+      log('consumeExistingParticipants: Found ${participantsList.length} participants');
 
       for (final p in participantsList) {
         final pData = p as Map<String, dynamic>;
@@ -77,13 +89,20 @@ mixin QuickRTCConsumerMixin {
     String targetParticipantName,
     Map<String, dynamic> targetParticipantInfo,
   ) async {
+    log('consumeParticipantInternal: Starting', {
+      'targetParticipantId': targetParticipantId,
+      'targetParticipantName': targetParticipantName,
+      'isConnected': state.isConnected,
+      'recvTransportExists': recvTransport != null,
+    });
+
     if (!state.isConnected || recvTransport == null) {
+      log('consumeParticipantInternal: Not connected or no recvTransport, returning empty');
       return [];
     }
 
-    log('Consuming participant', targetParticipantId);
-
     try {
+      log('consumeParticipantInternal: Calling consumeParticipantMedia');
       final response = await emitWithAck('consumeParticipantMedia', {
         'conferenceId': conferenceId,
         'participantId': participantId,
@@ -91,12 +110,15 @@ mixin QuickRTCConsumerMixin {
         'rtpCapabilities': device!.rtpCapabilities.toMap(),
       });
 
+      log('consumeParticipantInternal: Response received', response);
+
       if (response['status'] != 'ok') {
-        log('Failed to consume participant', response['error']);
+        log('consumeParticipantInternal: Failed', response['error']);
         return [];
       }
 
       final consumerParamsList = response['data'] as List<dynamic>;
+      log('consumeParticipantInternal: Got ${consumerParamsList.length} consumer params');
       final streams = <RemoteStream>[];
 
       for (final params in consumerParamsList) {

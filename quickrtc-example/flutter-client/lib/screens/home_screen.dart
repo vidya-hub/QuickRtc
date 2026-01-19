@@ -9,7 +9,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _serverUrl = TextEditingController(text: 'https://10.105.12.226:3000');
+  final _serverUrl = TextEditingController(text: 'https://192.168.1.4:3000');
   final _meetingId = TextEditingController();
   final _userName = TextEditingController();
 
