@@ -242,19 +242,21 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       ),
     ];
 
-    // Remote videos
+    // Remote participants - show ALL participants, even those without video
     for (final p in state.participantList) {
-      if (p.videoStream != null) {
-        tiles.add(QuickRTCMediaRenderer(
-          key: ValueKey('video_${p.id}'),
-          remoteStream: p.videoStream,
-          participantName: p.name,
-          isAudioEnabled: p.hasAudio && !p.isAudioMuted,
-          isVideoEnabled: p.hasVideo && !p.isVideoMuted,
-          showAudioIndicator: true,
-          showName: true,
-        ));
-      }
+      // Always show a tile for each participant (with or without video)
+      // This ensures participants who join without video are still visible
+      tiles.add(QuickRTCMediaRenderer(
+        key: ValueKey('participant_${p.id}'),
+        remoteStream: p.videoStream, // Can be null - will show placeholder
+        participantName: p.name,
+        isAudioEnabled: p.hasAudio && !p.isAudioMuted,
+        isVideoEnabled: p.hasVideo && !p.isVideoMuted,
+        showAudioIndicator: true,
+        showName: true,
+      ));
+
+      // Additionally show screenshare as a separate tile if present
       if (p.screenshareStream != null) {
         tiles.add(QuickRTCMediaRenderer(
           key: ValueKey('screen_${p.id}'),
