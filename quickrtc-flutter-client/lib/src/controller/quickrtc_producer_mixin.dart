@@ -43,9 +43,22 @@ mixin QuickRTCProducerMixin {
 
       log('Producing track', '${track.kind} as ${streamType.value}');
 
-      // Create MediaStream for the track
-      final stream = await createLocalMediaStream('quickrtc_${track.id}');
-      stream.addTrack(track);
+      // IMPORTANT: Use the original stream from getUserMedia if provided.
+      // On macOS, the camera is only released when the ORIGINAL stream from
+      // getUserMedia is disposed. If we create a new stream here, the original
+      // stream is never disposed and the camera LED stays on.
+      final MediaStream stream;
+      if (trackWithType.sourceStream != null) {
+        // Use the original stream - this is critical for proper camera release on macOS
+        stream = trackWithType.sourceStream!;
+        log('Using original stream from getUserMedia', stream.id);
+      } else {
+        // Fallback: create a new stream if no source stream provided
+        // This may cause camera LED to stay on macOS when pausing
+        stream = await createLocalMediaStream('quickrtc_${track.id}');
+        stream.addTrack(track);
+        log('Created new stream (no sourceStream provided)', stream.id);
+      }
 
       // Create a completer and unique key for this produce request
       final produceKey =
@@ -141,13 +154,79 @@ mixin QuickRTCProducerMixin {
       log('pauseStream: Stopping audio track to release microphone');
     }
 
-    // Stop the track - this releases the hardware
-    producerInfo.track.stop();
+    // Store reference to track and stream before clearing
+    final trackToStop = producerInfo.track;
+    final streamToDispose = producerInfo.stream;
 
-    // Remove track from stream
-    producerInfo.stream.removeTrack(producerInfo.track);
+    // Clear onEnded handler to prevent callbacks during cleanup
+    trackToStop.onEnded = null;
 
-    log('pauseStream: Track stopped/disabled');
+    // CRITICAL: Replace the track in RTCRtpSender with null first
+    // This disconnects the track from the peer connection
+    try {
+      final rtpSender = producerInfo.producer.rtpSender;
+      if (rtpSender != null) {
+        await rtpSender.replaceTrack(null);
+        log('pauseStream: RTCRtpSender track replaced with null');
+      }
+    } catch (e) {
+      log('pauseStream: Failed to replace RTCRtpSender track with null', e);
+    }
+
+    log('pauseStream: About to release camera', {
+      'trackId': trackToStop.id,
+      'trackKind': trackToStop.kind,
+      'streamId': streamToDispose.id,
+    });
+
+    // Check if any other producer is using the same stream before disposing.
+    // This can happen when audio and video tracks come from the same getUserMedia stream.
+    final sharedStreamId = streamToDispose.id;
+    final otherProducersUsingSameStream = producers.values
+        .where((p) =>
+            p.id != producerInfo.id &&
+            p.stream.id == sharedStreamId &&
+            !p.paused)
+        .toList();
+
+    if (otherProducersUsingSameStream.isEmpty) {
+      // CAMERA RELEASE STRATEGY:
+      // On macOS, use stream.dispose() instead of track.stop().
+      //
+      // Why? Native `streamDispose` directly looks up the stream by ID and calls
+      // the video capturer stop handler. In contrast, `track.stop()` triggers
+      // `trackDispose` which must search through localStreams to find the track.
+      //
+      // The stream.dispose() path is more reliable because:
+      // 1. It uses the stream ID directly (no searching required)
+      // 2. The original stream from getUserMedia is guaranteed to be in localStreams
+      // 3. It handles both the track stop and stream cleanup in one call
+      try {
+        await streamToDispose.dispose();
+        log('pauseStream: Stream disposed - camera should be released now');
+      } catch (e) {
+        log('pauseStream: Failed to dispose stream', e);
+        // Fallback: try track.stop() if stream.dispose() fails
+        try {
+          await trackToStop.stop();
+          log('pauseStream: Fallback track.stop() called');
+        } catch (e2) {
+          log('pauseStream: Fallback track.stop() also failed', e2);
+        }
+      }
+    } else {
+      // Other producers are using this stream - just stop the track
+      // The stream stays alive for other tracks
+      log('pauseStream: Other producers using stream, stopping track only');
+      try {
+        await trackToStop.stop();
+        log('pauseStream: Track stopped (stream kept for other producers)');
+      } catch (e) {
+        log('pauseStream: Failed to stop track', e);
+      }
+    }
+
+    log('pauseStream: Camera release completed');
 
     await emitWithAck('pauseProducer', {
       'conferenceId': conferenceId,
@@ -224,14 +303,6 @@ mixin QuickRTCProducerMixin {
         // Replace the track in the producer's RTCRtpSender
         await producerInfo.producer.replaceTrack(newTrack);
 
-        // Dispose the old stream (it no longer has any tracks after pause)
-        try {
-          await producerInfo.stream.dispose();
-        } catch (e) {
-          log('resumeStream: Failed to dispose old stream (may already be disposed)',
-              e);
-        }
-
         // Use the new stream from getUserMedia - this ensures the UI gets a fresh reference
         producerInfo.stream = newStream;
         producerInfo.track = newTrack;
@@ -285,8 +356,24 @@ mixin QuickRTCProducerMixin {
       return;
     }
 
+    // Clear onEnded to prevent callbacks during cleanup
+    producerInfo.track.onEnded = null;
+
     producerInfo.producer.close();
-    producerInfo.track.stop();
+
+    // CAMERA RELEASE: Use stream.dispose() for reliable camera release on macOS.
+    // See pauseStream() for detailed explanation.
+    try {
+      await producerInfo.stream.dispose();
+      log('stopStream: Stream disposed - camera released');
+    } catch (e) {
+      log('stopStream: Failed to dispose stream, trying track.stop()', e);
+      try {
+        await producerInfo.track.stop();
+      } catch (e2) {
+        log('stopStream: track.stop() also failed', e2);
+      }
+    }
 
     await emitWithAck('closeProducer', {
       'conferenceId': conferenceId,

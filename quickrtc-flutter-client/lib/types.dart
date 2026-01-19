@@ -340,17 +340,30 @@ class LocalMedia {
   }
 
   /// Get tracks with their types for producing
+  ///
+  /// Includes the source stream reference for proper camera release on macOS.
   List<TrackWithType> get tracksWithTypes {
     final result = <TrackWithType>[];
     if (audioTrack != null) {
-      result.add(TrackWithType(track: audioTrack!, type: StreamType.audio));
+      result.add(TrackWithType(
+        track: audioTrack!,
+        type: StreamType.audio,
+        sourceStream: stream, // Pass the original stream from getUserMedia
+      ));
     }
     if (videoTrack != null) {
-      result.add(TrackWithType(track: videoTrack!, type: StreamType.video));
+      result.add(TrackWithType(
+        track: videoTrack!,
+        type: StreamType.video,
+        sourceStream: stream, // Pass the original stream from getUserMedia
+      ));
     }
     if (screenshareTrack != null) {
       result.add(TrackWithType(
-          track: screenshareTrack!, type: StreamType.screenshare));
+        track: screenshareTrack!,
+        type: StreamType.screenshare,
+        sourceStream: screenshareStream, // Pass the screen share stream
+      ));
     }
     // Note: screenshareAudioTrack is typically mixed with the screenshare
     return result;
@@ -415,9 +428,15 @@ class TrackWithType {
   final MediaStreamTrack track;
   final StreamType? type;
 
+  /// The original MediaStream from getUserMedia.
+  /// On macOS, the camera is only released when this specific stream is disposed.
+  /// Pass this to ensure proper camera release on pause.
+  final MediaStream? sourceStream;
+
   const TrackWithType({
     required this.track,
     this.type,
+    this.sourceStream,
   });
 }
 

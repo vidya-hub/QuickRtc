@@ -17,26 +17,105 @@ class QuickRTCPlatform {
   /// Whether the screen capture foreground service is running (Android only)
   static bool _isServiceRunning = false;
 
+  /// Cached Android SDK version
+  static int? _androidSdkVersion;
+
   /// Check if the screen capture service is running
   static bool get isScreenCaptureServiceRunning => _isServiceRunning;
 
+  /// Get Android SDK version
+  static Future<int> getAndroidSdkVersion() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return 0;
+    }
+
+    if (_androidSdkVersion != null) {
+      return _androidSdkVersion!;
+    }
+
+    try {
+      final result = await _channel.invokeMethod<int>('getAndroidSdkVersion');
+      _androidSdkVersion = result ?? 0;
+      return _androidSdkVersion!;
+    } on PlatformException {
+      return 0;
+    } on MissingPluginException {
+      return 0;
+    }
+  }
+
+  /// Prepare for screen capture on Android 14+ (SDK 34+).
+  ///
+  /// On Android 14+, this sets up monitoring to automatically start the
+  /// foreground service when flutter_webrtc's permission dialog is completed.
+  ///
+  /// Call this BEFORE calling flutter_webrtc's getDisplayMedia().
+  ///
+  /// On Android 10-13, this is a no-op (use [startScreenCaptureService] instead).
+  /// On other platforms, this returns true immediately.
+  ///
+  /// Returns true if preparation was successful.
+  static Future<bool> prepareScreenCapture() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return true;
+    }
+
+    try {
+      debugPrint('QuickRTC: Preparing screen capture');
+      final result = await _channel.invokeMethod<bool>('prepareScreenCapture');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      debugPrint('Failed to prepare screen capture: ${e.message}');
+      return false;
+    } on MissingPluginException {
+      debugPrint('QuickRTC platform plugin not available');
+      return true;
+    }
+  }
+
   /// Start the screen capture foreground service.
   ///
-  /// This MUST be called before starting screen capture on Android 10+.
+  /// On Android 10+: Call this to start the foreground service.
+  /// On Android 14+: Call this AFTER the user has granted MediaProjection
+  ///                 permission (via Helper.requestCapturePermission()).
+  ///
+  /// This method starts the service and waits for it to be fully ready
+  /// before returning. On Android 14+, the service must call startForeground()
+  /// with FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION before MediaProjection
+  /// can be created.
+  ///
   /// On other platforms, this is a no-op but still returns true.
   ///
-  /// Returns true if the service started successfully.
+  /// Returns true if the service started successfully and is ready.
   static Future<bool> startScreenCaptureService() async {
     if (kIsWeb) {
       // Web doesn't need a foreground service
       return true;
     }
 
+    if (!Platform.isAndroid) {
+      return true;
+    }
+
     try {
+      debugPrint('QuickRTC: Starting screen capture foreground service');
+
+      // Start the service (returns immediately)
       final result =
           await _channel.invokeMethod<bool>('startScreenCaptureService');
-      _isServiceRunning = result ?? false;
-      return _isServiceRunning;
+
+      if (result != true) {
+        debugPrint('QuickRTC: Failed to start service');
+        return false;
+      }
+
+      // Wait for the service to be fully ready (following GetStream's pattern)
+      // Poll every 50ms for up to 3 seconds
+      final isReady = await _waitForServiceReady();
+
+      _isServiceRunning = isReady;
+      debugPrint('QuickRTC: Service ready: $isReady');
+      return isReady;
     } on PlatformException catch (e) {
       debugPrint('Failed to start screen capture service: ${e.message}');
       return false;
@@ -45,6 +124,31 @@ class QuickRTCPlatform {
       debugPrint('QuickRTC platform plugin not available');
       return true; // Return true to not block on unsupported platforms
     }
+  }
+
+  /// Wait for the screen capture service to be fully ready.
+  /// Polls every 50ms for up to 3 seconds.
+  /// Returns true if ready, false if timeout.
+  static Future<bool> _waitForServiceReady() async {
+    const timeout = Duration(seconds: 3);
+    const interval = Duration(milliseconds: 50);
+    final stopwatch = Stopwatch()..start();
+
+    while (stopwatch.elapsed < timeout) {
+      final isRunning = await checkScreenCaptureServiceRunning();
+
+      if (isRunning) {
+        debugPrint(
+            'QuickRTC: Screen capture service ready after ${stopwatch.elapsedMilliseconds}ms');
+        return true;
+      }
+
+      await Future<void>.delayed(interval);
+    }
+
+    debugPrint(
+        'QuickRTC: Timeout waiting for screen capture service to be ready');
+    return false;
   }
 
   /// Stop the screen capture foreground service.

@@ -70,6 +70,9 @@ abstract class QuickRTCStatic {
               };
         }
 
+        // IMPORTANT: Keep the original stream from getUserMedia.
+        // On macOS, the camera is only released when this specific stream is disposed.
+        // Do NOT create a new stream and copy tracks - use the original stream directly.
         cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
 
         if (config.audio) {
@@ -106,14 +109,17 @@ abstract class QuickRTCStatic {
         }
       }
 
-      // Create combined stream with all tracks
-      final combinedStream =
-          await createLocalMediaStream('quickrtc_local_media');
-      if (audioTrack != null) combinedStream.addTrack(audioTrack);
-      if (videoTrack != null) combinedStream.addTrack(videoTrack);
+      // IMPORTANT: Use the original cameraStream from getUserMedia directly.
+      // On macOS, the camera hardware is only released when the original stream
+      // from getUserMedia is disposed. Creating a new stream and copying tracks
+      // would leave the original stream undisposed and the camera LED on.
+      //
+      // If we only have screen share (no camera/mic), create an empty stream.
+      final mainStream =
+          cameraStream ?? await createLocalMediaStream('quickrtc_local_media');
 
       return LocalMedia(
-        stream: combinedStream,
+        stream: mainStream,
         audioTrack: audioTrack,
         videoTrack: videoTrack,
         screenshareTrack: screenshareTrack,
@@ -217,15 +223,70 @@ abstract class QuickRTCStatic {
   }
 
   /// Get screen share on mobile platforms
+  ///
+  /// On Android 14+ (SDK 34+), the flow is:
+  /// 1. Call flutter_webrtc's Helper.requestCapturePermission() to get user permission
+  ///    (flutter_webrtc stores the mediaProjectionData internally)
+  /// 2. Start our foreground service (now allowed because permission was granted)
+  ///    - The service calls startForeground() with FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+  ///    - We poll until the service is fully ready
+  /// 3. Call getDisplayMedia() - flutter_webrtc sees mediaProjectionData is not null,
+  ///    so it skips the permission dialog and directly uses the stored data
+  ///
+  /// This implementation follows GetStream's proven pattern for Android 14+ compatibility.
+  ///
+  /// On Android 10-13, the flow is:
+  /// 1. Start foreground service first
+  /// 2. Then call flutter_webrtc's getDisplayMedia() (which shows its own dialog)
   static Future<MediaStream> _getMobileScreenShare(
       ScreenShareConfig config) async {
     if (!kIsWeb && Platform.isAndroid) {
-      final serviceStarted = await QuickRTCPlatform.startScreenCaptureService();
-      if (!serviceStarted) {
-        throw Exception('Failed to start screen capture foreground service. '
-            'Screen sharing requires a foreground service on Android 10+.');
+      // Get Android SDK version to determine the flow
+      final sdkVersion = await QuickRTCPlatform.getAndroidSdkVersion();
+      debugPrint('QuickRTC: Android SDK version: $sdkVersion');
+
+      if (sdkVersion >= 34) {
+        // Android 14+ (SDK 34+): Request permission first, then start service
+        // This is the correct order required by Android 14+
+        debugPrint(
+            'QuickRTC: Android 14+ - requesting MediaProjection permission first');
+
+        // Step 1: Request permission using flutter_webrtc's built-in method
+        // This shows ONE permission dialog and stores the result internally
+        final permissionGranted = await Helper.requestCapturePermission();
+        if (!permissionGranted) {
+          throw const ScreenCapturePermissionException(
+            message: 'Screen capture permission denied by user.',
+            canRequestPermission: true,
+          );
+        }
+        debugPrint('QuickRTC: MediaProjection permission granted');
+
+        // Step 2: Start foreground service AFTER permission is granted
+        // startScreenCaptureService() will poll until the service is ready
+        debugPrint('QuickRTC: Starting foreground service');
+        final serviceStarted =
+            await QuickRTCPlatform.startScreenCaptureService();
+        if (!serviceStarted) {
+          throw Exception('Failed to start screen capture foreground service. '
+              'Screen sharing requires a foreground service on Android 14+.');
+        }
+        debugPrint('QuickRTC: Foreground service started and ready');
+
+        // Step 3: Now call getDisplayMedia - flutter_webrtc will skip the
+        // permission dialog because mediaProjectionData is already stored
+      } else if (sdkVersion >= 29) {
+        // Android 10-13 (SDK 29-33): Start service first, then request permission
+        debugPrint(
+            'QuickRTC: Android 10-13 detected, starting foreground service first');
+        final serviceStarted =
+            await QuickRTCPlatform.startScreenCaptureService();
+        if (!serviceStarted) {
+          throw Exception('Failed to start screen capture foreground service. '
+              'Screen sharing requires a foreground service on Android 10+.');
+        }
       }
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Android < 10: No service needed
     }
 
     try {
@@ -239,8 +300,11 @@ abstract class QuickRTCStatic {
         constraints['audio'] = true;
       }
 
+      debugPrint(
+          'QuickRTC: Calling getDisplayMedia with constraints: $constraints');
       return await navigator.mediaDevices.getDisplayMedia(constraints);
     } catch (e) {
+      debugPrint('QuickRTC: getDisplayMedia failed: $e');
       if (!kIsWeb && Platform.isAndroid) {
         await QuickRTCPlatform.stopScreenCaptureService();
       }

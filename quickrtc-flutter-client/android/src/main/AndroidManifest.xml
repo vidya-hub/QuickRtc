@@ -4,6 +4,9 @@
     <!-- Permissions for Screen Sharing (Android 10+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- E/MethodChannel#FlutterWebRTC.Method(16589): Failed to handle method call
+E/MethodChannel#FlutterWebRTC.Method(16589): java.lang.SecurityException: Media projections require a foreground service of type ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION -->
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <application>

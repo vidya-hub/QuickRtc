@@ -383,14 +383,16 @@ class Producer extends EnhancedEventEmitter {
       'track': newTrack,
     });
 
-    // Stop the previous track (but don't dispose the stream - we're just replacing the track).
+    // Stop the previous track if stopTracks is enabled and the track is still active.
+    // Note: The track may already be stopped if this is called during resume after pause.
     try {
       _track.onEnded = null;
-      if (stopTracks) {
+      if (stopTracks && _track.enabled) {
         _track.stop();
       }
     } catch (error) {
-      _logger.warn('replaceTrack() | failed to stop previous track: $error');
+      _logger.warn(
+          'replaceTrack() | failed to stop previous track (may already be stopped): $error');
     }
 
     // Set the new track.

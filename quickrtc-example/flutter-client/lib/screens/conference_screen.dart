@@ -18,7 +18,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   QuickRTCController? _controller;
   MediaStream? _localStream;
 
-  // Local UI state (reactive via setState)
+  // Local UI state (reactive via setState) - only for loading/error states
   bool _isLoading = true;
   String? _error;
   String _meetingId = '';
@@ -55,13 +55,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
       await _controller!
           .joinMeeting(conferenceId: _meetingId, participantName: _userName);
 
-      // Get and publish local media
-      final media = await QuickRTCStatic.getLocalMedia(
-        MediaConfig.audioVideo(videoConfig: VideoConfig.frontCamera),
-      );
-      _localStream = media.stream;
-      await _controller!
-          .produce(ProduceInput.fromTracksWithTypes(media.tracksWithTypes));
+      // Don't start camera/mic initially - user can enable via buttons
+      // Camera and microphone will be enabled when user clicks the respective buttons
 
       setState(() => _isLoading = false);
     } catch (e) {
@@ -148,6 +143,7 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     }
 
     // Use ListenableBuilder to listen to controller state changes
+    // This rebuilds automatically when controller.notifyListeners() is called
     return ListenableBuilder(
       listenable: _controller!,
       builder: (context, _) {
@@ -226,6 +222,10 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     // Use the stream from state - it gets updated when track is replaced on resume
     final localVideoStream = state.localVideoStream?.stream ?? _localStream;
 
+    // Determine audio/video status from controller state
+    final isAudioEnabled = state.hasLocalAudio && !state.isLocalAudioPaused;
+    final isVideoEnabled = state.hasLocalVideo && !state.isLocalVideoPaused;
+
     final tiles = <Widget>[
       // Local video
       QuickRTCMediaRenderer(
@@ -234,8 +234,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
         mirror: true,
         isLocal: true,
         participantName: _userName,
-        isAudioEnabled: !state.isLocalAudioPaused,
-        isVideoEnabled: !state.isLocalVideoPaused,
+        isAudioEnabled: isAudioEnabled,
+        isVideoEnabled: isVideoEnabled,
         showAudioIndicator: true,
         showName: true,
         showLocalLabel: true,
@@ -284,6 +284,10 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   }
 
   Widget _buildControls(QuickRTCState state) {
+    // Determine audio/video active state from controller state
+    final isAudioActive = state.hasLocalAudio && !state.isLocalAudioPaused;
+    final isVideoActive = state.hasLocalVideo && !state.isLocalVideoPaused;
+
     return Container(
       color: const Color(0xFF1A1A1A),
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -293,15 +297,13 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _ControlBtn(
-              icon: state.isLocalAudioPaused ? Icons.mic_off : Icons.mic,
-              active: !state.isLocalAudioPaused,
+              icon: isAudioActive ? Icons.mic : Icons.mic_off,
+              active: isAudioActive,
               onTap: _toggleAudio,
             ),
             _ControlBtn(
-              icon: state.isLocalVideoPaused
-                  ? Icons.videocam_off
-                  : Icons.videocam,
-              active: !state.isLocalVideoPaused,
+              icon: isVideoActive ? Icons.videocam : Icons.videocam_off,
+              active: isVideoActive,
               onTap: _toggleVideo,
             ),
             _ControlBtn(
@@ -324,10 +326,64 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   }
 
   Future<void> _toggleAudio() async {
+    if (_controller == null) return;
+
+    final state = _controller!.state;
+
+    // If no audio stream exists yet, start it for the first time
+    if (!state.hasLocalAudio) {
+      try {
+        final media =
+            await QuickRTCStatic.getLocalMedia(MediaConfig.audioOnly());
+        await _controller!.produce(
+          ProduceInput.fromTracksWithTypes(media.tracksWithTypes),
+        );
+        // Controller will notify listeners, triggering rebuild
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Failed to start audio: $e'),
+                backgroundColor: Colors.red),
+          );
+        }
+      }
+      return;
+    }
+
+    // Toggle existing audio - controller will notify listeners
     await _controller?.toggleMicrophoneMute();
   }
 
   Future<void> _toggleVideo() async {
+    if (_controller == null) return;
+
+    final state = _controller!.state;
+
+    // If no video stream exists yet, start it for the first time
+    if (!state.hasLocalVideo) {
+      try {
+        final media = await QuickRTCStatic.getLocalMedia(
+          MediaConfig.videoOnly(config: VideoConfig.frontCamera),
+        );
+        _localStream = media.stream;
+        await _controller!.produce(
+          ProduceInput.fromTracksWithTypes(media.tracksWithTypes),
+        );
+        // Controller will notify listeners, triggering rebuild
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text('Failed to start video: $e'),
+                backgroundColor: Colors.red),
+          );
+        }
+      }
+      return;
+    }
+
+    // Toggle existing video - controller will notify listeners
     await _controller?.toggleCameraPause();
   }
 

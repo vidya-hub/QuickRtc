@@ -29,8 +29,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   // State
   bool _isJoining = false;
   String? _error;
-  bool _audioEnabled = true;
-  bool _videoEnabled = true;
+  bool _audioEnabled = false;
+  bool _videoEnabled = false;
   bool _isFullScreen = false;
   String? _conferenceId;
   String? _participantName;
@@ -126,18 +126,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
         participantName: participantName,
       );
 
-      // Get local media using the static API
-      final localMedia =
-          await QuickRTCStatic.getLocalMedia(MediaConfig.audioVideo(
-        videoConfig: VideoConfig.frontCamera,
-      ));
-      _localStream = localMedia.stream;
-      _localRenderer.srcObject = _localStream;
-
-      // Produce media using tracks with types
-      await _controller!.produce(
-        ProduceInput.fromTracksWithTypes(localMedia.tracksWithTypes),
-      );
+      // Don't start camera initially - user can enable it manually
+      // Camera and microphone will be enabled when user clicks the respective buttons
 
       setState(() {});
     } catch (e, stackTrace) {
@@ -189,6 +179,15 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
             await renderer.initialize();
             renderer.srcObject = stream.stream;
             _remoteRenderers[stream.id] = renderer;
+            debugPrint('Created renderer for stream ${stream.id}');
+          } else {
+            // IMPORTANT: On Android, the srcObject may need to be re-assigned
+            // if the stream has changed (e.g., after reconnection)
+            final existingRenderer = _remoteRenderers[stream.id]!;
+            if (existingRenderer.srcObject?.id != stream.stream.id) {
+              existingRenderer.srcObject = stream.stream;
+              debugPrint('Updated renderer srcObject for stream ${stream.id}');
+            }
           }
         }
       }
@@ -204,53 +203,114 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
     for (final streamId in toRemove) {
       final renderer = _remoteRenderers.remove(streamId);
+      renderer?.srcObject = null;
       renderer?.dispose();
+      debugPrint('Removed renderer for stream $streamId');
     }
   }
 
   Future<void> _toggleAudio() async {
-    if (_localStream == null) return;
-
-    final audioTracks = _localStream!.getAudioTracks();
-    if (audioTracks.isEmpty) return;
-
-    setState(() => _audioEnabled = !_audioEnabled);
-
-    for (final track in audioTracks) {
-      track.enabled = _audioEnabled;
-    }
+    if (_controller == null || !_controller!.state.isConnected) return;
 
     final audioStream = _controller?.state.localAudioStream;
 
-    if (audioStream != null) {
-      if (_audioEnabled) {
-        await audioStream.resume();
-      } else {
-        await audioStream.pause();
+    // If no audio stream exists yet, we need to start it for the first time
+    if (audioStream == null) {
+      try {
+        // Get audio-only media
+        final localMedia = await QuickRTCStatic.getLocalMedia(
+          MediaConfig.audioOnly(),
+        );
+
+        // Produce audio track
+        await _controller!.produce(
+          ProduceInput.fromTracksWithTypes(localMedia.tracksWithTypes),
+        );
+
+        setState(() => _audioEnabled = true);
+      } catch (e) {
+        debugPrint('Error starting audio: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to start audio: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+      return;
+    }
+
+    setState(() => _audioEnabled = !_audioEnabled);
+
+    if (_audioEnabled) {
+      await audioStream.resume();
+    } else {
+      await audioStream.pause();
     }
   }
 
   Future<void> _toggleVideo() async {
-    if (_localStream == null) return;
-
-    final videoTracks = _localStream!.getVideoTracks();
-    if (videoTracks.isEmpty) return;
-
-    setState(() => _videoEnabled = !_videoEnabled);
-
-    for (final track in videoTracks) {
-      track.enabled = _videoEnabled;
-    }
+    if (_controller == null || !_controller!.state.isConnected) return;
 
     final videoStream = _controller?.state.localVideoStream;
 
-    if (videoStream != null) {
-      if (_videoEnabled) {
-        await videoStream.resume();
-      } else {
-        await videoStream.pause();
+    // If no video stream exists yet, we need to start it for the first time
+    if (videoStream == null) {
+      try {
+        // Get video-only media
+        final localMedia = await QuickRTCStatic.getLocalMedia(
+          MediaConfig.videoOnly(config: VideoConfig.frontCamera),
+        );
+        _localStream = localMedia.stream;
+        _localRenderer.srcObject = _localStream;
+
+        // Produce video track
+        await _controller!.produce(
+          ProduceInput.fromTracksWithTypes(localMedia.tracksWithTypes),
+        );
+
+        setState(() => _videoEnabled = true);
+      } catch (e) {
+        debugPrint('Error starting video: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to start video: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
+      return;
+    }
+
+    setState(() => _videoEnabled = !_videoEnabled);
+
+    if (_videoEnabled) {
+      // Resume video - re-acquire camera
+      await videoStream.resume();
+
+      // Update renderer with new stream from state (after resume, stream is refreshed)
+      // Give a brief delay for the new stream to be ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      final updatedVideoStream = _controller?.state.localVideoStream;
+      if (updatedVideoStream != null) {
+        _localStream = updatedVideoStream.stream;
+        _localRenderer.srcObject = _localStream;
+      }
+    } else {
+      // Pause video - release camera
+      // Clear the renderer first to release the reference
+      _localRenderer.srcObject = null;
+
+      // The library will handle stream disposal when pausing.
+      // We just clear our local reference to allow GC.
+      _localStream = null;
+
+      // Now pause the producer (this will stop the track and dispose stream if needed)
+      await videoStream.pause();
     }
   }
 

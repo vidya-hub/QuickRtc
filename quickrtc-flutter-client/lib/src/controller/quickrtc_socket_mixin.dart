@@ -19,6 +19,13 @@ mixin QuickRTCSocketMixin {
     String participantName,
     Map<String, dynamic> participantInfo,
   );
+  Future<RemoteStream?> consumeSingleProducer({
+    required String producerId,
+    required String targetParticipantId,
+    required String targetParticipantName,
+    required String kind,
+    String? streamType,
+  });
   void cleanup();
 
   /// Setup socket event listeners
@@ -83,7 +90,7 @@ mixin QuickRTCSocketMixin {
       ));
     });
 
-    // New producer - auto-consume and update state
+    // New producer - auto-consume the specific producer
     socket.on('newProducer', (data) async {
       log('Socket: newProducer', data);
 
@@ -100,28 +107,28 @@ mixin QuickRTCSocketMixin {
       // Check if this participant is already known
       var existingParticipant = state.participants[producerData.participantId];
 
-      // Auto-consume this participant's streams
-      final streams = await consumeParticipantInternal(
-        producerData.participantId,
-        producerData.participantName,
-        existingParticipant?.info ?? {},
+      // Consume this specific producer directly (avoids race condition)
+      final stream = await consumeSingleProducer(
+        producerId: producerData.producerId,
+        targetParticipantId: producerData.participantId,
+        targetParticipantName: producerData.participantName,
+        kind: producerData.kind,
+        streamType: producerData.streamType?.value,
       );
 
-      if (streams.isNotEmpty) {
-        log(
-          'Auto-consumed ${streams.length} streams from ${producerData.participantName}',
-        );
+      if (stream != null) {
+        log('Auto-consumed stream from ${producerData.participantName}: ${producerData.kind}');
 
-        // Update or create the participant with the new streams
+        // Update or create the participant with the new stream
         final updatedParticipant = existingParticipant != null
             ? existingParticipant.copyWith(
-                streams: [...existingParticipant.streams, ...streams],
+                streams: [...existingParticipant.streams, stream],
               )
             : RemoteParticipant(
                 id: producerData.participantId,
                 name: producerData.participantName,
                 info: {},
-                streams: streams,
+                streams: [stream],
               );
 
         updateState(state.copyWith(
@@ -130,6 +137,8 @@ mixin QuickRTCSocketMixin {
             producerData.participantId: updatedParticipant,
           },
         ));
+      } else {
+        log('Failed to consume stream from ${producerData.participantName}: ${producerData.kind}');
       }
     });
 

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
 import 'package:quickrtc_flutter_client/state/quick_rtc_state.dart';
@@ -169,13 +171,33 @@ mixin QuickRTCConsumerMixin {
         final track = consumer.track;
         log('Consumer created - id: ${consumer.id}, producerId: ${consumerParams.producerId}, kind: ${consumerParams.kind}, streamType: ${streamType.value}');
 
+        // IMPORTANT: Ensure track is enabled (Android/iOS may receive tracks in disabled state)
+        if (!track.enabled) {
+          track.enabled = true;
+          log('Consumer track was disabled, enabled it');
+        }
+
         // For video streams, create a dedicated MediaStream
+        // This is required because the consumer's stream may not be properly associated
+        // with the track on all platforms (especially Android)
         MediaStream streamToUse;
         if (consumerParams.kind == 'video') {
+          // Create a new stream and add the track
           final dedicatedStream =
               await createLocalMediaStream('consumer_${consumer.id}');
-          dedicatedStream.addTrack(track);
+          await dedicatedStream.addTrack(track);
           streamToUse = dedicatedStream;
+
+          // On Android, give extra time for the stream to be ready
+          if (!kIsWeb && Platform.isAndroid) {
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+
+          log('Created dedicated video stream', {
+            'streamId': streamToUse.id,
+            'trackId': track.id,
+            'trackEnabled': track.enabled,
+          });
         } else {
           streamToUse = consumer.stream;
         }
@@ -207,6 +229,151 @@ mixin QuickRTCConsumerMixin {
     } catch (error) {
       log('Error consuming participant', error);
       return [];
+    }
+  }
+
+  /// Consume a single producer by ID
+  /// This is used when a newProducer event is received to avoid race conditions
+  Future<RemoteStream?> consumeSingleProducer({
+    required String producerId,
+    required String targetParticipantId,
+    required String targetParticipantName,
+    required String kind,
+    String? streamType,
+  }) async {
+    log('consumeSingleProducer: Starting', {
+      'producerId': producerId,
+      'targetParticipantId': targetParticipantId,
+      'kind': kind,
+    });
+
+    if (!state.isConnected || recvTransport == null) {
+      log('consumeSingleProducer: Not connected or no recvTransport');
+      return null;
+    }
+
+    // Check if already consumed
+    if (consumedProducerIds.contains(producerId)) {
+      log('consumeSingleProducer: Already consumed producer $producerId');
+      return null;
+    }
+
+    try {
+      // Call the server's consume endpoint with the specific producer ID
+      final response = await emitWithAck('consume', {
+        'conferenceId': conferenceId,
+        'participantId': participantId,
+        'consumeOptions': {
+          'producerId': producerId,
+          'rtpCapabilities': device!.rtpCapabilities.toMap(),
+        },
+      });
+
+      log('consumeSingleProducer: Response received', response);
+
+      if (response['status'] != 'ok' || response['data'] == null) {
+        log('consumeSingleProducer: Failed', response['error']);
+        return null;
+      }
+
+      final consumerParams = ConsumerParamsData.fromJson(
+        response['data'] as Map<String, dynamic>,
+      );
+
+      // Track this producer as consumed
+      consumedProducerIds.add(producerId);
+
+      // Create completer for this consumer
+      final completer = Completer<Consumer>();
+      pendingConsumers[consumerParams.id] = completer;
+
+      // Start consume
+      recvTransport!.consume(
+        id: consumerParams.id,
+        producerId: consumerParams.producerId,
+        kind: RTCRtpMediaTypeExtension.fromString(consumerParams.kind),
+        rtpParameters: RtpParameters.fromMap(consumerParams.rtpParameters),
+        peerId: targetParticipantId,
+      );
+
+      // Wait for the consumer via callback
+      final consumer = await completer.future;
+
+      // Resume consumer on server
+      await emitWithAck('unpauseConsumer', {
+        'conferenceId': conferenceId,
+        'participantId': participantId,
+        'consumerId': consumerParams.id,
+      });
+
+      // Determine stream type
+      final resolvedStreamType = streamType != null
+          ? StreamType.values.firstWhere(
+              (t) => t.value == streamType,
+              orElse: () =>
+                  kind == 'audio' ? StreamType.audio : StreamType.video,
+            )
+          : (kind == 'audio' ? StreamType.audio : StreamType.video);
+
+      final track = consumer.track;
+      log('consumeSingleProducer: Consumer created - id: ${consumer.id}, producerId: $producerId, kind: $kind, streamType: ${resolvedStreamType.value}');
+
+      // IMPORTANT: Ensure track is enabled (Android/iOS may receive tracks in disabled state)
+      if (!track.enabled) {
+        track.enabled = true;
+        log('consumeSingleProducer: Track was disabled, enabled it');
+      }
+
+      // For video streams, create a dedicated MediaStream
+      // This is required because the consumer's stream may not be properly associated
+      // with the track on all platforms (especially Android)
+      MediaStream streamToUse;
+      if (kind == 'video') {
+        // Create a new stream and add the track
+        final dedicatedStream =
+            await createLocalMediaStream('consumer_${consumer.id}');
+        await dedicatedStream.addTrack(track);
+        streamToUse = dedicatedStream;
+
+        // On Android, give extra time for the stream to be ready
+        if (!kIsWeb && Platform.isAndroid) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+
+        log('consumeSingleProducer: Created dedicated video stream', {
+          'streamId': streamToUse.id,
+          'trackId': track.id,
+          'trackEnabled': track.enabled,
+        });
+      } else {
+        streamToUse = consumer.stream;
+      }
+
+      // Store consumer info
+      final consumerInfo = ConsumerInfo(
+        id: consumer.id,
+        type: resolvedStreamType,
+        consumer: consumer,
+        stream: streamToUse,
+        producerId: producerId,
+        participantId: targetParticipantId,
+        participantName: targetParticipantName,
+      );
+
+      consumers[consumer.id] = consumerInfo;
+
+      return RemoteStream(
+        id: consumer.id,
+        type: resolvedStreamType,
+        stream: streamToUse,
+        producerId: producerId,
+        participantId: targetParticipantId,
+        participantName: targetParticipantName,
+      );
+    } catch (error) {
+      log('consumeSingleProducer: Error', error);
+      consumedProducerIds.remove(producerId); // Rollback
+      return null;
     }
   }
 
