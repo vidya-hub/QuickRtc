@@ -192,14 +192,14 @@ class MediasoupConference implements Conference {
   ): MediasoupParticipant[] {
     return Array.from(participantsMap.values()) as MediasoupParticipant[];
   }
-  pauseProducer(participantId: string, producerId: string): void {
+  pauseProducer(participantId: string, producerId: string): "audio" | "video" | null {
     const participant = this.getParticipant(
       participantId
     ) as MediasoupParticipant;
     if (!participant) {
       throw new Error("Participant does not exist in the conference");
     }
-    participant.pauseProducer(producerId);
+    return participant.pauseProducer(producerId);
   }
   getExistingProducerIds(currentParticipantId: string): Array<{
     participantId: string;
@@ -256,10 +256,12 @@ class MediasoupConference implements Conference {
       const mediasoupParticipant = participant as MediasoupParticipant;
       const producer = mediasoupParticipant.getProducerById(producerId);
       if (producer) {
+        const appData = producer.appData as any;
+        console.log(`[getProducerInfo] producerId: ${producerId}, kind: ${producer.kind}, appData:`, appData);
         return {
           id: producer.id,
           kind: producer.kind as "audio" | "video",
-          streamType: (producer.appData as any)?.streamType,
+          streamType: appData?.streamType,
         };
       }
     }
@@ -268,14 +270,14 @@ class MediasoupConference implements Conference {
   async resumeProducer(
     participantId: string,
     producerId: string
-  ): Promise<void> {
+  ): Promise<"audio" | "video" | null> {
     const participant = this.getParticipant(
       participantId
     ) as MediasoupParticipant;
     if (!participant) {
       throw new Error("Participant does not exist in the conference");
     }
-    participant.resumeProducer(producerId);
+    return participant.resumeProducer(producerId);
   }
 
   async pauseConsumer(

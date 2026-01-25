@@ -3,103 +3,788 @@
 @tailwind utilities;
 
 /**
- * QuickRTC - Clean Black & White Documentation Theme
+ * QuickRTC - Modern Documentation Theme
+ * Clean, minimal design with subtle animations
  */
 
-/* Light mode */
+/* ==========================================
+   CSS Variables - Light Mode
+   ========================================== */
 :root {
-  --ifm-color-primary: #000000;
-  --ifm-color-primary-dark: #1a1a1a;
-  --ifm-color-primary-darker: #2a2a2a;
-  --ifm-color-primary-darkest: #3a3a3a;
-  --ifm-color-primary-light: #333333;
-  --ifm-color-primary-lighter: #444444;
-  --ifm-color-primary-lightest: #555555;
+  --ifm-color-primary: #171717;
+  --ifm-color-primary-dark: #0a0a0a;
+  --ifm-color-primary-darker: #000000;
+  --ifm-color-primary-darkest: #000000;
+  --ifm-color-primary-light: #262626;
+  --ifm-color-primary-lighter: #404040;
+  --ifm-color-primary-lightest: #525252;
   
   --ifm-background-color: #ffffff;
   --ifm-background-surface-color: #fafafa;
-  --ifm-navbar-background-color: #ffffff;
+  --ifm-navbar-background-color: rgba(255, 255, 255, 0.8);
   --ifm-footer-background-color: #0a0a0a;
   
   --ifm-code-font-size: 95%;
-  --ifm-font-family-monospace: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --ifm-font-family-base: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+  --ifm-heading-font-weight: 700;
   
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.05);
-  --ifm-navbar-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.1);
-  --ifm-toc-border-color: #eaeaea;
+  --ifm-navbar-shadow: none;
+  --ifm-toc-border-color: #e5e5e5;
   --ifm-code-background: #f5f5f5;
+  --ifm-hr-border-color: #e5e5e5;
+  
+  /* Custom properties */
+  --quickrtc-card-bg: #ffffff;
+  --quickrtc-card-border: #e5e5e5;
+  --quickrtc-card-hover-border: #d4d4d4;
+  --quickrtc-gradient-from: rgba(245, 245, 245, 0.5);
+  --quickrtc-gradient-to: rgba(255, 255, 255, 0);
 }
 
-/* Dark mode */
+/* ==========================================
+   CSS Variables - Dark Mode
+   ========================================== */
 [data-theme='dark'] {
-  --ifm-color-primary: #ffffff;
-  --ifm-color-primary-dark: #e6e6e6;
-  --ifm-color-primary-darker: #d9d9d9;
-  --ifm-color-primary-darkest: #bfbfbf;
-  --ifm-color-primary-light: #f2f2f2;
-  --ifm-color-primary-lighter: #f5f5f5;
-  --ifm-color-primary-lightest: #fafafa;
+  --ifm-color-primary: #fafafa;
+  --ifm-color-primary-dark: #e5e5e5;
+  --ifm-color-primary-darker: #d4d4d4;
+  --ifm-color-primary-darkest: #a3a3a3;
+  --ifm-color-primary-light: #ffffff;
+  --ifm-color-primary-lighter: #ffffff;
+  --ifm-color-primary-lightest: #ffffff;
   
   --ifm-background-color: #0a0a0a;
-  --ifm-background-surface-color: #111111;
-  --ifm-navbar-background-color: #0a0a0a;
+  --ifm-background-surface-color: #0f0f0f;
+  --ifm-navbar-background-color: rgba(10, 10, 10, 0.8);
   --ifm-footer-background-color: #000000;
   
   --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.1);
-  --ifm-navbar-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1);
-  --ifm-toc-border-color: #2a2a2a;
-  --ifm-code-background: #1a1a1a;
+  --ifm-toc-border-color: #262626;
+  --ifm-code-background: #171717;
+  --ifm-hr-border-color: #262626;
+  
+  /* Custom properties */
+  --quickrtc-card-bg: rgba(23, 23, 23, 0.5);
+  --quickrtc-card-border: #262626;
+  --quickrtc-card-hover-border: #404040;
+  --quickrtc-gradient-from: rgba(38, 38, 38, 0.3);
+  --quickrtc-gradient-to: rgba(10, 10, 10, 0);
 }
 
-/* Navbar */
+/* ==========================================
+   Base Styles
+   ========================================== */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ==========================================
+   Animations
+   ========================================== */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Animation utility classes */
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.6s ease-out forwards;
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s ease-out forwards;
+}
+
+/* Animation delays */
+.animation-delay-100 {
+  animation-delay: 100ms;
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+.animation-delay-400 {
+  animation-delay: 400ms;
+}
+
+.animation-delay-500 {
+  animation-delay: 500ms;
+}
+
+/* ==========================================
+   Navbar
+   ========================================== */
 .navbar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--ifm-toc-border-color);
   box-shadow: none;
+  transition: background-color 0.3s ease;
 }
 
 .navbar__title {
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-/* Code blocks */
-pre {
+.navbar__link {
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.navbar__link:hover {
+  color: var(--ifm-color-primary);
+}
+
+.navbar__link--active {
+  font-weight: 600;
+}
+
+/* ==========================================
+   Sidebar
+   ========================================== */
+.menu__link {
+  font-weight: 450;
   border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.menu__link:hover {
+  background-color: var(--quickrtc-gradient-from);
+}
+
+.menu__link--active {
+  font-weight: 600;
+  background-color: var(--quickrtc-gradient-from);
+}
+
+.menu__list-item-collapsible:hover {
+  background-color: transparent;
+}
+
+/* ==========================================
+   Code Blocks
+   ========================================== */
+pre {
+  border-radius: 12px;
+  border: 1px solid var(--ifm-toc-border-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  padding: 1.25rem !important;
+}
+
+pre code {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.prism-code {
+  padding: 1rem 1.25rem !important;
+}
+
+/* Code block container in docs */
+[class*="codeBlockContainer"] {
+  margin: 1.5rem 0 !important;
+}
+
+[class*="codeBlockContent"] {
+  padding: 0 !important;
+}
+
+[class*="codeBlockLines"] {
+  padding: 1rem 0 !important;
+}
+
+[class*="codeBlockLine"] {
+  padding: 0 1.25rem !important;
+}
+
+/* Homepage code block wrapper */
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-block-wrapper pre {
+  margin: 0 !important;
+}
+
+.code-block-wrapper [class*="codeBlockContainer"] {
+  margin: 0 !important;
+}
+
+/* Inline code */
+code {
+  border-radius: 6px;
+  padding: 0.2em 0.45em;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+/* Code in paragraphs */
+p code,
+li code,
+td code {
+  background-color: var(--ifm-code-background);
   border: 1px solid var(--ifm-toc-border-color);
 }
 
-/* Footer */
-.footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+/* ==========================================
+   Copy Button - Unified Style
+   ========================================== */
+.copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #737373;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
-.footer--dark {
-  --ifm-footer-background-color: #0a0a0a;
+.copy-btn:hover {
+  color: #171717;
+  background: #f5f5f5;
 }
 
-/* Button overrides for dark mode */
+[data-theme='dark'] .copy-btn {
+  color: #737373;
+}
+
+[data-theme='dark'] .copy-btn:hover {
+  color: #fafafa;
+  background: #262626;
+}
+
+/* Docusaurus Code Block Copy Button */
+[class*="copyButtonContainer"] button {
+  background: transparent !important;
+  border: none !important;
+  padding: 6px !important;
+  border-radius: 6px !important;
+  color: #737373 !important;
+  transition: all 0.15s ease !important;
+}
+
+[class*="copyButtonContainer"] button:hover {
+  color: #171717 !important;
+  background: #f5f5f5 !important;
+}
+
+[data-theme='dark'] [class*="copyButtonContainer"] button {
+  color: #737373 !important;
+}
+
+[data-theme='dark'] [class*="copyButtonContainer"] button:hover {
+  color: #fafafa !important;
+  background: #262626 !important;
+}
+
+/* ==========================================
+   Cards & Components
+   ========================================== */
+.feature-card {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] .feature-card:hover {
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+}
+
+.package-card {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.package-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Install command */
+.install-command {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ==========================================
+   Buttons
+   ========================================== */
+.button--primary,
+.button--secondary {
+  border-radius: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
 [data-theme='dark'] .button--primary {
-  color: #000000;
-  background-color: #ffffff;
-  border-color: #ffffff;
+  color: #0a0a0a;
+  background-color: #fafafa;
+  border-color: #fafafa;
 }
 
 [data-theme='dark'] .button--primary:hover {
-  background-color: #e6e6e6;
-  border-color: #e6e6e6;
+  background-color: #e5e5e5;
+  border-color: #e5e5e5;
+  transform: translateY(-1px);
 }
 
 [data-theme='light'] .button--primary {
   color: #ffffff;
-  background-color: #000000;
-  border-color: #000000;
+  background-color: #171717;
+  border-color: #171717;
 }
 
 [data-theme='light'] .button--primary:hover {
-  background-color: #1a1a1a;
-  border-color: #1a1a1a;
+  background-color: #0a0a0a;
+  border-color: #0a0a0a;
+  transform: translateY(-1px);
 }
 
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
+/* ==========================================
+   Footer
+   ========================================== */
+.footer {
+  border-top: 1px solid var(--ifm-toc-border-color);
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #0a0a0a;
+  background: linear-gradient(to bottom, #0f0f0f, #0a0a0a);
+}
+
+.footer__title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.footer__link-item {
+  font-weight: 450;
+  transition: color 0.2s ease;
+}
+
+.footer__link-item:hover {
+  color: #ffffff;
+}
+
+/* ==========================================
+   Documentation Pages
+   ========================================== */
+.markdown h1 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.markdown h2 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 2.5em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.markdown h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.markdown a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: all 0.2s ease;
+}
+
+.markdown a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Tables */
+.markdown table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--ifm-toc-border-color);
+}
+
+.markdown th {
+  background-color: var(--quickrtc-gradient-from);
+  font-weight: 600;
+}
+
+.markdown tr {
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+}
+
+.markdown tr:last-child {
+  border-bottom: none;
+}
+
+/* Blockquotes */
+.markdown blockquote {
+  border-left: 4px solid var(--ifm-color-primary);
+  background-color: var(--quickrtc-gradient-from);
+  border-radius: 0 12px 12px 0;
+  padding: 1em 1.5em;
+}
+
+/* ==========================================
+   Admonitions
+   ========================================== */
+.admonition {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================
+   TOC (Table of Contents) - Right Sidebar
+   ========================================== */
+.table-of-contents {
+  border-left: 1px solid var(--ifm-toc-border-color);
+  padding-left: 1rem;
+}
+
+.table-of-contents__left-border {
+  border-left: none;
+}
+
+.table-of-contents__link {
+  font-weight: 450;
+  font-size: 0.85rem;
+  color: var(--ifm-color-primary-lighter);
+  padding: 0.4rem 0.75rem;
+  margin: 0.15rem 0;
+  border-radius: 6px;
+  display: block;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.table-of-contents__link::before {
+  content: '';
+  position: absolute;
+  left: -1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background-color: var(--ifm-color-primary);
+  border-radius: 3px;
+  transition: height 0.2s ease;
+}
+
+.table-of-contents__link:hover {
+  color: var(--ifm-color-primary);
+  background-color: var(--quickrtc-gradient-from);
+}
+
+.table-of-contents__link--active {
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  background-color: var(--quickrtc-gradient-from);
+}
+
+.table-of-contents__link--active::before {
+  height: 60%;
+}
+
+/* Nested TOC items */
+.table-of-contents ul {
+  padding-left: 0.75rem;
+  margin: 0;
+  list-style: none;
+}
+
+.table-of-contents > ul {
+  padding-left: 0;
+}
+
+.table-of-contents li {
+  margin: 0;
+}
+
+/* Dark mode specific */
+[data-theme='dark'] .table-of-contents__link {
+  color: #a3a3a3;
+}
+
+[data-theme='dark'] .table-of-contents__link:hover {
+  color: #fafafa;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme='dark'] .table-of-contents__link--active {
+  color: #fafafa;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme='dark'] .table-of-contents__link--active::before {
+  background-color: #fafafa;
+}
+
+/* ==========================================
+   Mermaid Diagrams
+   ========================================== */
+.mermaid {
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--ifm-toc-border-color);
+  background-color: var(--quickrtc-card-bg);
+}
+
+[data-theme='dark'] .mermaid text {
+  fill: #e5e5e5 !important;
+}
+
+[data-theme='dark'] .mermaid .nodeLabel {
+  color: #fafafa !important;
+}
+
+[data-theme='dark'] .mermaid .label {
+  color: #fafafa !important;
+}
+
+[data-theme='dark'] .mermaid .edgeLabel {
+  background-color: #262626 !important;
+  color: #e5e5e5 !important;
+}
+
+[data-theme='dark'] .mermaid .node rect,
+[data-theme='dark'] .mermaid .node polygon,
+[data-theme='dark'] .mermaid .node circle {
+  fill: #262626 !important;
+  stroke: #525252 !important;
+}
+
+[data-theme='dark'] .mermaid .cluster rect {
+  fill: #171717 !important;
+  stroke: #404040 !important;
+}
+
+[data-theme='dark'] .mermaid .cluster text {
+  fill: #fafafa !important;
+}
+
+[data-theme='dark'] .mermaid line,
+[data-theme='dark'] .mermaid path.path {
+  stroke: #737373 !important;
+}
+
+[data-theme='dark'] .mermaid .arrowheadPath {
+  fill: #737373 !important;
+}
+
+/* Sequence diagram */
+[data-theme='dark'] .mermaid .actor {
+  fill: #262626 !important;
+  stroke: #525252 !important;
+}
+
+[data-theme='dark'] .mermaid .actor-line {
+  stroke: #404040 !important;
+}
+
+[data-theme='dark'] .mermaid .messageLine0,
+[data-theme='dark'] .mermaid .messageLine1 {
+  stroke: #737373 !important;
+}
+
+[data-theme='dark'] .mermaid .messageText {
+  fill: #e5e5e5 !important;
+}
+
+[data-theme='dark'] .mermaid .note {
+  fill: #404040 !important;
+  stroke: #525252 !important;
+}
+
+[data-theme='dark'] .mermaid .noteText {
+  fill: #fafafa !important;
+}
+
+[data-theme='dark'] .mermaid .loopText,
+[data-theme='dark'] .mermaid .loopLine {
+  fill: #e5e5e5 !important;
+  stroke: #525252 !important;
+}
+
+[data-theme='dark'] .mermaid .labelBox {
+  fill: #262626 !important;
+  stroke: #404040 !important;
+}
+
+[data-theme='dark'] .mermaid .labelText {
+  fill: #fafafa !important;
+}
+
+[data-theme='dark'] .mermaid .flowchart-link {
+  stroke: #737373 !important;
+}
+
+/* ==========================================
+   Scrollbar
+   ========================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #404040;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* ==========================================
+   Selection
+   ========================================== */
+::selection {
+  background-color: rgba(23, 23, 23, 0.2);
+}
+
+[data-theme='dark'] ::selection {
+  background-color: rgba(250, 250, 250, 0.2);
+}
+
+/* ==========================================
+   Grid Pattern Background
+   ========================================== */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, currentColor 1px, transparent 1px),
+    linear-gradient(to bottom, currentColor 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ==========================================
+   Gradient Text
+   ========================================== */
+.gradient-text {
+  background: linear-gradient(135deg, #171717 0%, #525252 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme='dark'] .gradient-text {
+  background: linear-gradient(135deg, #fafafa 0%, #a3a3a3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ==========================================
+   Focus States (Accessibility)
+   ========================================== */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================
+   Print Styles
+   ========================================== */
+@media print {
+  .navbar,
+  .footer,
+  .table-of-contents {
+    display: none;
+  }
+  
+  .markdown {
+    max-width: 100%;
+  }
 }

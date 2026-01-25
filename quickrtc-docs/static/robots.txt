@@ -1,0 +1,13 @@
+# QuickRTC Documentation
+# https://quickrtc.dev
+
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://quickrtc.dev/sitemap.xml
+
+# LLM-specific files
+# These files provide structured content for AI/LLM consumption
+# llms.txt - Concise overview for quick context
+# llms-full.txt - Complete documentation for comprehensive understanding

@@ -1,4 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="6" fill="#000"/>
-  <text x="16" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">Q</text>
+  <defs>
+    <linearGradient id="faviconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#171717"/>
+      <stop offset="100%" style="stop-color:#404040"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="32" height="32" rx="8" fill="url(#faviconGradient)"/>
+  <!-- Q letter with video play symbol integrated -->
+  <g fill="#ffffff">
+    <!-- Q circle -->
+    <circle cx="16" cy="14" r="8" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+    <!-- Q tail -->
+    <path d="M19 18 L26 26" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Play triangle inside -->
+    <path d="M13.5 11 L13.5 17 L19 14 Z" fill="#ffffff"/>
+  </g>
 </svg>

@@ -7,6 +7,17 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.10.0"
 
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.quickrtc.flutter_client
+        pluginClass: QuickRtcFlutterClientPlugin
+      ios:
+        pluginClass: QuickRtcFlutterClientPlugin
+      macos:
+        pluginClass: QuickRtcFlutterClientPlugin
+
 dependencies:
   flutter:
     sdk: flutter
@@ -14,18 +25,23 @@ dependencies:
   # State Management
   provider: ^6.1.1
 
-  # WebRTC - using latest version with Flutter v2 embedding support
-  flutter_webrtc: ^1.2.1
+  # WebRTC & MediaSoup (bundled inside lib/src/mediasoup)
+  flutter_webrtc: ^0.12.5+hotfix.1
+
+  # MediaSoup dependencies (required for bundled mediasoup)
+  events2: ^1.0.0
+  sdp_transform: ^0.3.2
+  h264_profile_level_id: ^0.2.0
+  collection: ^1.17.0
 
   # Socket.IO
   socket_io_client: ^2.0.3+1
 
-  # Code Generation
-  freezed_annotation: ^2.4.1
-  json_annotation: ^4.9.0
-
   # Utilities
   logger: ^2.0.2+1
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +52,3 @@ dev_dependencies:
   build_runner: ^2.4.7
   freezed: ^2.4.6
   json_serializable: ^6.7.1
-
-flutter:
-  # No assets or fonts needed for this package

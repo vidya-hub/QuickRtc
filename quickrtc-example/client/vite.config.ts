@@ -3,17 +3,12 @@ import react from "@vitejs/plugin-react";
 import fs from "fs";
 import path from "path";
 
-// Only load SSL certs for dev server (not during build)
+// Load SSL certs for dev server
 const getHttpsConfig = () => {
-  // Skip SSL for production build
-  if (process.env.NODE_ENV === "production") {
-    return undefined;
-  }
-  
   try {
     const certPath = path.join(__dirname, "..", "certs", "cert.pem");
     const keyPath = path.join(__dirname, "..", "certs", "key.pem");
-    
+
     if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
       return {
         key: fs.readFileSync(keyPath),
@@ -21,7 +16,7 @@ const getHttpsConfig = () => {
       };
     }
   } catch {
-    // Ignore errors during build
+    console.warn("SSL certs not found, running without HTTPS");
   }
   return undefined;
 };

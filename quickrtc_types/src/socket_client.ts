@@ -194,6 +194,7 @@ export interface ConsumerClosedData {
  */
 export interface MediaMutedData {
   participantId: string;
+  conferenceId?: string;
   mutedProducerIds?: string[];
 }
 

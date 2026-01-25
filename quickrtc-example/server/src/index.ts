@@ -48,7 +48,7 @@ const quickrtcClientBundle = path.join(
   "..",
   "quickrtc_client",
   "dist",
-  "index.js"
+  "index.js",
 );
 app.get("/quickrtc-client.js", (req, res) => {
   if (fs.existsSync(quickrtcClientBundle)) {
@@ -58,7 +58,7 @@ app.get("/quickrtc-client.js", (req, res) => {
     res
       .status(404)
       .send(
-        "QuickRTC client not found. Run 'npm run build' in quickrtc_client first."
+        "QuickRTC client not found. Run 'npm run build' in quickrtc_client first.",
       );
   }
 });
@@ -75,7 +75,7 @@ if (USE_SSL) {
 
   if (!fs.existsSync(path.join(certsDir, "key.pem"))) {
     console.error(
-      "SSL certs not found. Run 'npm run generate-certs' first, or set USE_SSL=false"
+      "SSL certs not found. Run 'npm run generate-certs' first, or set USE_SSL=false",
     );
     process.exit(1);
   }
@@ -90,7 +90,7 @@ if (USE_SSL) {
   // HTTP for Docker (nginx handles SSL)
   server = http.createServer(app);
   console.log(
-    "Starting with HTTP (SSL disabled - use nginx for SSL termination)"
+    "Starting with HTTP (SSL disabled - use nginx for SSL termination)",
   );
 }
 
@@ -129,7 +129,7 @@ const quickrtc = new QuickRTCServer({
 
 // Event logging
 quickrtc.on("conferenceCreated", (e) =>
-  console.log(`Conference created: ${e.detail.conference.id}`)
+  console.log(`Conference created: ${e.detail.conference.id}`),
 );
 quickrtc.on("participantJoined", (e) => {
   const info = (
@@ -137,11 +137,11 @@ quickrtc.on("participantJoined", (e) => {
   ).participantInfo;
   console.log(
     `${e.detail.participant.name} joined`,
-    info ? `(info: ${JSON.stringify(info)})` : ""
+    info ? `(info: ${JSON.stringify(info)})` : "",
   );
 });
 quickrtc.on("participantLeft", (e) =>
-  console.log(`${e.detail.participant.name} left`)
+  console.log(`${e.detail.participant.name} left`),
 );
 
 // Start server

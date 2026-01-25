@@ -1,0 +1,173 @@
+# QuickRTC
+
+> Simple WebRTC conferencing built on mediasoup
+
+QuickRTC is a production-ready WebRTC conferencing SDK that makes building real-time video applications simple. It provides an event-driven API, automatic stream management, and first-class React support.
+
+## Packages
+
+- **quickrtc-client**: Core JavaScript/TypeScript client SDK for any framework or vanilla JS
+- **quickrtc-server**: Node.js server with mediasoup SFU integration
+- **quickrtc-react-client**: React hooks and components for building video UIs
+
+## Installation
+
+```bash
+npm install quickrtc-client socket.io-client
+npm install quickrtc-server
+npm install quickrtc-react-client
+```
+
+## Key Features
+
+- **Simple API**: Intuitive event-driven API that abstracts WebRTC complexity
+- **Auto-Consume**: Remote streams are automatically consumed and ready to use
+- **React Ready**: First-class React support with useQuickRTC hook
+- **TypeScript First**: Full TypeScript support with comprehensive type definitions
+- **Scalable**: Built on mediasoup SFU architecture for efficient multi-participant handling
+- **Production Ready**: Battle-tested with error handling and reconnection logic
+
+## Quick Start
+
+### Server Setup
+
+```typescript
+import { QuickRTCServer } from "quickrtc-server";
+import { createServer } from "https";
+import { Server } from "socket.io";
+
+const httpsServer = createServer({ key, cert }, app);
+const io = new Server(httpsServer, { cors: { origin: "*" } });
+
+const server = new QuickRTCServer({
+  httpServer: httpsServer,
+  socketServer: io,
+});
+
+await server.start();
+httpsServer.listen(3000);
+```
+
+### Client Usage
+
+```typescript
+import { QuickRTC } from "quickrtc-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://your-server.com");
+const rtc = new QuickRTC({ socket });
+
+rtc.on("newParticipant", ({ participantName, streams }) => {
+  console.log(`${participantName} joined with ${streams.length} streams`);
+});
+
+await rtc.join({ conferenceId: "room-1", participantName: "Alice" });
+const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+await rtc.produce(media.getTracks());
+```
+
+### React Integration
+
+```typescript
+import { useQuickRTC, QuickRTCVideo } from "quickrtc-react-client";
+
+function VideoRoom() {
+  const { rtc, isConnected, join, produce } = useQuickRTC({ socket });
+  const [streams, setStreams] = useState([]);
+
+  useEffect(() => {
+    if (!rtc) return;
+    rtc.on("newParticipant", ({ streams }) => {
+      setStreams(prev => [...prev, ...streams]);
+    });
+  }, [rtc]);
+
+  return (
+    <div>
+      {streams.map(s => <QuickRTCVideo key={s.id} stream={s.stream} />)}
+    </div>
+  );
+}
+```
+
+## Client SDK API
+
+### Methods
+
+- `join(config)`: Join a conference with conferenceId and participantName
+- `leave()`: Leave the current conference
+- `produce(tracks)`: Share media tracks with other participants
+- `pause(streamId)`: Pause a local stream
+- `resume(streamId)`: Resume a paused stream
+- `stop(streamId)`: Stop a local stream completely
+
+### Events
+
+- `connected`: Successfully joined a conference
+- `disconnected`: Left or disconnected from conference
+- `newParticipant`: A participant joined with their streams
+- `participantLeft`: A participant left
+- `streamAdded`: A participant started sharing media
+- `streamRemoved`: A participant stopped sharing
+- `localStreamEnded`: Local track ended externally
+- `error`: An error occurred
+
+### Properties
+
+- `isConnected`: Whether connected to a conference
+- `conferenceId`: Current conference ID
+- `participantId`: Current participant ID
+- `participantName`: Current participant name
+- `localStreams`: Map of local streams
+- `remoteStreams`: Map of remote streams
+- `participants`: Map of remote participants
+
+## Types
+
+### LocalStream
+
+```typescript
+interface LocalStream {
+  id: string;
+  type: "audio" | "video" | "screenshare";
+  stream: MediaStream;
+  track: MediaStreamTrack;
+  paused: boolean;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  stop: () => Promise<void>;
+}
+```
+
+### RemoteStream
+
+```typescript
+interface RemoteStream {
+  id: string;
+  type: "audio" | "video" | "screenshare";
+  stream: MediaStream;
+  producerId: string;
+  participantId: string;
+  participantName: string;
+}
+```
+
+## Documentation
+
+- Getting Started: /docs/getting-started
+- Client SDK: /docs/client/overview
+- Server SDK: /docs/server/overview
+- React Integration: /docs/react/overview
+- Deployment: /docs/deployment/overview
+
+## Links
+
+- Website: https://quickrtc.dev
+- GitHub: https://github.com/vidya-hub/QuickRtc
+- npm (client): https://www.npmjs.com/package/quickrtc-client
+- npm (server): https://www.npmjs.com/package/quickrtc-server
+- npm (react): https://www.npmjs.com/package/quickrtc-react-client
+
+## License
+
+MIT

@@ -38,5 +38,5 @@ export interface AppState {
     conferenceId: string;
     participantId: string;
     producerId: string;
-  }): Promise<void> | void;
+  }): Promise<"audio" | "video" | null> | "audio" | "video" | null;
 }

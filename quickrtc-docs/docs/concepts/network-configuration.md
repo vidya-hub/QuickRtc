@@ -10,21 +10,29 @@ Understanding `listenIp` and `announcedIp` is critical for WebRTC to work correc
 
 WebRTC uses ICE (Interactive Connectivity Establishment) to discover the best network path between clients and the server. The server must advertise IP addresses that clients can actually reach.
 
+```mermaid
+graph LR
+    subgraph "The IP Address Problem"
+        subgraph "Server sees itself as:"
+            SIP1["127.0.0.1"]
+            SIP2["10.0.0.5"]
+            SIP3["172.17.0.2 (docker)"]
+        end
+        
+        Q{{"???"}}
+        
+        subgraph "Client needs to connect to:"
+            CIP["203.0.113.50<br/>(public IP)"]
+        end
+        
+        SIP1 --> Q
+        SIP2 --> Q
+        SIP3 --> Q
+        Q --> CIP
+    end
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    The IP Address Problem                        │
-│                                                                  │
-│   Server sees itself as:     Client needs to connect to:         │
-│   ┌──────────────────┐       ┌──────────────────┐                │
-│   │   127.0.0.1      │       │   203.0.113.50   │                │
-│   │   10.0.0.5       │  ???  │   (public IP)    │                │
-│   │   172.17.0.2     │       │                  │                │
-│   │   (docker)       │       │                  │                │
-│   └──────────────────┘       └──────────────────┘                │
-│                                                                  │
-│   Which IP should the server advertise to clients?               │
-└─────────────────────────────────────────────────────────────────┘
-```
+
+> **Which IP should the server advertise to clients?**
 
 ## Two Key Concepts
 
@@ -42,28 +50,14 @@ The IP address that mediasoup **advertises to clients** in ICE candidates. This 
 - For local dev: `127.0.0.1` or your machine's LAN IP
 - For production: Your server's public IP
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   listenIp vs announcedIp                        │
-│                                                                  │
-│                        Server                                    │
-│   ┌─────────────────────────────────────────────────────┐        │
-│   │                                                     │        │
-│   │   listenIp: 0.0.0.0                                 │        │
-│   │   (binds to all network interfaces)                 │        │
-│   │                                                     │        │
-│   │   announcedIp: 203.0.113.50                         │        │
-│   │   (tells clients to connect to this IP)             │        │
-│   │                                                     │        │
-│   └─────────────────────────────────────────────────────┘        │
-│                              │                                   │
-│                              │ ICE candidate:                    │
-│                              │ "connect to 203.0.113.50:40000"   │
-│                              ▼                                   │
-│                         ┌─────────┐                              │
-│                         │ Client  │                              │
-│                         └─────────┘                              │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Server"
+        LISTEN["listenIp: 0.0.0.0<br/>(binds to all network interfaces)"]
+        ANNOUNCE["announcedIp: 203.0.113.50<br/>(tells clients to connect to this IP)"]
+    end
+    
+    ANNOUNCE -->|"ICE candidate:<br/>'connect to 203.0.113.50:40000'"| CLIENT[Client]
 ```
 
 ## Configuration in QuickRTC
@@ -89,20 +83,13 @@ const server = new QuickRTCServer({
 
 When running both client and server on the same machine:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Local Development                             │
-│                                                                  │
-│   ┌──────────────┐              ┌──────────────┐                 │
-│   │   Browser    │◄────────────►│   Server     │                 │
-│   │              │  localhost   │              │                 │
-│   │ localhost:   │              │ localhost:   │                 │
-│   │    5173      │              │    3000      │                 │
-│   └──────────────┘              └──────────────┘                 │
-│                                                                  │
-│   listenIp: "0.0.0.0"                                            │
-│   announcedIp: "127.0.0.1"                                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Local Development"
+        BROWSER["Browser<br/>localhost:5173"] <-->|"localhost"| SERVER["Server<br/>localhost:3000"]
+    end
+    
+    CONFIG["listenIp: '0.0.0.0'<br/>announcedIp: '127.0.0.1'"]
 ```
 
 ```typescript
@@ -118,21 +105,13 @@ const getAnnouncedIp = () => {
 
 When testing with multiple devices on the same network (e.g., testing on phone):
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Local Network (LAN)                           │
-│                                                                  │
-│        Your Mac                          iPhone                  │
-│   ┌──────────────┐                  ┌──────────────┐             │
-│   │   Server     │                  │   Browser    │             │
-│   │              │◄────────────────►│              │             │
-│   │ 192.168.1.10 │    WiFi/LAN      │              │             │
-│   │    :3000     │                  │              │             │
-│   └──────────────┘                  └──────────────┘             │
-│                                                                  │
-│   listenIp: "0.0.0.0"                                            │
-│   announcedIp: "192.168.1.10"  (your Mac's LAN IP)               │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    subgraph "Local Network (LAN)"
+        MAC["Your Mac<br/>Server<br/>192.168.1.10:3000"] <-->|"WiFi/LAN"| PHONE["iPhone<br/>Browser"]
+    end
+    
+    CONFIG["listenIp: '0.0.0.0'<br/>announcedIp: '192.168.1.10' (your Mac's LAN IP)"]
 ```
 
 ```typescript
@@ -160,21 +139,16 @@ ipconfig | findstr IPv4
 
 When deploying to a cloud server with a public IP:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Production                                 │
-│                                                                  │
-│   Cloud Server (AWS/GCP/etc)              Internet Users         │
-│   ┌──────────────────────┐           ┌──────────────┐            │
-│   │                      │           │   Browser    │            │
-│   │  Internal: 10.0.0.5  │◄─────────►│   (Alice)    │            │
-│   │  Public: 203.0.113.50│  Internet │              │            │
-│   │                      │           └──────────────┘            │
-│   │  listenIp: 0.0.0.0   │           ┌──────────────┐            │
-│   │  announcedIp:        │◄─────────►│   Browser    │            │
-│   │    203.0.113.50      │           │   (Bob)      │            │
-│   └──────────────────────┘           └──────────────┘            │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Production"
+        subgraph "Cloud Server (AWS/GCP/etc)"
+            SERVER["Internal: 10.0.0.5<br/>Public: 203.0.113.50<br/><br/>listenIp: 0.0.0.0<br/>announcedIp: 203.0.113.50"]
+        end
+        
+        SERVER <-->|"Internet"| ALICE["Browser (Alice)"]
+        SERVER <-->|"Internet"| BOB["Browser (Bob)"]
+    end
 ```
 
 ```typescript
@@ -202,25 +176,15 @@ curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMeta
 
 Docker adds another layer of networking complexity:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Docker Networking                            │
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │                     Host Machine                         │   │
-│   │   Public IP: 203.0.113.50                                │   │
-│   │                                                          │   │
-│   │   ┌─────────────────────────────────────────────────┐    │   │
-│   │   │              Docker Container                    │    │   │
-│   │   │                                                  │    │   │
-│   │   │   Container IP: 172.17.0.2                       │    │   │
-│   │   │                                                  │    │   │
-│   │   │   listenIp: 0.0.0.0                              │    │   │
-│   │   │   announcedIp: 203.0.113.50 (host's public IP)   │    │   │
-│   │   │                                                  │    │   │
-│   │   └─────────────────────────────────────────────────┘    │   │
-│   └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Host Machine"
+        HOST_INFO["Public IP: 203.0.113.50"]
+        
+        subgraph "Docker Container"
+            CONTAINER["Container IP: 172.17.0.2<br/><br/>listenIp: 0.0.0.0<br/>announcedIp: 203.0.113.50<br/>(host's public IP)"]
+        end
+    end
 ```
 
 **Option 1: Host Network Mode (Recommended)**

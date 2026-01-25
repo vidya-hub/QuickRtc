@@ -92,8 +92,8 @@ export interface Conference {
   consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;
   resumeConsumer(resumeParams: ResumeConsumerParams): Promise<void>;
   participantsMapToArray(participantsMap: ParticipantsMap): Participant[];
-  pauseProducer(participantId: string, producerId: string): void;
-  resumeProducer(participantId: string, producerId: string): Promise<void>;
+  pauseProducer(participantId: string, producerId: string): "audio" | "video" | null;
+  resumeProducer(participantId: string, producerId: string): Promise<"audio" | "video" | null>;
   pauseConsumer(participantId: string, consumerId: string): Promise<void>;
   closeProducer(
     participantId: string,
@@ -158,8 +158,8 @@ export interface Participant {
   produce(produceParams: ProduceParams): Promise<string>;
   consume(consumeParams: ConsumeParams): Promise<ConsumerResponse>;
   resumeConsumer(consumerId: string): Promise<void>;
-  pauseProducer(producerId: string): void;
-  resumeProducer(producerId: string): void;
+  pauseProducer(producerId: string): "audio" | "video" | null;
+  resumeProducer(producerId: string): "audio" | "video" | null;
   pauseConsumer(consumerId: string): void;
   closeAllProducers(): Promise<string[]>;
   closeAllConsumers(): Promise<string[]>;

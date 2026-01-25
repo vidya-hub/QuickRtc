@@ -9,13 +9,14 @@ QuickRTC is a simple WebRTC conferencing SDK built on [mediasoup](https://medias
 
 ## Overview
 
-QuickRTC consists of three packages:
+QuickRTC consists of four packages:
 
-| Package | Description |
-|---------|-------------|
-| `quickrtc-client` | Core JavaScript/TypeScript client SDK |
-| `quickrtc-server` | Node.js server with mediasoup integration |
-| `quickrtc-react-client` | React hooks and components |
+| Package                   | Description                                  |
+| ------------------------- | -------------------------------------------- |
+| `quickrtc-client`         | Core JavaScript/TypeScript client SDK        |
+| `quickrtc-server`         | Node.js server with mediasoup integration    |
+| `quickrtc-react-client`   | React hooks and components                   |
+| `quickrtc-flutter-client` | Flutter SDK for Android, iOS, macOS, and Web |
 
 ## Quick Start
 
@@ -44,10 +45,13 @@ import { QuickRTCServer } from "quickrtc-server";
 const app = express();
 
 // HTTPS is required for WebRTC
-const httpsServer = createServer({
-  key: readFileSync("key.pem"),
-  cert: readFileSync("cert.pem"),
-}, app);
+const httpsServer = createServer(
+  {
+    key: readFileSync("key.pem"),
+    cert: readFileSync("cert.pem"),
+  },
+  app,
+);
 
 const io = new SocketIOServer(httpsServer, {
   cors: { origin: "*" },
@@ -79,9 +83,9 @@ const rtc = new QuickRTC({ socket });
 // Listen for remote participants
 rtc.on("newParticipant", ({ participantName, streams }) => {
   console.log(`${participantName} joined with ${streams.length} streams`);
-  
+
   // Streams are auto-consumed and ready to use
-  streams.forEach(stream => {
+  streams.forEach((stream) => {
     const video = document.createElement("video");
     video.srcObject = stream.stream;
     video.autoplay = true;
@@ -116,7 +120,7 @@ const mediaStream = await navigator.mediaDevices.getUserMedia({
 const localStreams = await rtc.produce(mediaStream.getTracks());
 
 // Each local stream has controls
-localStreams.forEach(stream => {
+localStreams.forEach((stream) => {
   console.log(`Producing ${stream.type}`);
   // stream.pause()
   // stream.resume()
@@ -161,3 +165,4 @@ interface LocalStream {
 - [Client SDK Documentation](/docs/client/overview)
 - [Server SDK Documentation](/docs/server/overview)
 - [React Integration](/docs/react/overview)
+- [Flutter SDK](/docs/flutter/getting-started)

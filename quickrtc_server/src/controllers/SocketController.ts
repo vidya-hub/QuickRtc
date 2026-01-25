@@ -116,6 +116,26 @@ class SocketEventController extends EnhancedEventEmitter {
       );
 
       socket.on(
+        "pauseProducer",
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.pauseProducer(socketEventData, socket, callback);
+        }
+      );
+
+      socket.on(
+        "unpauseProducer",
+        async (
+          socketEventData: ProducerControlRequest,
+          callback: (response: SocketResponse) => void
+        ) => {
+          await this.unpauseProducer(socketEventData, socket, callback);
+        }
+      );
+
+      socket.on(
         "closeConsumer",
         async (
           socketEventData: CloseConsumerRequest,
@@ -265,6 +285,9 @@ class SocketEventController extends EnhancedEventEmitter {
             // Get producer info to include streamType
             const producerInfo = conference?.getProducerInfo(producerId);
             const streamType = producerInfo?.streamType as "audio" | "video" | "screenshare" | undefined;
+            
+            console.log(`[CONSUME] producerId: ${producerId}, kind: ${consumerResponse.kind}, producerInfo.streamType: ${producerInfo?.streamType}, final streamType: ${streamType || consumerResponse.kind}`);
+            
             consumerParams.push({
               ...consumerResponse,
               targetParticipantId,
@@ -346,6 +369,92 @@ class SocketEventController extends EnhancedEventEmitter {
       this.emit("producerClosed", producerClosedData);
     } catch (error) {
       console.error("Error closing producer:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  private async pauseProducer(
+    socketEventData: ProducerControlRequest,
+    socket: Socket,
+    callback: (response: SocketResponse) => void
+  ) {
+    const { conferenceId, participantId, extraData } = socketEventData;
+    const producerId = extraData?.producerId;
+
+    if (!producerId) {
+      callback({ status: "error", error: "Missing producerId" });
+      return;
+    }
+
+    try {
+      const kind = await this.mediasoupController?.pauseProducer({
+        conferenceId,
+        participantId,
+        producerId,
+      });
+      callback({ status: "ok" });
+
+      // Broadcast mute event to other participants
+      if (kind === "audio") {
+        const mutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("audioMuted", mutedData);
+        this.emit("audioMuted", mutedData);
+      } else if (kind === "video") {
+        const mutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("videoMuted", mutedData);
+        this.emit("videoMuted", mutedData);
+      }
+    } catch (error) {
+      console.error("Error pausing producer:", error);
+      callback({ status: "error", error: (error as Error).message });
+    }
+  }
+
+  private async unpauseProducer(
+    socketEventData: ProducerControlRequest,
+    socket: Socket,
+    callback: (response: SocketResponse) => void
+  ) {
+    const { conferenceId, participantId, extraData } = socketEventData;
+    const producerId = extraData?.producerId;
+
+    if (!producerId) {
+      callback({ status: "error", error: "Missing producerId" });
+      return;
+    }
+
+    try {
+      const kind = await this.mediasoupController?.resumeProducer({
+        conferenceId,
+        participantId,
+        producerId,
+      });
+      callback({ status: "ok" });
+
+      // Broadcast unmute event to other participants
+      if (kind === "audio") {
+        const unmutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("audioUnmuted", unmutedData);
+        this.emit("audioUnmuted", unmutedData);
+      } else if (kind === "video") {
+        const unmutedData: MediaMutedData = {
+          participantId,
+          conferenceId,
+        };
+        socket.to(conferenceId).emit("videoUnmuted", unmutedData);
+        this.emit("videoUnmuted", unmutedData);
+      }
+    } catch (error) {
+      console.error("Error unpausing producer:", error);
       callback({ status: "error", error: (error as Error).message });
     }
   }
@@ -449,6 +558,14 @@ class SocketEventController extends EnhancedEventEmitter {
           this.mediasoupController.workerService.mediasoupConfig
             .transportConfig,
       });
+      
+      // Log ICE candidates being sent to client
+      console.log(`[ICE] Transport created for ${participantId} (${direction})`);
+      console.log(`[ICE] ID: ${transport?.id}`);
+      console.log(`[ICE] ICE Parameters:`, JSON.stringify(transport?.iceParameters, null, 2));
+      console.log(`[ICE] ICE Candidates:`, JSON.stringify(transport?.iceCandidates, null, 2));
+      console.log(`[ICE] DTLS Parameters:`, JSON.stringify(transport?.dtlsParameters, null, 2));
+      
       this.emit("transportCreated", transport);
       callback({
         status: "ok",
@@ -478,6 +595,10 @@ class SocketEventController extends EnhancedEventEmitter {
       callback({ status: "error", error: "Missing required parameters" });
       return;
     }
+    
+    console.log(`[DTLS] Connect transport for ${participantId} (${direction})`);
+    console.log(`[DTLS] DTLS Parameters from client:`, JSON.stringify(dtlsParameters, null, 2));
+    
     try {
       await this.mediasoupController?.connectTransport({
         conferenceId,
@@ -485,6 +606,9 @@ class SocketEventController extends EnhancedEventEmitter {
         dtlsParameters: dtlsParameters,
         direction: direction,
       });
+      
+      console.log(`[DTLS] Transport connected successfully for ${participantId} (${direction})`);
+      
       this.emit("transportConnected", {
         conferenceId,
         participantId,
@@ -492,7 +616,7 @@ class SocketEventController extends EnhancedEventEmitter {
       });
       callback({ status: "ok" });
     } catch (error) {
-      console.error("Error connecting transport:", error);
+      console.error(`[DTLS] Error connecting transport for ${participantId} (${direction}):`, error);
       callback({ status: "error", error: (error as Error).message });
     }
   }
@@ -509,6 +633,9 @@ class SocketEventController extends EnhancedEventEmitter {
       rtpParameters, 
       appData: { participantId, streamType: streamType || kind } 
     };
+    
+    console.log(`[PRODUCE] Received produce request - kind: ${kind}, streamType: ${streamType}, appData.streamType: ${producerOptions.appData.streamType}`);
+    
     try {
       if (!transportId || !kind || !rtpParameters) {
         callback({

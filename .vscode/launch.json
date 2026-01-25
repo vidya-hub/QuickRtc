@@ -5,24 +5,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "quickrtc-flutter-example",
-      "cwd": "quickrtc-flutter-example",
-      "request": "launch",
-      "type": "dart"
-    },
-    {
-      "name": "quickrtc-flutter-example (profile mode)",
-      "cwd": "quickrtc-flutter-example",
+      "name": "quickrtc-example",
+      "cwd": "quickrtc-example",
       "request": "launch",
       "type": "dart",
-      "flutterMode": "profile"
-    },
-    {
-      "name": "quickrtc-flutter-example (release mode)",
-      "cwd": "quickrtc-flutter-example",
-      "request": "launch",
-      "type": "dart",
-      "flutterMode": "release"
+      "program": "flutter-client/lib/main.dart"
     }
   ]
 }
