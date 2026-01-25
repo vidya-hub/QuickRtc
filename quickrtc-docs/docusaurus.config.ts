@@ -11,7 +11,7 @@ const config: Config = {
     v4: true,
   },
 
-  url: "https://quickrtc.dev",
+  url: "https://quickrtc-docs.vercel.app",
   baseUrl: "/",
 
   organizationName: "quickrtc",

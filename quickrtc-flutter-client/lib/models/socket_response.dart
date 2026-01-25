@@ -5,7 +5,7 @@ part 'socket_response.g.dart';
 
 /// Standard response from socket server
 @Freezed(genericArgumentFactories: true)
-class SocketResponse<T> with _$SocketResponse<T> {
+abstract class SocketResponse<T> with _$SocketResponse<T> {
   const factory SocketResponse({
     required String status, // 'ok' or 'error'
     T? data,

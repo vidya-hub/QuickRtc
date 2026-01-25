@@ -13,10 +13,7 @@ A Flutter WebRTC library built on MediaSoup for real-time video conferencing.
 
 ```yaml
 dependencies:
-  quickrtc_flutter_client:
-    git:
-      url: https://github.com/vidya-hub/QuickRTC.git
-      path: quickrtc-flutter-client
+  quickrtc_flutter_client: ^1.0.2
 ```
 
 ## Quick Start
@@ -38,6 +35,12 @@ socket.connect();
 // Create controller
 final controller = QuickRTCController(socket: socket, debug: true);
 
+// Wrap your app with QuickRTCProvider
+QuickRTCProvider(
+  controller: controller,
+  child: const MyApp(),
+);
+
 // Join meeting
 await controller.joinMeeting(
   conferenceId: 'my-room',
@@ -45,59 +48,84 @@ await controller.joinMeeting(
 );
 ```
 
-### 2. Start Camera & Mic
+## Builder, Consumer & Listener Patterns
+
+The SDK provides several widgets to simplify state management and UI updates.
+
+### QuickRTCBuilder
+
+Use this for reactive UI updates. It only rebuilds when the specified condition is met.
 
 ```dart
-// Get media
-final media = await QuickRTCStatic.getLocalMedia(MediaConfig.audioVideo());
-
-// Publish to meeting
-await controller.produce(
-  ProduceInput.fromTracksWithTypes(media.tracksWithTypes),
-);
+QuickRTCBuilder(
+  buildWhen: (prev, curr) => prev.participantCount != curr.participantCount,
+  builder: (context, state) {
+    return Text('Participants: ${state.participantCount}');
+  },
+)
 ```
 
-### 3. Control Media
+### QuickRTCConsumer
+
+Use this when you need both the `controller` and the `state` in your build method.
 
 ```dart
-await controller.toggleMicrophoneMute();  // Mute/unmute mic
-await controller.toggleCameraPause();     // Pause/resume camera
+QuickRTCConsumer(
+  builder: (context, controller, state, child) {
+    return IconButton(
+      icon: Icon(state.isLocalAudioPaused ? Icons.mic_off : Icons.mic),
+      onPressed: () => controller.toggleMicrophoneMute(),
+    );
+  },
+)
 ```
 
-### 4. Render Video
+### QuickRTCListener
+
+Use this for occasional side effects like showing notifications or navigation, without rebuilding the UI.
 
 ```dart
-// Local video
+QuickRTCListener(
+  listenWhen: (prev, curr) => prev.error != curr.error && curr.error != null,
+  listener: (context, controller) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(controller.state.error!)),
+    );
+  },
+  child: const YourWidget(),
+)
+```
+
+## Rendering Media
+
+### QuickRTCMediaRenderer
+
+Powerful widget for rendering local and remote video streams.
+
+```dart
+// Local video with mirroring
 QuickRTCMediaRenderer(
-  stream: localStream,
+  stream: state.localVideoStream?.stream,
   mirror: true,
   isLocal: true,
   participantName: 'You',
 )
 
-// Remote video
+// Remote video from participant
 QuickRTCMediaRenderer(
   remoteStream: participant.videoStream,
   participantName: participant.name,
+  isAudioEnabled: participant.hasAudio && !participant.isAudioMuted,
+  isVideoEnabled: participant.hasVideo && !participant.isVideoMuted,
 )
-
-// Remote audio (invisible - handles playback)
-QuickRTCAudioRenderers(participants: state.participantList)
 ```
 
-### 5. Listen to State
+### QuickRTCAudioRenderers
+
+Invisible widget that handles audio playback for all remote participants.
 
 ```dart
-ListenableBuilder(
-  listenable: controller,
-  builder: (context, _) {
-    final state = controller.state;
-    // state.participantList - remote participants
-    // state.hasLocalVideo - camera active
-    // state.hasLocalAudio - mic active
-    return YourUI();
-  },
-)
+QuickRTCAudioRenderers(participants: state.participantList)
 ```
 
 ### 6. Leave
@@ -198,8 +226,8 @@ participant.isAudioMuted    // bool
 
 ## Example
 
-See [example/](./example) for code snippets demonstrating all features.
+See [example/](./example) for code snippets demonstrating basic features. For a complete working application, refer to the [QuickRTC Example Repository](https://github.com/vidya-hub/QuickRTC/tree/main/quickrtc-example/flutter-client).
 
 ## Documentation
 
-Full documentation: [quickrtc.dev/docs/flutter](https://quickrtc.dev/docs/flutter/overview)
+Full documentation: [quickrtc-docs.vercel.app/docs/flutter/getting-started](https://quickrtc-docs.vercel.app/docs/flutter/getting-started)

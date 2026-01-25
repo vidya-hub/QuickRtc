@@ -5,7 +5,7 @@ part 'consumer_params.g.dart';
 
 /// Parameters for creating a consumer
 @freezed
-class ConsumerParams with _$ConsumerParams {
+abstract class ConsumerParams with _$ConsumerParams {
   const factory ConsumerParams({
     required String id,
     required String producerId,

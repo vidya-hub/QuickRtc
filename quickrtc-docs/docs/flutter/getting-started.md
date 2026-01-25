@@ -10,10 +10,7 @@ Set up your first video call with the QuickRTC Flutter SDK.
 
 ```yaml
 dependencies:
-  quickrtc_flutter_client:
-    git:
-      url: https://github.com/vidya-hub/QuickRTC.git
-      path: quickrtc-flutter-client
+  quickrtc_flutter_client: ^1.0.2
 ```
 
 ```bash

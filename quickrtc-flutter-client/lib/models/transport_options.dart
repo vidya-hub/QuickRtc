@@ -5,7 +5,7 @@ part 'transport_options.g.dart';
 
 /// Options for creating a WebRTC transport
 @freezed
-class TransportOptions with _$TransportOptions {
+abstract class TransportOptions with _$TransportOptions {
   const factory TransportOptions({
     required String id,
     required Map<String, dynamic> iceParameters,
@@ -20,7 +20,7 @@ class TransportOptions with _$TransportOptions {
 
 /// Pair of send and receive transports
 @freezed
-class TransportPair with _$TransportPair {
+abstract class TransportPair with _$TransportPair {
   const factory TransportPair({
     required TransportOptions sendTransport,
     required TransportOptions recvTransport,

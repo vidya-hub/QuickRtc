@@ -1,7 +1,7 @@
 name: quickrtc_flutter_client_example
 description: Example app demonstrating QuickRTC Flutter Client usage
 publish_to: "none"
-version: 1.0.0
+version: 1.0.2
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -16,7 +16,7 @@ dependencies:
     path: ../
 
   # Socket.IO for signaling
-  socket_io_client: ^2.0.3+1
+  socket_io_client: ^3.1.4
 
 dev_dependencies:
   flutter_test:

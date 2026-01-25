@@ -1,11 +1,11 @@
 # QuickRTC Documentation
-# https://quickrtc.dev
+# https://quickrtc-docs.vercel.app
 
 User-agent: *
 Allow: /
 
 # Sitemaps
-Sitemap: https://quickrtc.dev/sitemap.xml
+Sitemap: https://quickrtc-docs.vercel.app/sitemap.xml
 
 # LLM-specific files
 # These files provide structured content for AI/LLM consumption

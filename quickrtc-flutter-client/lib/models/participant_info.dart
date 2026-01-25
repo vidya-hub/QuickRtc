@@ -5,7 +5,7 @@ part 'participant_info.g.dart';
 
 /// Basic information about a participant
 @freezed
-class ParticipantInfo with _$ParticipantInfo {
+abstract class ParticipantInfo with _$ParticipantInfo {
   const factory ParticipantInfo({
     required String participantId,
     required String participantName,

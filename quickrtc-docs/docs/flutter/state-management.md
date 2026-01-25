@@ -77,9 +77,13 @@ Combines Provider + Listener + Builder:
 
 ```dart
 QuickRTCConsumer(
-  controller: controller,
+  controller: controller, // Optional if inside a QuickRTCProvider
   listener: (context, controller) {
-    // Handle side effects
+    if (controller.state.hasError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(controller.state.error!)),
+      );
+    }
   },
   builder: (context, state, controller) {
     return VideoGrid(participants: state.participantList);

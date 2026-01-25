@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'quickrtc_flutter_client'
-  s.version          = '1.0.0'
+  s.version          = '1.0.2'
   s.summary          = 'QuickRTC Flutter Client Plugin'
   s.description      = <<-DESC
 A Flutter WebRTC client library built on MediaSoup for real-time video conferencing.
