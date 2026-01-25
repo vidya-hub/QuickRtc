@@ -1,17 +1,15 @@
-# quickrtc-flutter-client
+# QuickRTC Flutter Client
 
-Flutter client library for QuickRTC conferencing.
+A Flutter WebRTC library built on MediaSoup for real-time video conferencing.
 
 ## Features
 
-- **State management agnostic** - Works with Provider, Riverpod, BLoC, GetX, or plain setState
-- **Event-driven API** - Simple subscribe/unsubscribe pattern
-- **Cross-platform** - Android, iOS, Web, Desktop
-- **Auto-consume** - Automatically handles new participant streams
+- **Simple API** - High-level methods for common tasks
+- **Cross-Platform** - Android, iOS, macOS, Web
+- **Screen Sharing** - Full support for all platforms
+- **Auto-Consume** - Automatically handles new participant streams
 
 ## Installation
-
-Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
@@ -23,230 +21,185 @@ dependencies:
 
 ## Quick Start
 
+### 1. Connect & Join
+
 ```dart
 import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
-class ConferenceScreen extends StatefulWidget {
-  @override
-  State<ConferenceScreen> createState() => _ConferenceScreenState();
-}
+// Create socket
+final socket = io.io('https://your-server.com:3000',
+  io.OptionBuilder()
+    .setTransports(['websocket'])
+    .disableAutoConnect()
+    .build());
+socket.connect();
 
-class _ConferenceScreenState extends State<ConferenceScreen> {
-  late QuickRTC rtc;
-  List<RemoteStream> remoteStreams = [];
-  List<LocalStream> localStreams = [];
-  List<Participant> participants = [];
+// Create controller
+final controller = QuickRTCController(socket: socket, debug: true);
 
-  @override
-  void initState() {
-    super.initState();
-    
-    final socket = io.io('https://your-server.com', <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': true,
-    });
-
-    rtc = QuickRTC(QuickRTCConfig(socket: socket, debug: true));
-
-    rtc.on<NewParticipantEvent>('newParticipant', (event) {
-      setState(() {
-        participants.add(Participant(id: event.participantId, name: event.participantName));
-        remoteStreams.addAll(event.streams);
-      });
-    });
-
-    rtc.on<RemoteStream>('streamAdded', (stream) {
-      setState(() => remoteStreams.add(stream));
-    });
-
-    rtc.on<StreamRemovedEvent>('streamRemoved', (event) {
-      setState(() => remoteStreams.removeWhere((s) => s.id == event.streamId));
-    });
-
-    rtc.on<ParticipantLeftEvent>('participantLeft', (event) {
-      setState(() {
-        participants.removeWhere((p) => p.id == event.participantId);
-        remoteStreams.removeWhere((s) => s.participantId == event.participantId);
-      });
-    });
-
-    rtc.on<LocalStreamEndedEvent>('localStreamEnded', (event) {
-      setState(() => localStreams.removeWhere((s) => s.id == event.streamId));
-    });
-  }
-
-  Future<void> _join() async {
-    await rtc.join(JoinConfig(
-      conferenceId: 'room-123',
-      participantName: 'Alice',
-    ));
-
-    final media = await navigator.mediaDevices.getUserMedia({
-      'audio': true,
-      'video': true,
-    });
-
-    final streams = await rtc.produce(ProduceInput.fromTracks(media.getTracks()));
-    setState(() => localStreams.addAll(streams));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          // Local videos
-          ...localStreams.map((s) => RTCVideoView(
-            RTCVideoRenderer()..srcObject = s.stream,
-            mirror: true,
-          )),
-          // Remote videos
-          ...remoteStreams.map((s) => RTCVideoView(
-            RTCVideoRenderer()..srcObject = s.stream,
-          )),
-          ElevatedButton(onPressed: _join, child: Text('Join')),
-        ],
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    rtc.dispose();
-    super.dispose();
-  }
-}
+// Join meeting
+await controller.joinMeeting(
+  conferenceId: 'my-room',
+  participantName: 'John',
+);
 ```
 
-## Events
-
-| Event | When | Data |
-|-------|------|------|
-| `newParticipant` | Someone joins | `NewParticipantEvent { participantId, participantName, streams[] }` |
-| `streamAdded` | Participant starts sharing | `RemoteStream { id, type, stream, participantId, participantName }` |
-| `streamRemoved` | Participant stops sharing | `StreamRemovedEvent { participantId, streamId, type }` |
-| `participantLeft` | Someone leaves | `ParticipantLeftEvent { participantId }` |
-| `localStreamEnded` | Your stream stopped externally | `LocalStreamEndedEvent { streamId, type }` |
-| `connected` | Joined conference | `ConnectedEvent { conferenceId, participantId }` |
-| `disconnected` | Left conference | `DisconnectedEvent { reason }` |
-| `error` | Error occurred | `ErrorEvent { message, error }` |
-
-## API
-
-### QuickRTC
+### 2. Start Camera & Mic
 
 ```dart
-final rtc = QuickRTC(QuickRTCConfig(
-  socket: socket,        // Socket.IO client instance
-  maxParticipants: 0,    // 0 = unlimited
-  debug: false,          // Enable debug logging
-));
+// Get media
+final media = await QuickRTCStatic.getLocalMedia(MediaConfig.audioVideo());
 
-// Properties
-rtc.isConnected          // bool - connected to conference
-rtc.conferenceId         // String? - current conference ID
-rtc.participantId        // String? - your participant ID
-rtc.participants         // Map<String, Participant> - remote participants
-rtc.localStreams         // Map<String, LocalStream> - your streams
-rtc.remoteStreams        // Map<String, RemoteStream> - remote streams
-
-// Methods
-await rtc.join(JoinConfig(...))              // Join conference
-await rtc.leave()                            // Leave conference
-await rtc.produce(ProduceInput.fromTrack(track))  // Produce media
-await rtc.pause(streamId)                    // Pause local stream
-await rtc.resume(streamId)                   // Resume local stream
-await rtc.stop(streamId)                     // Stop local stream
-rtc.on<T>(event, handler)                    // Subscribe to event
-rtc.off<T>(event, handler)                   // Unsubscribe from event
-rtc.dispose()                                // Cleanup resources
+// Publish to meeting
+await controller.produce(
+  ProduceInput.fromTracksWithTypes(media.tracksWithTypes),
+);
 ```
 
-### ProduceInput
+### 3. Control Media
 
 ```dart
-// Single track
-ProduceInput.fromTrack(track)
-ProduceInput.fromTrack(track, type: StreamType.screenshare)
-
-// Multiple tracks
-ProduceInput.fromTracks([audioTrack, videoTrack])
-
-// Tracks with explicit types
-ProduceInput.fromTracksWithTypes([
-  TrackWithType(track: screenTrack, type: StreamType.screenshare),
-])
+await controller.toggleMicrophoneMute();  // Mute/unmute mic
+await controller.toggleCameraPause();     // Pause/resume camera
 ```
 
-### LocalStream
+### 4. Render Video
 
 ```dart
-localStream.id           // Stream ID
-localStream.type         // StreamType (audio, video, screenshare)
-localStream.stream       // MediaStream
-localStream.track        // MediaStreamTrack
-localStream.paused       // bool
+// Local video
+QuickRTCMediaRenderer(
+  stream: localStream,
+  mirror: true,
+  isLocal: true,
+  participantName: 'You',
+)
 
-await localStream.pause()
-await localStream.resume()
-await localStream.stop()
+// Remote video
+QuickRTCMediaRenderer(
+  remoteStream: participant.videoStream,
+  participantName: participant.name,
+)
+
+// Remote audio (invisible - handles playback)
+QuickRTCAudioRenderers(participants: state.participantList)
+```
+
+### 5. Listen to State
+
+```dart
+ListenableBuilder(
+  listenable: controller,
+  builder: (context, _) {
+    final state = controller.state;
+    // state.participantList - remote participants
+    // state.hasLocalVideo - camera active
+    // state.hasLocalAudio - mic active
+    return YourUI();
+  },
+)
+```
+
+### 6. Leave
+
+```dart
+await controller.leaveMeeting();
+controller.dispose();
+socket.disconnect();
+```
+
+## Screen Sharing
+
+```dart
+// Mobile
+final media = await QuickRTCStatic.getLocalMedia(MediaConfig.screenShareOnly());
+
+// Desktop (with picker)
+final media = await QuickRTCStatic.getScreenShareWithPicker(context);
+
+// Publish
+await controller.produce(
+  ProduceInput.fromTrack(media.screenshareTrack!, type: StreamType.screenshare),
+);
 ```
 
 ## Platform Setup
 
 ### Android
 
-Add to `android/app/src/main/AndroidManifest.xml`:
+`android/app/src/main/AndroidManifest.xml`:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 ```
 
-Set minimum SDK in `android/app/build.gradle`:
+`android/app/build.gradle`:
 
 ```gradle
 android {
     defaultConfig {
-        minSdkVersion 21
+        minSdkVersion 24
     }
 }
 ```
 
 ### iOS
 
-Add to `ios/Runner/Info.plist`:
+`ios/Runner/Info.plist`:
 
 ```xml
 <key>NSCameraUsageDescription</key>
-<string>Camera access required for video calls</string>
+<string>Camera for video calls</string>
 <key>NSMicrophoneUsageDescription</key>
-<string>Microphone access required for audio calls</string>
+<string>Microphone for audio calls</string>
 ```
 
-### Web
+### macOS
 
-Add to `web/index.html`:
+`macos/Runner/*.entitlements`:
 
-```html
-<script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+```xml
+<key>com.apple.security.device.camera</key>
+<true/>
+<key>com.apple.security.device.audio-input</key>
+<true/>
+<key>com.apple.security.network.client</key>
+<true/>
 ```
 
-## Widgets
-
-### RTCVideoRendererWidget
+## State Properties
 
 ```dart
-RTCVideoRendererWidget(
-  stream: mediaStream,
-  mirror: false,         // Flip horizontally (for self-view)
-  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-)
+state.isConnected           // Connection status
+state.participantList       // List<RemoteParticipant>
+state.participantCount      // Number of participants
+state.hasLocalAudio         // Mic active
+state.hasLocalVideo         // Camera active
+state.isLocalAudioPaused    // Mic muted
+state.isLocalVideoPaused    // Camera paused
+state.localVideoStream      // LocalStream?
+state.localAudioStream      // LocalStream?
 ```
 
-## License
+## RemoteParticipant
 
-ISC
+```dart
+participant.id              // String
+participant.name            // String
+participant.videoStream     // RemoteStream?
+participant.audioStream     // RemoteStream?
+participant.hasVideo        // bool
+participant.hasAudio        // bool
+participant.isVideoMuted    // bool
+participant.isAudioMuted    // bool
+```
+
+## Example
+
+See [example/](./example) for code snippets demonstrating all features.
+
+## Documentation
+
+Full documentation: [quickrtc.dev/docs/flutter](https://quickrtc.dev/docs/flutter/overview)

@@ -17,6 +17,8 @@ import {
   IconShield,
   IconVideo,
   IconGithub,
+  IconFlutter,
+  IconMobile,
 } from "../components/Icons";
 
 const clientExample = `import { QuickRTC } from "quickrtc-client";
@@ -70,6 +72,31 @@ function VideoRoom() {
   );
 }`;
 
+const flutterExample = `import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
+
+// Create controller with socket
+final controller = QuickRTCController(socket: socket);
+
+// Join and enable media
+await controller.joinMeeting(
+  conferenceId: 'room-1',
+  participantName: 'Alice',
+);
+await controller.enableMedia();
+
+// Build reactive UI
+QuickRTCBuilder(
+  builder: (context, state) {
+    return GridView.builder(
+      itemCount: state.participantList.length,
+      itemBuilder: (context, i) => QuickRTCMediaRenderer(
+        remoteStream: state.participantList[i].videoStream,
+        participantName: state.participantList[i].name,
+      ),
+    );
+  },
+);`;
+
 const features = [
   {
     icon: <IconCode className="w-full h-full" />,
@@ -90,10 +117,10 @@ const features = [
       "First-class React support with hooks and components. useQuickRTC hook handles all the complexity for you.",
   },
   {
-    icon: <IconTypeScript className="w-full h-full" />,
-    title: "TypeScript First",
+    icon: <IconFlutter className="w-full h-full" />,
+    title: "Flutter SDK",
     description:
-      "Full TypeScript support with comprehensive type definitions. Enjoy autocomplete and type safety throughout.",
+      "Full-featured Flutter SDK for iOS, Android, macOS, and Web. Reactive state management with QuickRTCBuilder.",
   },
   {
     icon: <IconScale className="w-full h-full" />,
@@ -131,6 +158,14 @@ const packages = [
     install: "npm install quickrtc-react-client",
     type: "react" as const,
   },
+  {
+    name: "quickrtc-flutter-client",
+    description:
+      "Flutter SDK for Android, iOS, macOS, and Web with reactive state management.",
+    install: "flutter pub add quickrtc_flutter_client",
+    type: "flutter" as const,
+    badge: "pub.dev",
+  },
 ];
 
 const codeExamples = [
@@ -151,6 +186,13 @@ const codeExamples = [
     description:
       "Use the useQuickRTC hook for seamless React integration with automatic state management.",
     code: reactExample,
+  },
+  {
+    title: "Flutter SDK",
+    description:
+      "Build cross-platform video apps with reactive state management using QuickRTCBuilder.",
+    code: flutterExample,
+    language: "dart",
   },
 ];
 
@@ -184,7 +226,7 @@ function HeroSection() {
           {/* Description */}
           <p className="text-base lg:text-lg text-neutral-500 dark:text-neutral-500 mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
             Production-ready video conferencing SDK with automatic stream
-            management, event-driven architecture, and React hooks. 
+            management, event-driven architecture, React hooks, and Flutter support.
             Build real-time video apps in minutes.
           </p>
 
@@ -249,7 +291,7 @@ function PackagesSection() {
           description="QuickRTC is split into focused packages so you can use exactly what you need."
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
           {packages.map((pkg) => (
             <PackageCard
               key={pkg.name}
@@ -257,6 +299,7 @@ function PackagesSection() {
               description={pkg.description}
               install={pkg.install}
               type={pkg.type}
+              badge={(pkg as any).badge}
             />
           ))}
         </div>
@@ -296,7 +339,7 @@ function CodeExamplesSection() {
               </div>
               <div className={`${idx % 2 === 1 ? "lg:order-1" : ""}`}>
                 <div className="code-block-wrapper rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 shadow-lg">
-                  <CodeBlock language="typescript">{example.code}</CodeBlock>
+                  <CodeBlock language={(example as any).language || "typescript"}>{example.code}</CodeBlock>
                 </div>
               </div>
             </div>

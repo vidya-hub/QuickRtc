@@ -1,20 +1,22 @@
-import { IconTerminal, IconServer, IconReact } from "./Icons";
+import { IconTerminal, IconServer, IconReact, IconFlutter } from "./Icons";
 import { CopyButton } from "./CopyButton";
 
 interface PackageCardProps {
   name: string;
   description: string;
   install: string;
-  type: "client" | "server" | "react";
+  type: "client" | "server" | "react" | "flutter";
+  badge?: string;
 }
 
 const icons = {
   client: IconTerminal,
   server: IconServer,
   react: IconReact,
+  flutter: IconFlutter,
 };
 
-export function PackageCard({ name, description, install, type }: PackageCardProps) {
+export function PackageCard({ name, description, install, type, badge = "npm" }: PackageCardProps) {
   const Icon = icons[type];
 
   return (
@@ -27,7 +29,7 @@ export function PackageCard({ name, description, install, type }: PackageCardPro
             <Icon className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
           </div>
           <span className="text-xs font-medium px-2 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
-            npm
+            {badge}
           </span>
         </div>
         
