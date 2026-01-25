@@ -1,11 +1,11 @@
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'ortc.dart';
-import 'rtp_parameters.dart';
-import 'sctp_parameters.dart';
-import 'transport.dart';
-import 'common/enhanced_event_emitter.dart';
-import 'common/logger.dart';
-import 'handlers/handler_interface.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/ortc.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sctp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/transport.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/handlers/handler_interface.dart';
 
 Logger _logger = Logger('Device');
 
@@ -22,7 +22,7 @@ class Device {
   // Local SCTP capabilities.
   SctpCapabilities? _sctpCapabilities;
   // Observer instance.
-  EnhancedEventEmitter _observer = EnhancedEventEmitter();
+  final EnhancedEventEmitter _observer = EnhancedEventEmitter();
 
   // Whether the Device is loaded.
   bool get loaded => _loaded;
@@ -56,7 +56,7 @@ class Device {
     required RtpCapabilities routerRtpCapabilities,
   }) async {
     _logger.debug(
-        'load() [routerRtpCapabilities:${routerRtpCapabilities.toString()}]');
+        'load() [routerRtpCapabilities:${routerRtpCapabilities.toString()}]',);
 
     routerRtpCapabilities = RtpCapabilities.copy(routerRtpCapabilities);
 
@@ -84,17 +84,17 @@ class Device {
 
       // Get extended RTP capabilities.
       _extendedRtpCapabilities = Ortc.getExtendedRtpCapabilities(
-          nativeRtpCapabilities, routerRtpCapabilities);
+          nativeRtpCapabilities, routerRtpCapabilities,);
 
       _logger.debug(
-          'load() | got extended RTP capabilities:$_extendedRtpCapabilities');
+          'load() | got extended RTP capabilities:$_extendedRtpCapabilities',);
 
       // Check wether we can produce audio/video.
       _canProduceByKind = CanProduceByKind(
         audio: Ortc.canSend(
-            RTCRtpMediaType.RTCRtpMediaTypeAudio, _extendedRtpCapabilities!),
+            RTCRtpMediaType.RTCRtpMediaTypeAudio, _extendedRtpCapabilities!,),
         video: Ortc.canSend(
-            RTCRtpMediaType.RTCRtpMediaTypeVideo, _extendedRtpCapabilities!),
+            RTCRtpMediaType.RTCRtpMediaTypeVideo, _extendedRtpCapabilities!,),
       );
 
       // Generate our receiving RTP capabilities for receiving media.
@@ -105,7 +105,7 @@ class Device {
       Ortc.validateRtpCapabilities(_recvRtpCapabilities);
 
       _logger.debug(
-          'load() | got receiving RTP capabilities:$_recvRtpCapabilities');
+          'load() | got receiving RTP capabilities:$_recvRtpCapabilities',);
 
       // Generate our SCTP capabilities.
       _sctpCapabilities = handler.getNativeSctpCapabilities();
@@ -125,7 +125,7 @@ class Device {
         await handler.close();
       }
 
-      throw error;
+      rethrow;
     }
   }
 
@@ -260,7 +260,7 @@ class Device {
       iceParameters: IceParameters.fromMap(data['iceParameters']),
       iceCandidates: List<IceCandidate>.from(data['iceCandidates']
           .map((iceCandidate) => IceCandidate.fromMap(iceCandidate))
-          .toList()),
+          .toList(),),
       dtlsParameters: DtlsParameters.fromMap(data['dtlsParameters']),
       sctpParameters: data['sctpParameters'] != null
           ? SctpParameters.fromMap(data['sctpParameters'])
@@ -272,7 +272,7 @@ class Device {
           {
             'googDscp': true,
           }
-        ]
+        ],
       }),
       additionalSettings: {
         'encodedInsertableStreams': false,
@@ -330,7 +330,7 @@ class Device {
       iceParameters: IceParameters.fromMap(data['iceParameters']),
       iceCandidates: List<IceCandidate>.from(data['iceCandidates']
           .map((iceCandidate) => IceCandidate.fromMap(iceCandidate))
-          .toList()),
+          .toList(),),
       dtlsParameters: DtlsParameters.fromMap(data['dtlsParameters']),
       sctpParameters: data['sctpParameters'] != null
           ? SctpParameters.fromMap(data['sctpParameters'])
@@ -342,7 +342,7 @@ class Device {
           {
             'googDscp': true,
           }
-        ]
+        ],
       }),
       additionalSettings: {
         'encodedInsertableStreams': false,

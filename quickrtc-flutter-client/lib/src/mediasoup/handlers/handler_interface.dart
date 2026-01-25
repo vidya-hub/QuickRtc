@@ -1,14 +1,14 @@
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import '../producer.dart';
-import '../sctp_parameters.dart';
-import '../transport.dart';
-import '../common/enhanced_event_emitter.dart';
-import '../rtp_parameters.dart';
-import 'unified_plan.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/producer.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sctp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/transport.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/handlers/unified_plan.dart';
 
-class SCTP_NUM_STREAMS {
-  static const int OS = 1024;
-  static const int MIS = 1024;
+class SctpNumStreams {
+  static const int os = 1024;
+  static const int mis = 1024;
 }
 
 class RTCOAuthCredential {
@@ -37,7 +37,7 @@ extension RTCIceCredentialTypeToString on RTCIceCredentialType {
     RTCIceCredentialType.password: 'password',
   };
 
-  operator [](String i) => types[i];
+  RTCIceCredentialType? operator [](String i) => types[i];
   String get value => values[this]!;
 }
 
@@ -57,13 +57,13 @@ extension RTCIceTransportPolicyToString on RTCIceTransportPolicy {
     RTCIceTransportPolicy.relay: 'relay',
   };
 
-  operator [](String i) => types[i];
+  RTCIceTransportPolicy? operator [](String i) => types[i];
   String get value => values[this]!;
 }
 
 class RTCIceServer {
   /// String or RTCOAuthCredential.
-  final credential;
+  final dynamic credential;
   final RTCIceCredentialType credentialType;
   final List<String> urls;
   final String username;
@@ -93,9 +93,9 @@ class HandlerRunOptions {
   SctpParameters? sctpParameters;
   List<RTCIceServer> iceServers;
   RTCIceTransportPolicy? iceTransportPolicy;
-  var additionalSettings;
+  dynamic additionalSettings;
   Map<String, dynamic> proprietaryConstraints;
-  var extendedRtpCapabilities;
+  dynamic extendedRtpCapabilities;
 
   HandlerRunOptions({
     required this.direction,
@@ -249,10 +249,10 @@ abstract class HandlerInterface extends EnhancedEventEmitter {
   Future<void> replaceTrack(ReplaceTrackOptions options);
   Future<void> setMaxSpatialLayer(SetMaxSpatialLayerOptions options);
   Future<void> setRtpEncodingParameters(
-      SetRtpEncodingParametersOptions options);
+      SetRtpEncodingParametersOptions options,);
   Future<List<StatsReport>> getSenderStats(String localId);
   Future<HandlerSendDataChannelResult> sendDataChannel(
-      SendDataChannelArguments options);
+      SendDataChannelArguments options,);
   Future<HandlerReceiveResult> receive(HandlerReceiveOptions options);
   Future<void> stopReceiving(
     String localId,

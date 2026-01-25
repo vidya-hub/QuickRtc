@@ -1,8 +1,9 @@
+import 'package:collection/collection.dart';
 import 'package:sdp_transform/sdp_transform.dart';
-import '../../rtp_parameters.dart';
-import '../../sdp_object.dart';
-import 'media_section.dart';
-import '../../transport.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sdp_object.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/handlers/sdp/media_section.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/transport.dart';
 
 class CommonUtils {
   static RtpCapabilities extractRtpCapabilities(SdpObject sdpObject) {
@@ -118,21 +119,16 @@ class CommonUtils {
   }
 
   static DtlsParameters extractDtlsParameters(SdpObject sdpObject) {
-    MediaObject? mediaObject = sdpObject.media.firstWhere(
+    MediaObject? mediaObject = sdpObject.media.firstWhereOrNull(
       (m) =>
           m.iceUfrag != null &&
           m.iceUfrag!.isNotEmpty &&
           m.port != null &&
           m.port != 0,
-      orElse: () => null as MediaObject,
     );
 
-    if (mediaObject == null) {
-      throw ('no active media section found');
-    }
-
     Fingerprint fingerprint =
-        (mediaObject.fingerprint ?? sdpObject.fingerprint)!;
+        (mediaObject!.fingerprint ?? sdpObject.fingerprint)!;
 
     DtlsRole role = DtlsRole.auto;
 
@@ -184,30 +180,14 @@ class CommonUtils {
         continue;
       }
 
-      Rtp? rtp = (answerMediaObject?.rtp ?? []).firstWhere(
-        (Rtp r) => r.payload == codec.payloadType,
-        orElse: () => null as Rtp,
-      );
-
-      if (rtp == null) {
-        continue;
-      }
-
       // Just in case.. ?
       answerMediaObject!.fmtp = answerMediaObject.fmtp ?? [];
 
-      Fmtp? fmtp = (answerMediaObject.fmtp ?? []).firstWhere(
+      Fmtp? fmtp = (answerMediaObject.fmtp ?? []).firstWhereOrNull(
         (Fmtp f) => f.payload == codec.payloadType,
-        orElse: () => null as Fmtp,
       );
 
-      if (fmtp == null) {
-        fmtp = Fmtp(
-          payload: codec.payloadType,
-          config: '',
-        );
-        answerMediaObject.fmtp!.add(fmtp);
-      }
+      if (fmtp == null) continue;
 
       Map<dynamic, dynamic> parameters = parseParams(fmtp.config);
 

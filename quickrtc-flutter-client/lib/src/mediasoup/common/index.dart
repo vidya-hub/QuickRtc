@@ -1,23 +1,23 @@
 enum Priority {
-  VeryLow,
-  Low,
-  Medium,
-  High,
+  veryLow,
+  low,
+  medium,
+  high,
 }
 
 extension PriorityExtension on Priority {
   static const Map<String, Priority> types = {
-    'very-low': Priority.VeryLow,
-    'low': Priority.Low,
-    'medium': Priority.Medium,
-    'high': Priority.High,
+    'very-low': Priority.veryLow,
+    'low': Priority.low,
+    'medium': Priority.medium,
+    'high': Priority.high,
   };
 
   static const Map<Priority, String> values = {
-    Priority.VeryLow: 'very-low',
-    Priority.Low: 'low',
-    Priority.Medium: 'medium',
-    Priority.High: 'high',
+    Priority.veryLow: 'very-low',
+    Priority.low: 'low',
+    Priority.medium: 'medium',
+    Priority.high: 'high',
   };
 
   static Priority fromString(String i) => types[i]!;

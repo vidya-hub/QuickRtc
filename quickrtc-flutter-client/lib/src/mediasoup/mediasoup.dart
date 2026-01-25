@@ -29,7 +29,7 @@ export 'common/logger.dart';
 // Handlers
 export 'handlers/handler_interface.dart';
 export 'handlers/unified_plan.dart';
-export 'handlers/plan_b.dart' hide FirstWhereOrNullExtension;
+export 'handlers/plan_b.dart';
 
 // SDP utilities
 export 'handlers/sdp/remote_sdp.dart';

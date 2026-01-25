@@ -1,4 +1,4 @@
-import 'common/index.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/index.dart';
 
 class NumSctpStreams {
   /*

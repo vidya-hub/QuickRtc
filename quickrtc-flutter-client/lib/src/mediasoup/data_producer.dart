@@ -1,9 +1,9 @@
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import 'sctp_parameters.dart';
-import 'common/enhanced_event_emitter.dart';
-import 'common/logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sctp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
 
 class DataProducerOptions {
   final bool ordered;
@@ -109,7 +109,7 @@ class DataProducer extends EnhancedEventEmitter {
 
     dataChannel.send(data is String
         ? RTCDataChannelMessage(data)
-        : RTCDataChannelMessage.fromBinary(data));
+        : RTCDataChannelMessage.fromBinary(data),);
   }
 
   void _handleDataChannel() {

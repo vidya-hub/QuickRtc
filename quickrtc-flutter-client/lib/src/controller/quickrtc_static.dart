@@ -137,7 +137,7 @@ abstract class QuickRTCStatic {
 
   /// Get screen share stream with platform-specific handling
   static Future<MediaStream> _getScreenShareStream(
-      ScreenShareConfig? config) async {
+      ScreenShareConfig? config,) async {
     final effectiveConfig = config ?? ScreenShareConfig.defaultConfig;
 
     // Build constraints based on platform
@@ -173,14 +173,14 @@ abstract class QuickRTCStatic {
   ///
   /// Uses flutter_webrtc's getDisplayMedia API without custom dialogs.
   static Future<MediaStream> _getDesktopScreenShare(ScreenShareConfig config,
-      [BuildContext? context]) async {
+      [BuildContext? context,]) async {
     // On macOS, check/request TCC permission first
     if (!kIsWeb && Platform.isMacOS) {
       final hasPermission =
           await QuickRTCPlatform.checkScreenCapturePermission();
       if (!hasPermission) {
         debugPrint(
-            'QuickRTC: Screen capture permission not granted, requesting...');
+            'QuickRTC: Screen capture permission not granted, requesting...',);
         final granted = await QuickRTCPlatform.requestScreenCapturePermission();
         if (!granted) {
           throw const ScreenCapturePermissionException(
@@ -218,7 +218,7 @@ abstract class QuickRTCStatic {
     }
 
     debugPrint(
-        'QuickRTC: Calling getDisplayMedia (flutter_webrtc native behavior)');
+        'QuickRTC: Calling getDisplayMedia (flutter_webrtc native behavior)',);
     return await navigator.mediaDevices.getDisplayMedia(constraints);
   }
 
@@ -239,7 +239,7 @@ abstract class QuickRTCStatic {
   /// 1. Start foreground service first
   /// 2. Then call flutter_webrtc's getDisplayMedia() (which shows its own dialog)
   static Future<MediaStream> _getMobileScreenShare(
-      ScreenShareConfig config) async {
+      ScreenShareConfig config,) async {
     if (!kIsWeb && Platform.isAndroid) {
       // Get Android SDK version to determine the flow
       final sdkVersion = await QuickRTCPlatform.getAndroidSdkVersion();
@@ -249,7 +249,7 @@ abstract class QuickRTCStatic {
         // Android 14+ (SDK 34+): Request permission first, then start service
         // This is the correct order required by Android 14+
         debugPrint(
-            'QuickRTC: Android 14+ - requesting MediaProjection permission first');
+            'QuickRTC: Android 14+ - requesting MediaProjection permission first',);
 
         // Step 1: Request permission using flutter_webrtc's built-in method
         // This shows ONE permission dialog and stores the result internally
@@ -278,7 +278,7 @@ abstract class QuickRTCStatic {
       } else if (sdkVersion >= 29) {
         // Android 10-13 (SDK 29-33): Start service first, then request permission
         debugPrint(
-            'QuickRTC: Android 10-13 detected, starting foreground service first');
+            'QuickRTC: Android 10-13 detected, starting foreground service first',);
         final serviceStarted =
             await QuickRTCPlatform.startScreenCaptureService();
         if (!serviceStarted) {
@@ -301,7 +301,7 @@ abstract class QuickRTCStatic {
       }
 
       debugPrint(
-          'QuickRTC: Calling getDisplayMedia with constraints: $constraints');
+          'QuickRTC: Calling getDisplayMedia with constraints: $constraints',);
       return await navigator.mediaDevices.getDisplayMedia(constraints);
     } catch (e) {
       debugPrint('QuickRTC: getDisplayMedia failed: $e');
@@ -356,7 +356,7 @@ abstract class QuickRTCStatic {
           await QuickRTCPlatform.checkScreenCapturePermission();
       if (!hasPermission) {
         debugPrint(
-            'QuickRTC: Screen capture permission not granted for getSources');
+            'QuickRTC: Screen capture permission not granted for getSources',);
         return [];
       }
     }
@@ -394,7 +394,7 @@ abstract class QuickRTCStatic {
   }) async {
     if (!WebRTC.platformIsDesktop) {
       throw Exception(
-          'getScreenShareWithPicker is only available on desktop platforms');
+          'getScreenShareWithPicker is only available on desktop platforms',);
     }
 
     // Get the stream using flutter_webrtc's native behavior
@@ -452,25 +452,25 @@ abstract class QuickRTCStatic {
         ? [SourceType.Screen]
         : [SourceType.Window];
     debugPrint(
-        'QuickRTC: Refreshing native source list for types: $sourceTypes');
+        'QuickRTC: Refreshing native source list for types: $sourceTypes',);
     final refreshedSources =
         await desktopCapturer.getSources(types: sourceTypes);
     debugPrint(
-        'QuickRTC: Native source list refreshed, found ${refreshedSources.length} sources');
+        'QuickRTC: Native source list refreshed, found ${refreshedSources.length} sources',);
 
     // Verify our source ID is in the refreshed list
     final matchingSource =
         refreshedSources.where((s) => s.id == source.id).toList();
     if (matchingSource.isEmpty) {
       debugPrint(
-          'QuickRTC: WARNING - Source ID ${source.id} not found in refreshed list!');
+          'QuickRTC: WARNING - Source ID ${source.id} not found in refreshed list!',);
       debugPrint('QuickRTC: Available source IDs:');
       for (final s in refreshedSources) {
         debugPrint('QuickRTC:   - ${s.id} (${s.name}) [${s.type}]');
       }
     } else {
       debugPrint(
-          'QuickRTC: Source ID ${source.id} confirmed in refreshed list');
+          'QuickRTC: Source ID ${source.id} confirmed in refreshed list',);
     }
 
     // IMPORTANT: Use getDisplayMedia for desktop screen capture, NOT getUserMedia
@@ -523,7 +523,7 @@ abstract class QuickRTCStatic {
 
   /// Switch camera between front and back (mobile only)
   static Future<MediaStreamTrack?> switchCamera(
-      MediaStreamTrack currentTrack) async {
+      MediaStreamTrack currentTrack,) async {
     if (!WebRTC.platformIsMobile) {
       throw Exception('switchCamera is only available on mobile platforms');
     }

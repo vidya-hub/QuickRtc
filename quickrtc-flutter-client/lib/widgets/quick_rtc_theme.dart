@@ -347,7 +347,7 @@ class CustomPosition {
 
   /// Create a position anchored to the bottom-left with offsets
   const CustomPosition.bottomLeft(
-      {double bottomOffset = 0, double leftOffset = 0})
+      {double bottomOffset = 0, double leftOffset = 0,})
       : bottom = bottomOffset,
         left = leftOffset,
         top = null,
@@ -355,7 +355,7 @@ class CustomPosition {
 
   /// Create a position anchored to the bottom-right with offsets
   const CustomPosition.bottomRight(
-      {double bottomOffset = 0, double rightOffset = 0})
+      {double bottomOffset = 0, double rightOffset = 0,})
       : bottom = bottomOffset,
         right = rightOffset,
         top = null,

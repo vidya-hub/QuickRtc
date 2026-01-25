@@ -120,12 +120,12 @@ class MediaConfig {
 
   /// Create config for audio and video
   static MediaConfig audioVideo(
-          {AudioConfig? audioConfig, VideoConfig? videoConfig}) =>
+          {AudioConfig? audioConfig, VideoConfig? videoConfig,}) =>
       MediaConfig(
           audio: true,
           video: true,
           audioConfig: audioConfig,
-          videoConfig: videoConfig);
+          videoConfig: videoConfig,);
 
   /// Create config for screen share only
   static MediaConfig screenShareOnly({ScreenShareConfig? config}) =>
@@ -167,12 +167,15 @@ class AudioConfig {
 
   Map<String, dynamic> toConstraints() {
     final constraints = <String, dynamic>{};
-    if (echoCancellation != null)
+    if (echoCancellation != null) {
       constraints['echoCancellation'] = echoCancellation;
-    if (noiseSuppression != null)
+    }
+    if (noiseSuppression != null) {
       constraints['noiseSuppression'] = noiseSuppression;
-    if (autoGainControl != null)
+    }
+    if (autoGainControl != null) {
       constraints['autoGainControl'] = autoGainControl;
+    }
     if (deviceId != null) constraints['deviceId'] = deviceId;
     return constraints.isEmpty ? {'optional': []} : constraints;
   }
@@ -349,21 +352,21 @@ class LocalMedia {
         track: audioTrack!,
         type: StreamType.audio,
         sourceStream: stream, // Pass the original stream from getUserMedia
-      ));
+      ),);
     }
     if (videoTrack != null) {
       result.add(TrackWithType(
         track: videoTrack!,
         type: StreamType.video,
         sourceStream: stream, // Pass the original stream from getUserMedia
-      ));
+      ),);
     }
     if (screenshareTrack != null) {
       result.add(TrackWithType(
         track: screenshareTrack!,
         type: StreamType.screenshare,
         sourceStream: screenshareStream, // Pass the screen share stream
-      ));
+      ),);
     }
     // Note: screenshareAudioTrack is typically mixed with the screenshare
     return result;

@@ -16,7 +16,7 @@ mixin QuickRTCTransportMixin {
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data);
+      String event, Map<String, dynamic> data,);
   void onProducerCallback(Producer producer);
   void onConsumerCallback(Consumer consumer, [dynamic accept]);
 

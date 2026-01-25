@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:events2/events2.dart';
-import 'logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
 
 Logger _logger = Logger('EnhancedEventEmitter');
 
@@ -18,15 +18,15 @@ class EnhancedEventEmitter extends EventEmitter {
   }
 
   Future<dynamic> safeEmitAsFuture(String event,
-      [Map<String, dynamic>? args]) async {
+      [Map<String, dynamic>? args,]) async {
     try {
       final Completer<dynamic> completer = Completer<dynamic>();
-      Map<String, dynamic> _args = {
+      Map<String, dynamic> args0 = {
         'callback': completer.complete,
         'errback': completer.completeError,
         ...?args,
       };
-      emitAsFuture(event, _args);
+      emitAsFuture(event, args0);
       return completer.future;
     } catch (error) {
       _logger.error(

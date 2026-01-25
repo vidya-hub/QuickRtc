@@ -1,4 +1,4 @@
-import 'handlers/sdp/media_section.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/handlers/sdp/media_section.dart';
 
 class Origin {
   final String username;
@@ -155,7 +155,7 @@ class SdpObject {
         name = data['name'],
         invalid = List<Invalid>.from((data['invalid'] ?? [])
             .map((inval) => Invalid.fromMap(inval))
-            .toList()),
+            .toList(),),
         timing = data['timing'] != null ? Timing.fromMap(data['timing']) : null,
         connection = data['connection'] != null
             ? Connection.fromMap(data['connection'])
@@ -169,9 +169,9 @@ class SdpObject {
             ? MsidSemantic.fromMap(data['msidSemantic'])
             : null,
         media = List<MediaObject>.from(
-            (data['media'] ?? []).map((m) => MediaObject.fromMap(m)).toList()),
+            (data['media'] ?? []).map((m) => MediaObject.fromMap(m)).toList(),),
         groups = List<Group>.from(
-            (data['groups'] ?? []).map((g) => Group.fromMap(g)).toList()),
+            (data['groups'] ?? []).map((g) => Group.fromMap(g)).toList(),),
         icelite = data['icelite'],
         description = data['description'];
 

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import 'sctp_parameters.dart';
-import 'common/enhanced_event_emitter.dart';
-import 'common/logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sctp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
 
 class DataConsumerOptions {
   final String id;
@@ -65,7 +65,7 @@ class DataConsumer extends EnhancedEventEmitter {
       required this.sctpStreamParameters,
       this.appData = const <String, dynamic>{},
       this.closed = false,
-      this.peerId})
+      this.peerId,})
       : observer = EnhancedEventEmitter(),
         super() {
     _logger.debug('constructor()');

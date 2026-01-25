@@ -481,7 +481,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
   // ============================================================================
 
   Widget _buildVideoOrPlaceholder(
-      BuildContext context, QuickRTCThemeData theme) {
+      BuildContext context, QuickRTCThemeData theme,) {
     // Show loading
     if (!_initialized) {
       if (widget.loadingBuilder != null) {
@@ -573,7 +573,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
               begin: Alignment.bottomCenter,
               end: Alignment.topCenter,
               colors: [
-                Colors.black.withOpacity(0.7),
+                Colors.black.withValues(alpha: 0.7),
                 Colors.transparent,
               ],
             ),
@@ -624,7 +624,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
       padding: theme.indicatorPadding,
       decoration: BoxDecoration(
         color: (_isAudioEnabled ? theme.audioOnColor : theme.audioOffColor)
-            .withOpacity(theme.indicatorBackgroundOpacity),
+            .withValues(alpha: theme.indicatorBackgroundOpacity),
         borderRadius: theme.indicatorBorderRadius,
       ),
       child: Icon(
@@ -648,7 +648,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
         padding: theme.indicatorPadding,
         decoration: BoxDecoration(
           color:
-              theme.videoOffColor.withOpacity(theme.indicatorBackgroundOpacity),
+              theme.videoOffColor.withValues(alpha: theme.indicatorBackgroundOpacity),
           borderRadius: theme.indicatorBorderRadius,
         ),
         child: Icon(

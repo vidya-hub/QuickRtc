@@ -1,6 +1,7 @@
+import 'package:collection/collection.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import '../../rtp_parameters.dart';
-import 'media_section.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/handlers/sdp/media_section.dart';
 
 class PlanBUtils {
   static List<RtpEncodingParameters> getRtpEncodings(
@@ -9,7 +10,7 @@ class PlanBUtils {
   ) {
     // First media SSRC (or the only one).
     int? firstSsrc;
-    Set<int> ssrcs = Set<int>();
+    Set<int> ssrcs = <int>{};
 
     for (Ssrc line in offerMediaObject.ssrcs ?? []) {
       if (line.attribute != 'msid') {
@@ -23,9 +24,7 @@ class PlanBUtils {
 
         ssrcs.add(ssrc);
 
-        if (firstSsrc == null) {
-          firstSsrc = ssrc;
-        }
+        firstSsrc ??= ssrc;
       }
     }
 
@@ -44,7 +43,7 @@ class PlanBUtils {
       List<String> tokens = line.ssrcs.split(' ');
 
       int? ssrc;
-      if (tokens.length > 0) {
+      if (tokens.isNotEmpty) {
         ssrc = int.parse(tokens.first);
       }
 
@@ -103,7 +102,7 @@ class PlanBUtils {
     String? streamId;
 
     // Get the SSRC.
-    Ssrc? ssrcMsidLine = (offerMediaObject.ssrcs ?? []).firstWhere(
+    (offerMediaObject.ssrcs ?? []).firstWhereOrNull(
       (Ssrc line) {
         if (line.attribute != 'msid') {
           return false;
@@ -120,12 +119,7 @@ class PlanBUtils {
           return false;
         }
       },
-      orElse: () => null as Ssrc,
     );
-
-    if (ssrcMsidLine == null) {
-      throw ('a=ssrc line with msid information not found [track.id:${track.id}]');
-    }
 
     // Get the SSRC for RTX.
     (offerMediaObject.ssrcGroups ?? []).any((SsrcGroup line) {
@@ -144,9 +138,8 @@ class PlanBUtils {
       }
     });
 
-    Ssrc? ssrcCnameLine = offerMediaObject.ssrcs?.firstWhere(
+    Ssrc? ssrcCnameLine = offerMediaObject.ssrcs?.firstWhereOrNull(
       (Ssrc line) => line.attribute == 'cname' && line.id == firstSsrc,
-      orElse: () => null as Ssrc,
     );
 
     if (ssrcCnameLine == null) {
@@ -171,7 +164,7 @@ class PlanBUtils {
     offerMediaObject.ssrcGroups!.add(SsrcGroup(
       semantics: 'SIM',
       ssrcs: ssrcs.join(' '),
-    ));
+    ),);
 
     for (int i = 0; i < ssrcs.length; ++i) {
       int ssrc = ssrcs[i];
@@ -180,13 +173,13 @@ class PlanBUtils {
         id: ssrc,
         attribute: 'cname',
         value: cname,
-      ));
+      ),);
 
       offerMediaObject.ssrcs!.add(Ssrc(
         id: ssrc,
         attribute: 'msid',
         value: '$streamId ${track.id}',
-      ));
+      ),);
     }
 
     for (int i = 0; i < rtxSsrcs.length; ++i) {
@@ -197,18 +190,18 @@ class PlanBUtils {
         id: rtxSsrc,
         attribute: 'cname',
         value: cname,
-      ));
+      ),);
 
       offerMediaObject.ssrcs!.add(Ssrc(
         id: rtxSsrc,
         attribute: 'msid',
         value: '$streamId ${track.id}',
-      ));
+      ),);
 
       offerMediaObject.ssrcGroups!.add(SsrcGroup(
         semantics: 'FID',
         ssrcs: '$ssrc $rtxSsrc',
-      ));
+      ),);
     }
   }
 }

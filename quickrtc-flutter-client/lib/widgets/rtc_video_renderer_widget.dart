@@ -8,11 +8,11 @@ class RTCVideoRendererWidget extends StatefulWidget {
   final RTCVideoViewObjectFit objectFit;
 
   const RTCVideoRendererWidget({
-    Key? key,
+    super.key,
     required this.stream,
     this.mirror = false,
     this.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-  }) : super(key: key);
+  });
 
   @override
   State<RTCVideoRendererWidget> createState() => _RTCVideoRendererWidgetState();

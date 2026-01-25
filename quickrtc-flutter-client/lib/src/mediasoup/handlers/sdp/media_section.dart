@@ -1,8 +1,9 @@
-import '../../producer.dart';
-import '../../sctp_parameters.dart';
-import '../../sdp_object.dart';
-import '../../transport.dart';
-import '../../rtp_parameters.dart';
+import 'package:collection/collection.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/producer.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sctp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/sdp_object.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/transport.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
 
 class Rtp {
   final int payload;
@@ -310,12 +311,12 @@ class Simulcast {
   }
 }
 
-class Simulcast_03 {
+class Simulcast03 {
   final String value;
 
-  Simulcast_03({required this.value});
+  Simulcast03({required this.value});
 
-  Simulcast_03.fromMap(Map data) : value = data['value'];
+  Simulcast03.fromMap(Map data) : value = data['value'];
 
   Map<String, String> toMap() {
     return {
@@ -349,7 +350,7 @@ class Crypto {
   final int id;
   final String suite;
   final String config;
-  var sessionConfig;
+  dynamic sessionConfig;
 
   Crypto({
     required this.id,
@@ -444,11 +445,11 @@ class SourceFilter {
   });
 
   SourceFilter.fromMap(Map data)
-      : this.filterMode = data['filterMode'],
-        this.netType = data['netType'],
-        this.addressTypes = data['addressTypes'],
-        this.destAddress = data['destAddress'],
-        this.srcList = data['srcList'];
+      : filterMode = data['filterMode'],
+        netType = data['netType'],
+        addressTypes = data['addressTypes'],
+        destAddress = data['destAddress'],
+        srcList = data['srcList'];
 
   Map<String, String> toMap() {
     return {
@@ -487,7 +488,7 @@ class MediaObject {
   List<Ssrc>? ssrcs;
   List<SsrcGroup>? ssrcGroups;
   Simulcast? simulcast;
-  Simulcast_03? simulcast_03;
+  Simulcast03? simulcast_03;
   List<Rid>? rids;
   bool? extmapAllowMixed;
   String? rtcpRsize;
@@ -559,7 +560,7 @@ class MediaObject {
     if (data['candidates'] != null) {
       candidates = List<IceCandidate>.from((data['candidates'] ?? [])
           .map((candidate) => IceCandidate.fromMap(candidate))
-          .toList());
+          .toList(),);
     }
     if (data['iceUfrag'] != null) {
       iceUfrag = data['iceUfrag'];
@@ -587,11 +588,11 @@ class MediaObject {
     }
     if (data['rtp'] != null) {
       rtp = List<Rtp>.from(
-          (data['rtp'] ?? <Rtp>[]).map((r) => Rtp.fromMap(r)).toList());
+          (data['rtp'] ?? <Rtp>[]).map((r) => Rtp.fromMap(r)).toList(),);
     }
     if (data['fmtp'] != null) {
       fmtp = List<Fmtp>.from(
-          (data['fmtp'] ?? []).map((f) => Fmtp.fromMap(f)).toList());
+          (data['fmtp'] ?? []).map((f) => Fmtp.fromMap(f)).toList(),);
     }
     if (data['type'] != null) {
       type = data['type'];
@@ -610,7 +611,7 @@ class MediaObject {
     }
     if (data['ext'] != null) {
       ext = List<Ext>.from(
-          (data['ext'] ?? []).map((e) => Ext.fromMap(e)).toList());
+          (data['ext'] ?? []).map((e) => Ext.fromMap(e)).toList(),);
     }
     if (data['msid'] != null) {
       msid = data['msid'];
@@ -620,26 +621,26 @@ class MediaObject {
     }
     if (data['rtcpFb'] != null) {
       rtcpFb = List<RtcpFb>.from(
-          (data['rtcpFb'] ?? []).map((r) => RtcpFb.fromMap(r)).toList());
+          (data['rtcpFb'] ?? []).map((r) => RtcpFb.fromMap(r)).toList(),);
     }
     if (data['ssrcs'] != null) {
       ssrcs = List<Ssrc>.from(
-          (data['ssrcs'] ?? []).map((ssrc) => Ssrc.fromMap(ssrc)).toList());
+          (data['ssrcs'] ?? []).map((ssrc) => Ssrc.fromMap(ssrc)).toList(),);
     }
     if (data['ssrcGroups'] != null) {
       ssrcGroups = List<SsrcGroup>.from((data['ssrcGroups'] ?? [])
           .map((ssrcGroup) => SsrcGroup.fromMap(ssrcGroup))
-          .toList());
+          .toList(),);
     }
     if (data['simulcast'] != null) {
       simulcast = Simulcast.fromMap(data['simulcast']);
     }
     if (data['simulcast_03'] != null) {
-      simulcast_03 = Simulcast_03.fromMap(data['simulcast_03']);
+      simulcast_03 = Simulcast03.fromMap(data['simulcast_03']);
     }
     if (data['rids'] != null) {
       rids = List<Rid>.from(
-          (data['rids'] ?? []).map((r) => Rid.fromMap(r)).toList());
+          (data['rids'] ?? []).map((r) => Rid.fromMap(r)).toList(),);
     }
     if (data['extmapAllowMixed'] != null ||
         data['extmap-allow-mixed'] != null) {
@@ -666,15 +667,15 @@ class MediaObject {
     if (data['rtcpFbTrrInt'] != null) {
       rtcpFbTrrInt = List<RtcpFbTrrInt>.from((data['rtcpFbTrrInt'] ?? [])
           .map((rFTI) => RtcpFbTrrInt.fromMap(data['rtcpFbTrrInt']))
-          .toList());
+          .toList(),);
     }
     if (data['crypto'] != null) {
       crypto = List<Crypto>.from(
-          (data['crypto'] ?? []).map((c) => Crypto.fromMap(c)).toList());
+          (data['crypto'] ?? []).map((c) => Crypto.fromMap(c)).toList(),);
     }
     if (data['invalid'] != null) {
       invalid = List<Invalid>.from(
-          (data['invalid'] ?? []).map((i) => Invalid.fromMap(i)).toList());
+          (data['invalid'] ?? []).map((i) => Invalid.fromMap(i)).toList(),);
     }
     if (data['ptime'] != null) {
       ptime = data['ptime'];
@@ -687,7 +688,7 @@ class MediaObject {
     }
     if (data['bandwidth'] != null) {
       bandwidth = List<Bandwidth>.from(
-          (data['bandwidth'] ?? []).map((b) => Bandwidth.fromMap(b)).toList());
+          (data['bandwidth'] ?? []).map((b) => Bandwidth.fromMap(b)).toList(),);
     }
     if (data['framerate'] != null) {
       framerate = data['framerate'];
@@ -698,7 +699,7 @@ class MediaObject {
     if (data['imageattrs'] != null) {
       imageattrs = List<Imageattrs>.from((data['imageattrs'] ?? [])
           .map((ia) => Imageattrs.fromMap(ia))
-          .toList());
+          .toList(),);
     }
     if (data['sourceFilter'] != null) {
       sourceFilter = SourceFilter.fromMap(data['sourceFilter']);
@@ -712,7 +713,7 @@ class MediaObject {
     Map<String, dynamic> result = <String, dynamic>{};
     if (candidates != null) {
       result['candidates'] = [
-        candidates!.map((IceCandidate c) => c.toMap()).toList().first
+        candidates!.map((IceCandidate c) => c.toMap()).toList().first,
       ];
     }
     if (iceUfrag != null) {
@@ -885,7 +886,7 @@ abstract class MediaSection {
     if (data['iceCandidates'] != null) {
       iceCandidates.addAll(data['iceCandidates']
           .map((iceC) => IceCandidate.fromMap(iceC))
-          .toList());
+          .toList(),);
     }
 
     _planB = data['planB'] == true;
@@ -907,12 +908,12 @@ abstract class MediaSection {
   void setDtlsRole(DtlsRole role);
 
   String? get mid =>
-      _mediaObject.mid != null ? _mediaObject.mid.toString() : null;
+      _mediaObject.mid?.toString();
 
   bool get closed => _mediaObject.port == 0;
 
   void disable() {
-    _mediaObject.direction = RtpHeaderDirection.Inactive;
+    _mediaObject.direction = RtpHeaderDirection.inactive;
 
     _mediaObject.ext = null;
     _mediaObject.ssrcs = null;
@@ -923,7 +924,7 @@ abstract class MediaSection {
   }
 
   void close() {
-    _mediaObject.direction = RtpHeaderDirection.Inactive;
+    _mediaObject.direction = RtpHeaderDirection.inactive;
 
     _mediaObject.port = 0;
 
@@ -939,10 +940,10 @@ abstract class MediaSection {
 
 class AnswerMediaSection extends MediaSection {
   AnswerMediaSection({
-    required IceParameters iceParameters,
-    required List<IceCandidate> iceCandidates,
-    required DtlsParameters dtlsParameters,
-    bool planB = false,
+    required IceParameters super.iceParameters,
+    required List<IceCandidate> super.iceCandidates,
+    required DtlsParameters super.dtlsParameters,
+    super.planB = false,
     SctpParameters? sctpParameters,
     PlainRtpParameters? plainRtpParameters,
     required MediaObject offerMediaObject,
@@ -950,12 +951,7 @@ class AnswerMediaSection extends MediaSection {
     RtpParameters? answerRtpParameters,
     ProducerCodecOptions? codecOptions,
     bool extmapAllowMixed = false,
-  }) : super(
-          iceParameters: iceParameters,
-          iceCandidates: iceCandidates,
-          dtlsParameters: dtlsParameters,
-          planB: planB,
-        ) {
+  }) {
     _mediaObject.mid = offerMediaObject.mid;
     _mediaObject.type = offerMediaObject.type;
     _mediaObject.protocol = offerMediaObject.protocol;
@@ -1018,9 +1014,8 @@ class AnswerMediaSection extends MediaSection {
                   codecOptions.videoGoogleMinBitrate;
 
               final RtpCodecParameters? offerCodec =
-                  offerRtpParameters?.codecs.firstWhere(
+                  offerRtpParameters?.codecs.firstWhereOrNull(
                 (RtpCodecParameters c) => c.payloadType == codec.payloadType,
-                orElse: () => null as RtpCodecParameters,
               );
 
               switch (codec.mimeType.toLowerCase()) {
@@ -1029,27 +1024,27 @@ class AnswerMediaSection extends MediaSection {
                     // if (opusStereo != null) {
                     // offerCodec.parameters['sprop-stereo'] = opusStereo ? 1 : 0;
                     offerCodec!.parameters['sprop-stereo'] =
-                        opusStereo != null ? opusStereo : 0;
+                        opusStereo ?? 0;
                     // codecParameters['stereo'] = opusStereo ? 1 : 0;
                     codecParameters['stereo'] =
-                        opusStereo != null ? opusStereo : 0;
+                        opusStereo ?? 0;
                     // }
 
                     // if (opusFec != null) {
                     // offerCodec.parameters['useinbandfec'] = opusFec ? 1 : 0;
                     offerCodec.parameters['useinbandfec'] =
-                        opusFec != null ? opusFec : 0;
+                        opusFec ?? 0;
                     // codecParameters['useinbandfec'] = opusFec ? 1 : 0;
                     codecParameters['useinbandfec'] =
-                        opusFec != null ? opusFec : 0;
+                        opusFec ?? 0;
                     // }
 
                     // if (opusDtx != null) {
                     // offerCodec.parameters['usedtx'] = opusDtx ? 1 : 0;
                     offerCodec.parameters['usedtx'] =
-                        opusDtx != null ? opusDtx : 0;
+                        opusDtx ?? 0;
                     // codecParameters['usedtx'] = opusDtx ? 1 : 0;
-                    codecParameters['usedtx'] = opusDtx != null ? opusDtx : 0;
+                    codecParameters['usedtx'] = opusDtx ?? 0;
                     // }
 
                     if (opusMaxPlaybackRate != null) {
@@ -1115,7 +1110,7 @@ class AnswerMediaSection extends MediaSection {
                 payload: codec.payloadType,
                 type: fb.type,
                 subtype: fb.parameter,
-              ));
+              ),);
             }
           }
 
@@ -1139,7 +1134,7 @@ class AnswerMediaSection extends MediaSection {
             _mediaObject.ext!.add(Ext(
               uri: ext.uri,
               value: ext.id,
-            ));
+            ),);
           }
 
           // Allow both 1 byte and 2 bytes length header extensions.
@@ -1165,11 +1160,11 @@ class AnswerMediaSection extends MediaSection {
               _mediaObject.rids!.add(Rid(
                 id: rid.id,
                 direction: 'recv',
-              ));
+              ),);
             }
           } else if (offerMediaObject.simulcast_03 != null) {
             // Simulcast (draft version 03).
-            _mediaObject.simulcast_03 = Simulcast_03(
+            _mediaObject.simulcast_03 = Simulcast03(
               value: offerMediaObject.simulcast_03!.value
                   .replaceAll(RegExp(r'/send/g'), 'recv'),
             );
@@ -1184,7 +1179,7 @@ class AnswerMediaSection extends MediaSection {
               _mediaObject.rids!.add(Rid(
                 id: rid.id,
                 direction: 'recv',
-              ));
+              ),);
             }
           }
 
@@ -1243,24 +1238,19 @@ class AnswerMediaSection extends MediaSection {
 
 class OfferMediaSection extends MediaSection {
   OfferMediaSection({
-    required IceParameters iceParameters,
-    required List<IceCandidate> iceCandidates,
-    required DtlsParameters dtlsParameters,
+    required IceParameters super.iceParameters,
+    required List<IceCandidate> super.iceCandidates,
+    required DtlsParameters super.dtlsParameters,
     SctpParameters? sctpParameters,
     PlainRtpParameters? plainRtpParameters,
-    bool planB = false,
+    super.planB = false,
     required String mid,
     required String kind,
     RtpParameters? offerRtpParameters,
     String? streamId,
     String? trackId,
     bool oldDataChannelSpec = false,
-  }) : super(
-          planB: planB,
-          dtlsParameters: dtlsParameters,
-          iceCandidates: iceCandidates,
-          iceParameters: iceParameters,
-        ) {
+  }) {
     _mediaObject.mid = mid;
     _mediaObject.type = kind;
 
@@ -1334,7 +1324,7 @@ class OfferMediaSection extends MediaSection {
               _mediaObject.rtcpFb!.add(RtcpFb(
                   payload: codec.payloadType,
                   type: fb.type,
-                  subtype: fb.parameter));
+                  subtype: fb.parameter,),);
             }
           }
 
@@ -1350,7 +1340,7 @@ class OfferMediaSection extends MediaSection {
             _mediaObject.ext!.add(Ext(
               uri: ext.uri,
               value: ext.id,
-            ));
+            ),);
           }
 
           _mediaObject.rtcpMux = 'rtcp-mux';
@@ -1371,7 +1361,7 @@ class OfferMediaSection extends MediaSection {
               id: ssrc,
               attribute: 'cname',
               value: offerRtpParameters.rtcp!.cname!,
-            ));
+            ),);
           }
 
           if (_planB) {
@@ -1379,7 +1369,7 @@ class OfferMediaSection extends MediaSection {
               id: ssrc,
               attribute: 'msid',
               value: '${streamId ?? '-'} $trackId',
-            ));
+            ),);
           }
 
           if (rtxSsrc != null) {
@@ -1389,7 +1379,7 @@ class OfferMediaSection extends MediaSection {
                 id: rtxSsrc,
                 attribute: 'cname',
                 value: offerRtpParameters.rtcp!.cname!,
-              ));
+              ),);
             }
 
             if (_planB) {
@@ -1397,14 +1387,14 @@ class OfferMediaSection extends MediaSection {
                 id: rtxSsrc,
                 attribute: 'msid',
                 value: '${streamId ?? '-'} $trackId',
-              ));
+              ),);
             }
 
             // Associate original and retransmission SSRCs.
             _mediaObject.ssrcGroups!.add(SsrcGroup(
               semantics: 'FID',
               ssrcs: '$ssrc $rtxSsrc',
-            ));
+            ),);
           }
 
           break;
@@ -1431,7 +1421,7 @@ class OfferMediaSection extends MediaSection {
     }
   }
 
-  OfferMediaSection.fromMap(Map data) : super.fromMap(data);
+  OfferMediaSection.fromMap(super.data) : super.fromMap();
 
   @override
   void setDtlsRole(DtlsRole role) {
@@ -1455,14 +1445,14 @@ class OfferMediaSection extends MediaSection {
         id: ssrc,
         attribute: 'cname',
         value: offerRtpParameters.rtcp!.cname!,
-      ));
+      ),);
     }
 
     _mediaObject.ssrcs!.add(Ssrc(
       id: ssrc,
       attribute: 'msid',
       value: '${streamId ?? '-'} $trackId',
-    ));
+    ),);
 
     if (rtxSsrc != null) {
       if (offerRtpParameters.rtcp?.cname != null &&
@@ -1471,20 +1461,20 @@ class OfferMediaSection extends MediaSection {
           id: rtxSsrc,
           attribute: 'cname',
           value: offerRtpParameters.rtcp!.cname!,
-        ));
+        ),);
       }
 
       _mediaObject.ssrcs!.add(Ssrc(
         id: rtxSsrc,
         attribute: 'msid',
         value: '${streamId ?? '-'} $trackId',
-      ));
+      ),);
 
       // Associate original and retransmission SSRCs.
       _mediaObject.ssrcGroups!.add(SsrcGroup(
         semantics: 'FID',
         ssrcs: '$ssrc $rtxSsrc',
-      ));
+      ),);
     }
   }
 
@@ -1510,13 +1500,9 @@ class OfferMediaSection extends MediaSection {
 }
 
 String getCodecName(RtpCodecParameters codec) {
-  RegExp? mimeTypeRegex = RegExp(r"^(audio|video)/(.+)", caseSensitive: true);
+  RegExp? mimeTypeRegex = RegExp(r'^(audio|video)/(.+)', caseSensitive: true);
   Iterable<RegExpMatch> mimeTypeMatch =
       mimeTypeRegex.allMatches(codec.mimeType);
-
-  if (mimeTypeMatch == null) {
-    throw ('invalid codec.mimeType');
-  }
 
   return mimeTypeMatch.elementAt(0).group(2)!;
 }

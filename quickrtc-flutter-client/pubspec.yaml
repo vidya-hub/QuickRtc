@@ -27,7 +27,7 @@ dependencies:
 
   # WebRTC & MediaSoup (bundled inside lib/src/mediasoup)
   flutter_webrtc: ^0.12.5+hotfix.1
-  
+
   # MediaSoup dependencies (required for bundled mediasoup)
   events2: ^1.0.0
   sdp_transform: ^0.3.2
@@ -40,6 +40,8 @@ dependencies:
   # Utilities
   logger: ^2.0.2+1
   equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
 
 dev_dependencies:
   flutter_test:

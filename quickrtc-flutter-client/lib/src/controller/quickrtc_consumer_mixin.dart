@@ -21,7 +21,7 @@ mixin QuickRTCConsumerMixin {
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data);
+      String event, Map<String, dynamic> data,);
 
   /// Auto-consume all existing participants in the conference
   Future<void> consumeExistingParticipants() async {
@@ -78,7 +78,7 @@ mixin QuickRTCConsumerMixin {
             ...state.participants,
             pId: remoteParticipant,
           },
-        ));
+        ),);
       }
     } catch (error) {
       log('Error consuming existing participants', error);
@@ -222,7 +222,7 @@ mixin QuickRTCConsumerMixin {
           producerId: consumerParams.producerId,
           participantId: targetParticipantId,
           participantName: targetParticipantName,
-        ));
+        ),);
       }
 
       return streams;

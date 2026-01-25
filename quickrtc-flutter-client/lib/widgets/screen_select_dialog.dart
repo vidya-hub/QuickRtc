@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 
 /// A dialog for selecting a screen to share.
 ///
@@ -118,7 +115,7 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
 
       // Debug logging
       debugPrint(
-          'ScreenSelectDialog: ========================================');
+          'ScreenSelectDialog: ========================================',);
       debugPrint('ScreenSelectDialog: Loaded ${sources.length} screen sources');
       for (final source in sources) {
         debugPrint('ScreenSelectDialog: Source:');
@@ -127,7 +124,7 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
         debugPrint('ScreenSelectDialog:   type=${source.type}');
       }
       debugPrint(
-          'ScreenSelectDialog: ========================================');
+          'ScreenSelectDialog: ========================================',);
 
       if (mounted) {
         setState(() {
@@ -157,7 +154,7 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
 
   void _onSourceSelected(DesktopCapturerSource source) {
     debugPrint(
-        'ScreenSelectDialog: Source selected: name="${source.name}", id="${source.id}", type=${source.type}');
+        'ScreenSelectDialog: Source selected: name="${source.name}", id="${source.id}", type=${source.type}',);
     setState(() {
       _selectedSource = source;
     });
@@ -166,7 +163,7 @@ class _ScreenSelectDialogState extends State<ScreenSelectDialog> {
   void _onShare() {
     if (_selectedSource != null) {
       debugPrint(
-          'ScreenSelectDialog: Sharing source: name="${_selectedSource!.name}", id="${_selectedSource!.id}", type=${_selectedSource!.type}');
+          'ScreenSelectDialog: Sharing source: name="${_selectedSource!.name}", id="${_selectedSource!.id}", type=${_selectedSource!.type}',);
       Navigator.of(context).pop(_selectedSource);
     }
   }

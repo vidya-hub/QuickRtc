@@ -17,7 +17,7 @@ mixin QuickRTCProducerMixin {
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data);
+      String event, Map<String, dynamic> data,);
 
   /// Produce media tracks
   ///
@@ -110,7 +110,7 @@ mixin QuickRTCProducerMixin {
     // Update state with new local streams
     updateState(state.copyWith(
       localStreams: [...state.localStreams, ...results],
-    ));
+    ),);
 
     return results;
   }
@@ -186,7 +186,7 @@ mixin QuickRTCProducerMixin {
         .where((p) =>
             p.id != producerInfo.id &&
             p.stream.id == sharedStreamId &&
-            !p.paused)
+            !p.paused,)
         .toList();
 
     if (otherProducersUsingSameStream.isEmpty) {
@@ -319,9 +319,9 @@ mixin QuickRTCProducerMixin {
         log('resumeStream: Track replaced successfully');
       } catch (e) {
         log('resumeStream: Failed to re-acquire ${isVideo ? "camera" : "microphone"}',
-            e);
+            e,);
         throw Exception(
-            'Failed to re-acquire ${isVideo ? "camera" : "microphone"}: $e');
+            'Failed to re-acquire ${isVideo ? "camera" : "microphone"}: $e',);
       }
     } else {
       // Track wasn't fully stopped, just re-enable it
@@ -386,7 +386,7 @@ mixin QuickRTCProducerMixin {
     // Update state - remove the local stream
     updateState(state.copyWith(
       localStreams: state.localStreams.where((s) => s.id != streamId).toList(),
-    ));
+    ),);
   }
 
   /// Close all producers (defensive - ignores errors during cleanup)
@@ -424,7 +424,7 @@ mixin QuickRTCProducerMixin {
   /// Update the paused state of a local stream in state
   void _updateLocalStreamPausedState(String streamId, bool paused) {
     log('_updateLocalStreamPausedState',
-        {'streamId': streamId, 'paused': paused});
+        {'streamId': streamId, 'paused': paused},);
 
     // Get current producer info to get latest track reference
     final producerInfo = producers[streamId];

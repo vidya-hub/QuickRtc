@@ -7,11 +7,11 @@ import 'package:quickrtc_flutter_client/state/quick_rtc_state.dart';
 import 'package:quickrtc_flutter_client/types.dart';
 
 // Mixins
-import 'quickrtc_transport_mixin.dart';
-import 'quickrtc_producer_mixin.dart';
-import 'quickrtc_consumer_mixin.dart';
-import 'quickrtc_socket_mixin.dart';
-import 'quickrtc_media_mixin.dart';
+import 'package:quickrtc_flutter_client/src/controller/quickrtc_transport_mixin.dart';
+import 'package:quickrtc_flutter_client/src/controller/quickrtc_producer_mixin.dart';
+import 'package:quickrtc_flutter_client/src/controller/quickrtc_consumer_mixin.dart';
+import 'package:quickrtc_flutter_client/src/controller/quickrtc_socket_mixin.dart';
+import 'package:quickrtc_flutter_client/src/controller/quickrtc_media_mixin.dart';
 
 // Re-export static utilities
 export 'quickrtc_static.dart';
@@ -107,7 +107,7 @@ class QuickRTCController extends ChangeNotifier
   @override
   void updateState(QuickRTCState newState) {
     log('updateState called',
-        'old participants: ${_state.participants.length}, new: ${newState.participants.length}');
+        'old participants: ${_state.participants.length}, new: ${newState.participants.length}',);
     log('States equal?', _state == newState);
 
     if (_state != newState) {
@@ -115,7 +115,7 @@ class QuickRTCController extends ChangeNotifier
       // Only notify if not disposed
       if (_isDisposed) return;
       log('Notifying listeners',
-          'hasListeners check skipped, using _isDisposed');
+          'hasListeners check skipped, using _isDisposed',);
       notifyListeners();
     } else {
       log('State unchanged', 'NOT notifying listeners');
@@ -197,7 +197,7 @@ class QuickRTCController extends ChangeNotifier
       } else {
         completer.complete({'status': 'ok', 'data': response});
       }
-    });
+    },);
 
     return completer.future;
   }
@@ -356,7 +356,7 @@ class QuickRTCController extends ChangeNotifier
         participantId: effectiveParticipantId,
         participantName: participantName,
         clearError: true,
-      ));
+      ),);
 
       await consumeExistingParticipants();
     } catch (error) {
@@ -364,7 +364,7 @@ class QuickRTCController extends ChangeNotifier
       updateState(_state.copyWith(
         status: ConnectionStatus.disconnected,
         error: 'Failed to join meeting: $error',
-      ));
+      ),);
       rethrow;
     }
   }
@@ -474,7 +474,7 @@ class QuickRTCController extends ChangeNotifier
           id: pId,
           name: pData['participantName'] as String,
           info: pData['participantInfo'] as Map<String, dynamic>? ?? {},
-          streams: [],
+          streams: const [],
         );
       }
     }

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import 'common/enhanced_event_emitter.dart';
-import 'common/logger.dart';
-import 'rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
 
 // https://mediasoup.org/documentation/v3/mediasoup-client/api/#ProducerCodecOptions
 class ProducerCodecOptions {
@@ -366,7 +366,7 @@ class Producer extends EnhancedEventEmitter {
       if (stopTracks) {
         try {
           newTrack.stop();
-        } catch (error) {}
+        } catch (_) { /* ignored */ }
       }
       throw 'closed';
     }
@@ -392,7 +392,7 @@ class Producer extends EnhancedEventEmitter {
       }
     } catch (error) {
       _logger.warn(
-          'replaceTrack() | failed to stop previous track (may already be stopped): $error');
+          'replaceTrack() | failed to stop previous track (may already be stopped): $error',);
     }
 
     // Set the new track.
@@ -414,9 +414,11 @@ class Producer extends EnhancedEventEmitter {
 
   /// Sets the video max spatial layer to be sent.
   Future<void> setMaxSpatialLayer(int spatialLayer) async {
-    if (closed)
+    if (closed) {
       throw 'closed';
-    else if (kind != 'video') throw 'not a video Producer';
+    } else if (kind != 'video') {
+      throw 'not a video Producer';
+    }
 
     if (spatialLayer == maxSpatialLayer) return;
 
@@ -429,9 +431,9 @@ class Producer extends EnhancedEventEmitter {
 
   /// Sets the DSCP value.
   Future<void> setRtpEncodingParameters(RtpEncodingParameters params) async {
-    if (closed)
+    if (closed) {
       throw 'closed';
-    else if (params == null) throw 'invalid params';
+    }
 
     await safeEmitAsFuture('@setrtpencodingparameters', {
       'params': params,
@@ -459,7 +461,7 @@ class Producer extends EnhancedEventEmitter {
         _track.stop();
         stream.dispose();
       }
-    } catch (error) {}
+    } catch (_) { /* ignored */ }
   }
 
   @override

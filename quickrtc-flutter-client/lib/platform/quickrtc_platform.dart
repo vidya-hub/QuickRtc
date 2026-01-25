@@ -139,7 +139,7 @@ class QuickRTCPlatform {
 
       if (isRunning) {
         debugPrint(
-            'QuickRTC: Screen capture service ready after ${stopwatch.elapsedMilliseconds}ms');
+            'QuickRTC: Screen capture service ready after ${stopwatch.elapsedMilliseconds}ms',);
         return true;
       }
 
@@ -147,7 +147,7 @@ class QuickRTCPlatform {
     }
 
     debugPrint(
-        'QuickRTC: Timeout waiting for screen capture service to be ready');
+        'QuickRTC: Timeout waiting for screen capture service to be ready',);
     return false;
   }
 

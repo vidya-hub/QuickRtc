@@ -215,7 +215,7 @@ mixin QuickRTCMediaMixin {
 
     final streams = await produce(
       ProduceInput.fromTrack(media.screenshareTrack!,
-          type: StreamType.screenshare),
+          type: StreamType.screenshare,),
     );
 
     return streams.isNotEmpty ? streams.first : null;

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import 'common/enhanced_event_emitter.dart';
-import 'common/logger.dart';
-import 'rtp_parameters.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/enhanced_event_emitter.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
+import 'package:quickrtc_flutter_client/src/mediasoup/rtp_parameters.dart';
 
 Logger _logger = Logger('Consumer');
 
@@ -21,7 +21,7 @@ class ConsumerOptions {
   });
 }
 
-typedef void ConsumerOnTrackEnded();
+typedef ConsumerOnTrackEnded = void Function();
 
 class Consumer extends EnhancedEventEmitter {
   /// Id.
@@ -240,7 +240,9 @@ class Consumer extends EnhancedEventEmitter {
     try {
       track.onEnded = null;
       await track.stop();
-    } catch (error) {}
+    } catch (_) {
+      // Intentionally ignored - track may already be stopped
+    }
   }
 
   @override

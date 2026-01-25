@@ -49,7 +49,7 @@ mixin QuickRTCSocketMixin {
         id: joinedData.participantId,
         name: joinedData.participantName,
         info: joinedData.participantInfo ?? {},
-        streams: [],
+        streams: const [],
       );
 
       updateState(state.copyWith(
@@ -57,7 +57,7 @@ mixin QuickRTCSocketMixin {
           ...state.participants,
           joinedData.participantId: remoteParticipant,
         },
-      ));
+      ),);
     });
 
     // Participant left
@@ -87,7 +87,7 @@ mixin QuickRTCSocketMixin {
 
       updateState(state.copyWith(
         participants: updatedParticipants,
-      ));
+      ),);
     });
 
     // New producer - auto-consume the specific producer
@@ -127,7 +127,7 @@ mixin QuickRTCSocketMixin {
             : RemoteParticipant(
                 id: producerData.participantId,
                 name: producerData.participantName,
-                info: {},
+                info: const {},
                 streams: [stream],
               );
 
@@ -136,7 +136,7 @@ mixin QuickRTCSocketMixin {
             ...state.participants,
             producerData.participantId: updatedParticipant,
           },
-        ));
+        ),);
       } else {
         log('Failed to consume stream from ${producerData.participantName}: ${producerData.kind}');
       }
@@ -176,7 +176,7 @@ mixin QuickRTCSocketMixin {
               ...state.participants,
               closedData.participantId: updatedParticipant,
             },
-          ));
+          ),);
         }
       }
     });
@@ -241,7 +241,7 @@ mixin QuickRTCSocketMixin {
       log('Socket: error', error);
       updateState(state.copyWith(
         error: error.toString(),
-      ));
+      ),);
     });
   }
 
@@ -283,7 +283,7 @@ mixin QuickRTCSocketMixin {
         ...state.participants,
         participantId: participant.copyWith(streams: updatedStreams),
       },
-    ));
+    ),);
 
     log('Updated $type stream paused=$paused for participant $participantId');
   }
