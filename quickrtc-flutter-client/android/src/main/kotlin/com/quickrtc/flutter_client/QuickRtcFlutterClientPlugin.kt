@@ -57,6 +57,9 @@ class QuickRtcFlutterClientPlugin: FlutterPlugin, MethodCallHandler, ActivityAwa
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "quickrtc_flutter_client")
         channel.setMethodCallHandler(this)
         context = flutterPluginBinding.applicationContext
+        
+        // Set the method channel on ScreenCaptureService for callbacks
+        ScreenCaptureService.setMethodChannel(channel)
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -72,6 +75,8 @@ class QuickRtcFlutterClientPlugin: FlutterPlugin, MethodCallHandler, ActivityAwa
                 startScreenCaptureService(result)
             }
             "stopScreenCaptureService" -> {
+                // Mark that we're stopping from our code (not externally)
+                ScreenCaptureService.markStoppingFromOurCode()
                 stopScreenCaptureService()
                 mediaProjectionMonitor?.stopMonitoring()
                 result.success(true)
@@ -191,6 +196,8 @@ class QuickRtcFlutterClientPlugin: FlutterPlugin, MethodCallHandler, ActivityAwa
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        // Clear the method channel from ScreenCaptureService
+        ScreenCaptureService.setMethodChannel(null)
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {

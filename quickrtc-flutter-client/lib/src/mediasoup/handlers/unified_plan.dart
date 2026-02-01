@@ -398,6 +398,14 @@ class UnifiedPlan extends HandlerInterface {
 
       await _pc!.setLocalDescription(offer);
 
+      // Sync RemoteSdp order with the offer's m-line order before generating answer.
+      SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
+      final List<String> offerMids = localSdpObject.media
+          .where((m) => m.mid != null)
+          .map((m) => m.mid!)
+          .toList();
+      _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
+
       RTCSessionDescription answer =
           RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
 
@@ -570,6 +578,10 @@ class UnifiedPlan extends HandlerInterface {
 
     MediaSectionIdx mediaSectionIdx = _remoteSdp.getNextMediaSectionIdx();
 
+    _logger.debug(
+      'send() | mediaSectionIdx [idx:${mediaSectionIdx.idx}, reuseMid:${mediaSectionIdx.reuseMid}]',
+    );
+
     RTCRtpTransceiver transceiver = await _pc!.addTransceiver(
       track: options.track,
       kind: RTCRtpMediaTypeExtension.fromString(options.track.kind!),
@@ -653,7 +665,7 @@ class UnifiedPlan extends HandlerInterface {
       );
       localId = transceiver.mid;
     }
-    
+
     if (localId.isEmpty) {
       throw 'Transceiver mid not found after setLocalDescription';
     }
@@ -670,7 +682,7 @@ class UnifiedPlan extends HandlerInterface {
 
     // Update payload types in sendingRtpParameters and sendingRemoteRtpParameters
     // based on the actual offer.
-    
+
     // Pass 1: Primary codecs
     for (RtpCodecParameters codec in sendingRtpParameters.codecs) {
       if (Ortc.isRtxCodec(codec)) continue;
@@ -712,21 +724,23 @@ class UnifiedPlan extends HandlerInterface {
       // Find the corresponding RTX PT in the offer by looking for 'apt=X' where X is a PT in the offer
       // that matches one of our primary codecs.
       for (Rtp offerRtp in offerMediaObject.rtp ?? []) {
-         // Check if this offer PT is an RTX PT for some primary PT
-         final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
-           (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
-         );
-         
-         if (fmtp != null) {
-           final int offerApt = int.parse(parseParams(fmtp.config)['apt'].toString());
-           // Does this offerApt match any of our updated primary PTs?
-           final bool matchesPrimary = sendingRtpParameters.codecs.any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
-           if (matchesPrimary) {
-             codec.payloadType = fmtp.payload;
-             codec.parameters['apt'] = offerApt;
-             break;
-           }
-         }
+        // Check if this offer PT is an RTX PT for some primary PT
+        final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
+          (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
+        );
+
+        if (fmtp != null) {
+          final int offerApt =
+              int.parse(parseParams(fmtp.config)['apt'].toString());
+          // Does this offerApt match any of our updated primary PTs?
+          final bool matchesPrimary = sendingRtpParameters.codecs
+              .any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
+          if (matchesPrimary) {
+            codec.payloadType = fmtp.payload;
+            codec.parameters['apt'] = offerApt;
+            break;
+          }
+        }
       }
     }
 
@@ -737,32 +751,38 @@ class UnifiedPlan extends HandlerInterface {
       if (apt == null) continue;
 
       for (Rtp offerRtp in offerMediaObject.rtp ?? []) {
-         final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
-           (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
-         );
-         
-         if (fmtp != null) {
-           final int offerApt = int.parse(parseParams(fmtp.config)['apt'].toString());
-           final bool matchesPrimary = sendingRemoteRtpParameters.codecs.any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
-           if (matchesPrimary) {
-             codec.payloadType = fmtp.payload;
-             codec.parameters['apt'] = offerApt;
-             break;
-           }
-         }
+        final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
+          (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
+        );
+
+        if (fmtp != null) {
+          final int offerApt =
+              int.parse(parseParams(fmtp.config)['apt'].toString());
+          final bool matchesPrimary = sendingRemoteRtpParameters.codecs
+              .any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
+          if (matchesPrimary) {
+            codec.payloadType = fmtp.payload;
+            codec.parameters['apt'] = offerApt;
+            break;
+          }
+        }
       }
     }
 
     // Pass 3: Header Extensions
-    for (RtpHeaderExtensionParameters ext in sendingRtpParameters.headerExtensions) {
-      final Ext? matchingExt = offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
+    for (RtpHeaderExtensionParameters ext
+        in sendingRtpParameters.headerExtensions) {
+      final Ext? matchingExt =
+          offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
       if (matchingExt != null) {
         ext.id = matchingExt.value!;
       }
     }
 
-    for (RtpHeaderExtensionParameters ext in sendingRemoteRtpParameters.headerExtensions) {
-      final Ext? matchingExt = offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
+    for (RtpHeaderExtensionParameters ext
+        in sendingRemoteRtpParameters.headerExtensions) {
+      final Ext? matchingExt =
+          offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
       if (matchingExt != null) {
         ext.id = matchingExt.value!;
       }
@@ -808,13 +828,34 @@ class UnifiedPlan extends HandlerInterface {
       }
     }
 
+    // Only pass reuseMid if the transceiver actually reused the old mid.
+    // WebRTC may assign a new mid even when we expected to reuse a closed section.
+    // If localId != reuseMid, we should add a new section, not replace the old one.
+    final String? effectiveReuseMid = (mediaSectionIdx.reuseMid != null &&
+            mediaSectionIdx.reuseMid == localId)
+        ? mediaSectionIdx.reuseMid
+        : null;
+
+    _logger.debug(
+      'send() | calling _remoteSdp.send() [localId:$localId, reuseMid:${mediaSectionIdx.reuseMid}, effectiveReuseMid:$effectiveReuseMid]',
+    );
+
     _remoteSdp.send(
       offerMediaObject: offerMediaObject,
+      reuseMid: effectiveReuseMid,
       offerRtpParameters: sendingRtpParameters,
       answerRtpParameters: sendingRemoteRtpParameters,
       codecOptions: options.codecOptions,
       extmapAllowMixed: true,
     );
+
+    // Sync the RemoteSdp media section order to match the offer's m-line order.
+    // This is critical to avoid "order of m-lines in answer doesn't match offer" errors.
+    final List<String> offerMids = localSdpObject.media
+        .where((m) => m.mid != null)
+        .map((m) => m.mid!)
+        .toList();
+    _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
 
     RTCSessionDescription answer =
         RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
@@ -1047,6 +1088,14 @@ class UnifiedPlan extends HandlerInterface {
     );
 
     await _pc!.setLocalDescription(offer);
+
+    // Sync RemoteSdp order with the offer's m-line order before generating answer.
+    SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
+    final List<String> offerMids = localSdpObject.media
+        .where((m) => m.mid != null)
+        .map((m) => m.mid!)
+        .toList();
+    _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
 
     RTCSessionDescription answer =
         RTCSessionDescription(_remoteSdp.getSdp(), 'answer');

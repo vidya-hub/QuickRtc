@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
 import 'package:quickrtc_flutter_client/state/quick_rtc_state.dart';
 import 'package:quickrtc_flutter_client/types.dart';
+import 'package:quickrtc_flutter_client/src/exceptions.dart';
 
 /// Mixin providing consumer functionality (consuming remote media)
 mixin QuickRTCConsumerMixin {
@@ -18,10 +19,14 @@ mixin QuickRTCConsumerMixin {
   Map<String, ConsumerInfo> get consumers;
   Set<String> get consumedProducerIds;
   Map<String, Completer<Consumer>> get pendingConsumers;
+  Duration get operationTimeout;
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data,);
+    String event,
+    Map<String, dynamic> data, {
+    Duration? timeout,
+  });
 
   /// Auto-consume all existing participants in the conference
   Future<void> consumeExistingParticipants() async {
@@ -73,12 +78,14 @@ mixin QuickRTCConsumerMixin {
           streams: streams,
         );
 
-        updateState(state.copyWith(
-          participants: {
-            ...state.participants,
-            pId: remoteParticipant,
-          },
-        ),);
+        updateState(
+          state.copyWith(
+            participants: {
+              ...state.participants,
+              pId: remoteParticipant,
+            },
+          ),
+        );
       }
     } catch (error) {
       log('Error consuming existing participants', error);
@@ -152,8 +159,29 @@ mixin QuickRTCConsumerMixin {
           peerId: targetParticipantId,
         );
 
-        // Wait for the consumer via callback
-        final consumer = await completer.future;
+        // Wait for the consumer via callback with timeout
+        final Consumer consumer;
+        try {
+          consumer = await completer.future.timeout(
+            operationTimeout,
+            onTimeout: () {
+              pendingConsumers.remove(consumerParams.id);
+              throw QuickRTCTimeoutException(
+                operation: 'Consumer creation for ${consumerParams.kind}',
+                timeout: operationTimeout,
+              );
+            },
+          );
+        } catch (e) {
+          pendingConsumers.remove(consumerParams.id);
+          consumedProducerIds.remove(consumerParams.producerId);
+          if (e is QuickRTCException) rethrow;
+          throw QuickRTCConsumerException(
+            'Failed to create consumer for ${consumerParams.kind}',
+            consumerId: consumerParams.id,
+            cause: e,
+          );
+        }
 
         // Resume consumer on server
         await emitWithAck('unpauseConsumer', {
@@ -215,14 +243,16 @@ mixin QuickRTCConsumerMixin {
 
         consumers[consumer.id] = consumerInfo;
 
-        streams.add(RemoteStream(
-          id: consumer.id,
-          type: streamType,
-          stream: streamToUse,
-          producerId: consumerParams.producerId,
-          participantId: targetParticipantId,
-          participantName: targetParticipantName,
-        ),);
+        streams.add(
+          RemoteStream(
+            id: consumer.id,
+            type: streamType,
+            stream: streamToUse,
+            producerId: consumerParams.producerId,
+            participantId: targetParticipantId,
+            participantName: targetParticipantName,
+          ),
+        );
       }
 
       return streams;
@@ -296,8 +326,26 @@ mixin QuickRTCConsumerMixin {
         peerId: targetParticipantId,
       );
 
-      // Wait for the consumer via callback
-      final consumer = await completer.future;
+      // Wait for the consumer via callback with timeout
+      final Consumer consumer;
+      try {
+        consumer = await completer.future.timeout(
+          operationTimeout,
+          onTimeout: () {
+            pendingConsumers.remove(consumerParams.id);
+            throw QuickRTCTimeoutException(
+              operation: 'Consumer creation for $kind',
+              timeout: operationTimeout,
+            );
+          },
+        );
+      } catch (e) {
+        pendingConsumers.remove(consumerParams.id);
+        consumedProducerIds.remove(producerId);
+        if (e is QuickRTCTimeoutException) rethrow;
+        log('consumeSingleProducer: Error creating consumer', e);
+        return null;
+      }
 
       // Resume consumer on server
       await emitWithAck('unpauseConsumer', {
@@ -387,6 +435,12 @@ mixin QuickRTCConsumerMixin {
       } catch (_) {
         // Ignore errors - peer connection may already be closed
       }
+      // Dispose the stream to release resources
+      try {
+        await consumerInfo.stream.dispose();
+      } catch (_) {
+        // Ignore errors during stream disposal
+      }
     }
   }
 
@@ -404,6 +458,12 @@ mixin QuickRTCConsumerMixin {
       } catch (_) {
         // Ignore errors - peer connection may already be closed
       }
+      // Dispose the stream to release resources
+      try {
+        await info.stream.dispose();
+      } catch (_) {
+        // Ignore errors during stream disposal
+      }
       consumers.remove(entry.key);
     }
   }
@@ -415,6 +475,12 @@ mixin QuickRTCConsumerMixin {
         await consumer.consumer.close();
       } catch (_) {
         // Ignore errors during cleanup - peer connection may already be closed
+      }
+      // Dispose the stream to release resources
+      try {
+        await consumer.stream.dispose();
+      } catch (_) {
+        // Ignore errors during stream disposal
       }
     }
     consumers.clear();

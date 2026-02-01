@@ -66,6 +66,19 @@ await controller.produce(
 );
 ```
 
+#### Android External Stop Detection
+
+On Android, when screen sharing is stopped via the system notification ("Stop now" button) or when MediaProjection is revoked, the SDK automatically:
+
+1. Detects the stop via producer stats monitoring (checks if bytes are still being sent)
+2. Calls `stopStream()` which emits `closeProducer` to the server
+3. Other participants are notified and remove the screen share tile
+
+This is handled automatically - no additional code is required. The SDK uses multiple detection strategies:
+- Track `onMute` callback
+- Track `muted` property monitoring  
+- Producer RTP stats monitoring (most reliable - detects when no new bytes are being sent for ~2 seconds)
+
 ### 6. Render Video
 
 ```dart

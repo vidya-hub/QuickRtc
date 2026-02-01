@@ -128,6 +128,46 @@ class RemoteSdp {
     return write(_sdpObject.toMap(), null);
   }
 
+  /// Reorder media sections to match the m-line order of the given local offer.
+  /// This ensures the answer SDP has m-lines in the same order as the offer,
+  /// which is required by WebRTC spec.
+  void syncMediaSectionOrderWithOffer(List<String> offerMids) {
+    if (offerMids.isEmpty) return;
+
+    // Create new ordered lists based on offer's mid order
+    final List<MediaSection> orderedSections = [];
+    final List<MediaObject> orderedMedia = [];
+
+    for (final mid in offerMids) {
+      final idx = _midToIndex[mid];
+      if (idx != null) {
+        orderedSections.add(_mediaSections[idx]);
+        orderedMedia.add(_sdpObject.media[idx]);
+      }
+    }
+
+    // Only update if we found all the mids from the offer
+    if (orderedSections.length == offerMids.length) {
+      _mediaSections.clear();
+      _mediaSections.addAll(orderedSections);
+      _sdpObject.media.clear();
+      _sdpObject.media.addAll(orderedMedia);
+
+      // Rebuild _midToIndex with new indices
+      _midToIndex.clear();
+      for (int i = 0; i < _mediaSections.length; i++) {
+        final mid = _mediaSections[i].mid;
+        if (mid != null) {
+          _midToIndex[mid] = i;
+        }
+      }
+
+      logger.debug(
+        'syncMediaSectionOrderWithOffer() | reordered to match offer [mids: ${offerMids.join(", ")}]',
+      );
+    }
+  }
+
   void updateIceParameters(IceParameters iceParameters) {
     logger.debug(
       'updateIceParameters() [iceParameters:$iceParameters]',

@@ -1,6 +1,6 @@
 name: quickrtc_flutter_client
-description: A Flutter WebRTC client library built on MediaSoup with Provider state management for real-time video conferencing.
-version: 1.0.2
+description: A Flutter WebRTC library built on MediaSoup for real-time video conferencing.
+version: 1.1.0
 homepage: https://github.com/vidya-hub/QuickRTC
 
 environment:
@@ -40,15 +40,8 @@ dependencies:
   # Utilities
   logger: ^2.6.2
   equatable: ^2.0.8
-  freezed_annotation: ^3.1.0
-  json_annotation: ^4.9.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
-
-  # Code Generation
-  build_runner: ^2.4.9
-  freezed: ^3.1.0
-  json_serializable: ^6.9.0

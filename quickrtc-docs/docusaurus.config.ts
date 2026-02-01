@@ -96,8 +96,8 @@ const config: Config = {
               to: "/docs/server/overview",
             },
             {
-              label: "Deployment",
-              to: "/docs/deployment/overview",
+              label: "Flutter SDK",
+              to: "/docs/flutter/getting-started",
             },
           ],
         },

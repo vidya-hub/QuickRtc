@@ -16,7 +16,9 @@ mixin QuickRTCTransportMixin {
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data,);
+    String event,
+    Map<String, dynamic> data,
+  );
   void onProducerCallback(Producer producer);
   void onConsumerCallback(Consumer consumer, [dynamic accept]);
 
@@ -99,7 +101,7 @@ mixin QuickRTCTransportMixin {
         });
 
         if (response['status'] == 'ok') {
-          data['callback']();
+          data['callback'](null);
         } else {
           data['errback'](Exception(response['error']));
         }
@@ -148,7 +150,7 @@ mixin QuickRTCTransportMixin {
         });
 
         if (response['status'] == 'ok') {
-          data['callback']();
+          data['callback'](null);
         } else {
           data['errback'](Exception(response['error']));
         }

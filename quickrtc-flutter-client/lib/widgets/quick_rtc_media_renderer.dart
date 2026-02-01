@@ -309,6 +309,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
   final RTCVideoRenderer _renderer = RTCVideoRenderer();
   bool _initialized = false;
   bool _hasVideoTracks = false;
+  MediaStream? _currentStream; // Track current stream to cleanup listeners
 
   // ============================================================================
   // DERIVED PROPERTIES
@@ -371,10 +372,21 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
 
   @override
   void dispose() {
+    // Clear stream listeners before disposal
+    _clearStreamListeners();
     // Clear srcObject before disposal to prevent errors on Android
     _renderer.srcObject = null;
     _renderer.dispose();
     super.dispose();
+  }
+
+  /// Clears onAddTrack/onRemoveTrack listeners from the current stream
+  void _clearStreamListeners() {
+    if (_currentStream != null) {
+      _currentStream!.onAddTrack = null;
+      _currentStream!.onRemoveTrack = null;
+      _currentStream = null;
+    }
   }
 
   Future<void> _initRenderer() async {
@@ -393,6 +405,10 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
     if (!_initialized) return;
 
     final stream = _stream;
+
+    // Clear listeners from old stream before switching
+    _clearStreamListeners();
+
     if (stream == null) {
       _renderer.srcObject = null;
       if (mounted) setState(() => _hasVideoTracks = false);
@@ -401,6 +417,7 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
     }
 
     _renderer.srcObject = stream;
+    _currentStream = stream;
     _hasVideoTracks = stream.getVideoTracks().isNotEmpty;
 
     // Android: listen for track additions (tracks may arrive after stream)
@@ -481,7 +498,9 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
   // ============================================================================
 
   Widget _buildVideoOrPlaceholder(
-      BuildContext context, QuickRTCThemeData theme,) {
+    BuildContext context,
+    QuickRTCThemeData theme,
+  ) {
     // Show loading
     if (!_initialized) {
       if (widget.loadingBuilder != null) {
@@ -647,8 +666,8 @@ class _QuickRTCMediaRendererState extends State<QuickRTCMediaRenderer> {
       indicator = Container(
         padding: theme.indicatorPadding,
         decoration: BoxDecoration(
-          color:
-              theme.videoOffColor.withValues(alpha: theme.indicatorBackgroundOpacity),
+          color: theme.videoOffColor
+              .withValues(alpha: theme.indicatorBackgroundOpacity),
           borderRadius: theme.indicatorBorderRadius,
         ),
         child: Icon(

@@ -1,347 +1,268 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Layout from "@theme/Layout";
 import CodeBlock from "@theme/CodeBlock";
+import Link from "@docusaurus/Link";
 
-import { Button } from "../components/Button";
-import { FeatureCard } from "../components/FeatureCard";
-import { PackageCard } from "../components/PackageCard";
-import { InstallCommand } from "../components/InstallCommand";
-import { SectionHeading } from "../components/SectionHeading";
-import { AnimatedBackground, GridPattern } from "../components/AnimatedBackground";
-import {
-  IconCode,
-  IconZap,
-  IconReact,
-  IconTypeScript,
-  IconScale,
-  IconShield,
-  IconVideo,
-  IconGithub,
-  IconFlutter,
-  IconMobile,
-} from "../components/Icons";
+/* ===========================================
+   Code Examples
+   =========================================== */
 
-const clientExample = `import { QuickRTC } from "quickrtc-client";
-import { io } from "socket.io-client";
-
-const socket = io("https://your-server.com");
-const rtc = new QuickRTC({ socket });
-
-// Listen for participants
-rtc.on("newParticipant", ({ participantName, streams }) => {
-  console.log(\`\${participantName} joined with \${streams.length} streams\`);
-});
-
-// Join and start sharing
-await rtc.join({ conferenceId: "room-1", participantName: "Alice" });
-const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-await rtc.produce(media.getTracks());`;
-
-const serverExample = `import { QuickRTCServer } from "quickrtc-server";
-import { createServer } from "https";
-import { Server } from "socket.io";
-
-const httpsServer = createServer({ key, cert }, app);
-const io = new Server(httpsServer, { cors: { origin: "*" } });
+const codeExamples = {
+  server: {
+    code: `import { QuickRTCServer } from "quickrtc-server";
 
 const server = new QuickRTCServer({
-  httpServer: httpsServer,
+  httpServer,
   socketServer: io,
 });
 
-await server.start();
-httpsServer.listen(3000);`;
-
-const reactExample = `import { useQuickRTC, QuickRTCVideo } from "quickrtc-react-client";
-
-function VideoRoom() {
-  const { rtc, isConnected, join, produce } = useQuickRTC({ socket });
-  const [streams, setStreams] = useState([]);
-
-  useEffect(() => {
-    if (!rtc) return;
-    rtc.on("newParticipant", ({ streams }) => {
-      setStreams(prev => [...prev, ...streams]);
-    });
-  }, [rtc]);
-
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      {streams.map(s => <QuickRTCVideo key={s.id} stream={s.stream} />)}
-    </div>
-  );
-}`;
-
-const flutterExample = `import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
-
-// Create controller with socket
-final controller = QuickRTCController(socket: socket);
-
-// Join and enable media
-await controller.joinMeeting(
-  conferenceId: 'room-1',
-  participantName: 'Alice',
-);
-await controller.enableMedia();
-
-// Build reactive UI
-QuickRTCBuilder(
-  builder: (context, state) {
-    return GridView.builder(
-      itemCount: state.participantList.length,
-      itemBuilder: (context, i) => QuickRTCMediaRenderer(
-        remoteStream: state.participantList[i].videoStream,
-        participantName: state.participantList[i].name,
-      ),
-    );
-  },
-);`;
-
-const features = [
-  {
-    icon: <IconCode className="w-full h-full" />,
-    title: "Simple API",
-    description:
-      "Intuitive event-driven API that abstracts away WebRTC complexity. Join conferences, produce media, and handle streams with just a few lines of code.",
-  },
-  {
-    icon: <IconZap className="w-full h-full" />,
-    title: "Auto-Consume",
-    description:
-      "Remote streams are automatically consumed and ready to use. No manual subscription management required.",
-  },
-  {
-    icon: <IconReact className="w-full h-full" />,
-    title: "React Ready",
-    description:
-      "First-class React support with hooks and components. useQuickRTC hook handles all the complexity for you.",
-  },
-  {
-    icon: <IconFlutter className="w-full h-full" />,
-    title: "Flutter SDK",
-    description:
-      "Full-featured Flutter SDK for iOS, Android, macOS, and Web. Reactive state management with QuickRTCBuilder.",
-  },
-  {
-    icon: <IconScale className="w-full h-full" />,
-    title: "Scalable",
-    description:
-      "Built on mediasoup SFU architecture. Efficiently handles multiple participants with minimal bandwidth usage.",
-  },
-  {
-    icon: <IconShield className="w-full h-full" />,
-    title: "Production Ready",
-    description:
-      "Battle-tested in production environments. Includes error handling, reconnection logic, and comprehensive events.",
-  },
-];
-
-const packages = [
-  {
-    name: "quickrtc-client",
-    description:
-      "Core JavaScript/TypeScript client SDK. Works with any framework or vanilla JS.",
-    install: "npm install quickrtc-client",
-    type: "client" as const,
-  },
-  {
-    name: "quickrtc-server",
-    description:
-      "Node.js server with mediasoup integration. Handles all WebRTC signaling.",
+await server.start();`,
     install: "npm install quickrtc-server",
-    type: "server" as const,
+    lang: "typescript",
   },
-  {
-    name: "quickrtc-react-client",
-    description:
-      "React hooks and components for building video UIs quickly.",
-    install: "npm install quickrtc-react-client",
-    type: "react" as const,
-  },
-  {
-    name: "quickrtc-flutter-client",
-    description:
-      "Flutter SDK for Android, iOS, macOS, and Web with reactive state management.",
-    install: "flutter pub add quickrtc_flutter_client",
-    type: "flutter" as const,
-    badge: "pub.dev",
-  },
-];
+  react: {
+    code: `import { useQuickRTC } from "quickrtc-react-client";
 
-const codeExamples = [
-  {
-    title: "Client SDK",
-    description:
-      "Connect to a conference, share your camera, and receive remote streams with the event-driven API.",
-    code: clientExample,
+const { join, produce } = useQuickRTC({ socket });
+
+await join({ conferenceId: "room-1", participantName: "Alice" });
+await produce(tracks);`,
+    install: "npm install quickrtc-react-client",
+    lang: "typescript",
   },
-  {
-    title: "Server Setup",
-    description:
-      "Spin up a WebRTC server with automatic room management and media routing.",
-    code: serverExample,
+  flutter: {
+    code: `final controller = QuickRTCController(socket: socket);
+
+await controller.joinMeeting(
+  conferenceId: "room-1",
+  participantName: "Alice",
+);
+
+await controller.enableMedia();`,
+    install: "flutter pub add quickrtc_flutter_client",
+    lang: "dart",
   },
-  {
-    title: "React Integration",
-    description:
-      "Use the useQuickRTC hook for seamless React integration with automatic state management.",
-    code: reactExample,
-  },
-  {
-    title: "Flutter SDK",
-    description:
-      "Build cross-platform video apps with reactive state management using QuickRTCBuilder.",
-    code: flutterExample,
-    language: "dart",
-  },
-];
+};
+
+type TabKey = keyof typeof codeExamples;
+
+/* ===========================================
+   Icons
+   =========================================== */
+
+function ArrowRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+    </svg>
+  );
+}
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.268 2.75 1.026A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.337c1.909-1.294 2.747-1.026 2.747-1.026.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function BookIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+    </svg>
+  );
+}
+
+function CubeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  );
+}
+
+function DevicePhoneMobileIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+    </svg>
+  );
+}
+
+function CodeBracketIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+    </svg>
+  );
+}
+
+/* ===========================================
+   Hero Section
+   =========================================== */
 
 function HeroSection() {
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
-      <AnimatedBackground />
-      <GridPattern />
-      
-      <div className="container mx-auto px-4 py-20 relative z-10">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-neutral-100 dark:bg-neutral-800/80 border border-neutral-200 dark:border-neutral-700 mb-8 animate-fade-in">
-            <IconVideo className="w-4 h-4 text-neutral-500" />
-            <span className="text-sm text-neutral-600 dark:text-neutral-400">
-              WebRTC made simple
-            </span>
-          </div>
+    <section className="hero-section">
+      <div className="hero-container">
+        {/* Badge */}
+        <div className="hero-badge">
+          <span className="hero-badge-dot" />
+          Open Source
+        </div>
 
-          {/* Heading */}
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 animate-fade-in-up">
-            <span className="text-neutral-900 dark:text-white">Quick</span>
-            <span className="text-neutral-400 dark:text-neutral-500">RTC</span>
-          </h1>
+        {/* Title */}
+        <h1 className="hero-title">QuickRTC</h1>
 
-          {/* Tagline */}
-          <p className="text-xl lg:text-2xl text-neutral-600 dark:text-neutral-400 mb-4 animate-fade-in-up animation-delay-100">
-            Simple WebRTC conferencing built on mediasoup
-          </p>
+        {/* Subtitle */}
+        <p className="hero-subtitle">
+          Production-ready WebRTC conferencing SDK
+        </p>
 
-          {/* Description */}
-          <p className="text-base lg:text-lg text-neutral-500 dark:text-neutral-500 mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
-            Production-ready video conferencing SDK with automatic stream
-            management, event-driven architecture, React hooks, and Flutter support.
-            Build real-time video apps in minutes.
-          </p>
+        {/* Description */}
+        <p className="hero-description">
+          Built on mediasoup. Ship video conferencing in days, not weeks.
+        </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-fade-in-up animation-delay-300">
-            <Button to="/docs/getting-started" variant="primary" size="lg" icon>
-              Get Started
-            </Button>
-            <Button href="https://github.com/vidya-hub/QuickRtc" variant="secondary" size="lg">
-              <IconGithub className="w-5 h-5" />
-              View on GitHub
-            </Button>
-          </div>
-
-          {/* Install Command */}
-          <div className="animate-fade-in-up animation-delay-400">
-            <InstallCommand command="npm install quickrtc-react-client quickrtc-server" />
-          </div>
+        {/* CTAs */}
+        <div className="hero-cta-group">
+          <Link to="/docs/getting-started" className="btn btn-primary">
+            Get Started
+            <ArrowRightIcon className="btn-icon" />
+          </Link>
+          <Link to="https://github.com/nicholasgriffintn/quickrtc" className="btn btn-secondary">
+            <GitHubIcon className="btn-icon-left" />
+            GitHub
+          </Link>
         </div>
       </div>
-
-      {/* Bottom gradient fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white dark:from-neutral-950 to-transparent pointer-events-none" />
     </section>
   );
 }
+
+/* ===========================================
+   Code Section
+   =========================================== */
+
+function CodeSection() {
+  const [activeTab, setActiveTab] = useState<TabKey>("server");
+  const [copied, setCopied] = useState(false);
+  const example = codeExamples[activeTab];
+
+  const copyInstall = () => {
+    navigator.clipboard.writeText(example.install);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const tabs: { key: TabKey; label: string }[] = [
+    { key: "server", label: "Server" },
+    { key: "react", label: "React" },
+    { key: "flutter", label: "Flutter" },
+  ];
+
+  return (
+    <section className="code-section">
+      <div className="code-container">
+        <div className="code-card">
+          {/* Header */}
+          <div className="code-card-header">
+            <div className="code-tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`code-tab ${activeTab === tab.key ? "code-tab--active" : ""}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Code Block */}
+          <div className="code-block-wrapper">
+            <CodeBlock language={example.lang}>{example.code}</CodeBlock>
+          </div>
+
+          {/* Footer */}
+          <div className="code-card-footer">
+            <div className="install-command">
+              <span className="install-prompt">$</span>
+              <code>{example.install}</code>
+            </div>
+            <button onClick={copyInstall} className="copy-btn" aria-label="Copy install command">
+              {copied ? (
+                <>
+                  <CheckIcon className="copy-icon" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <CopyIcon className="copy-icon" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ===========================================
+   Features Section
+   =========================================== */
+
+const features = [
+  {
+    title: "Production Ready",
+    description: "Battle-tested infrastructure with mediasoup SFU for scalable, low-latency video.",
+    icon: CubeIcon,
+  },
+  {
+    title: "Multi-Platform",
+    description: "Native SDKs for React and Flutter. Build once, deploy everywhere.",
+    icon: DevicePhoneMobileIcon,
+  },
+  {
+    title: "Developer First",
+    description: "Clean APIs, TypeScript support, and comprehensive documentation.",
+    icon: CodeBracketIcon,
+  },
+];
 
 function FeaturesSection() {
   return (
-    <section className="py-24 relative">
-      <div className="container mx-auto px-4">
-        <SectionHeading
-          badge="Features"
-          title="Everything you need for video conferencing"
-          description="QuickRTC provides a complete toolkit for building real-time video applications with minimal effort."
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {features.map((feature, idx) => (
-            <FeatureCard
-              key={feature.title}
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
-              index={idx}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function PackagesSection() {
-  return (
-    <section className="py-24 bg-neutral-50 dark:bg-neutral-900/30 relative">
-      <GridPattern />
-      <div className="container mx-auto px-4 relative z-10">
-        <SectionHeading
-          badge="Packages"
-          title="Modular by design"
-          description="QuickRTC is split into focused packages so you can use exactly what you need."
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-          {packages.map((pkg) => (
-            <PackageCard
-              key={pkg.name}
-              name={pkg.name}
-              description={pkg.description}
-              install={pkg.install}
-              type={pkg.type}
-              badge={(pkg as any).badge}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CodeExamplesSection() {
-  return (
-    <section className="py-24 relative">
-      <div className="container mx-auto px-4">
-        <SectionHeading
-          badge="Examples"
-          title="Quick to implement"
-          description="Get up and running in minutes with these examples."
-        />
-
-        <div className="max-w-4xl mx-auto space-y-16">
-          {codeExamples.map((example, idx) => (
-            <div
-              key={example.title}
-              className={`grid lg:grid-cols-2 gap-8 items-start ${
-                idx % 2 === 1 ? "lg:direction-rtl" : ""
-              }`}
-            >
-              <div className={`space-y-4 ${idx % 2 === 1 ? "lg:order-2" : ""}`}>
-                <span className="inline-block text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                  {String(idx + 1).padStart(2, "0")}
-                </span>
-                <h3 className="text-2xl font-bold text-neutral-900 dark:text-white">
-                  {example.title}
-                </h3>
-                <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                  {example.description}
-                </p>
+    <section className="features-section">
+      <div className="features-container">
+        <div className="features-grid">
+          {features.map((feature) => (
+            <div key={feature.title} className="feature-card">
+              <div className="feature-icon-wrapper">
+                <feature.icon className="feature-icon" />
               </div>
-              <div className={`${idx % 2 === 1 ? "lg:order-1" : ""}`}>
-                <div className="code-block-wrapper rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-800 shadow-lg">
-                  <CodeBlock language={(example as any).language || "typescript"}>{example.code}</CodeBlock>
-                </div>
-              </div>
+              <h3 className="feature-title">{feature.title}</h3>
+              <p className="feature-description">{feature.description}</p>
             </div>
           ))}
         </div>
@@ -350,48 +271,76 @@ function CodeExamplesSection() {
   );
 }
 
-function CTASection() {
+/* ===========================================
+   Links Section
+   =========================================== */
+
+const links = [
+  {
+    title: "Documentation",
+    description: "Learn how to get started with QuickRTC",
+    href: "/docs/getting-started",
+    icon: BookIcon,
+  },
+  {
+    title: "Architecture",
+    description: "Understand how QuickRTC works under the hood",
+    href: "/docs/concepts/quickrtc-architecture",
+    icon: CubeIcon,
+  },
+  {
+    title: "Flutter SDK",
+    description: "Build mobile apps with the Flutter client SDK",
+    href: "/docs/flutter/getting-started",
+    icon: DevicePhoneMobileIcon,
+  },
+  {
+    title: "API Reference",
+    description: "Explore the server and client APIs",
+    href: "/docs/server/overview",
+    icon: CodeBracketIcon,
+  },
+];
+
+function LinksSection() {
   return (
-    <section className="py-24 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-neutral-100 to-neutral-50 dark:from-neutral-900 dark:to-neutral-950" />
-      <GridPattern />
-      
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-3xl lg:text-5xl font-bold text-neutral-900 dark:text-white mb-6">
-            Ready to build?
-          </h2>
-          <p className="text-lg text-neutral-600 dark:text-neutral-400 mb-10 max-w-xl mx-auto">
-            Start building your real-time video application in under 5 minutes with QuickRTC.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button to="/docs/getting-started" variant="primary" size="lg" icon>
-              Read the Docs
-            </Button>
-            <Button href="https://github.com/vidya-hub/QuickRtc" variant="secondary" size="lg">
-              <IconGithub className="w-5 h-5" />
-              Star on GitHub
-            </Button>
-          </div>
+    <section className="links-section">
+      <div className="links-container">
+        <h2 className="links-heading">Explore</h2>
+        <div className="links-grid">
+          {links.map((link) => (
+            <Link key={link.title} to={link.href} className="nav-card">
+              <div className="nav-card-icon-wrapper">
+                <link.icon className="nav-card-icon" />
+              </div>
+              <div className="nav-card-content">
+                <h3 className="nav-card-title">{link.title}</h3>
+                <p className="nav-card-description">{link.description}</p>
+              </div>
+              <ArrowRightIcon className="nav-card-arrow" />
+            </Link>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
+/* ===========================================
+   Page
+   =========================================== */
+
 export default function Home(): ReactNode {
   return (
     <Layout
-      title="Simple WebRTC Conferencing"
-      description="QuickRTC - Production-ready WebRTC conferencing SDK built on mediasoup. Simple API, React hooks, TypeScript support."
+      title="Production-ready WebRTC SDK"
+      description="QuickRTC - Production-ready WebRTC conferencing SDK built on mediasoup. Ship video conferencing in days, not weeks."
     >
-      <main className="overflow-hidden">
+      <main className="homepage">
         <HeroSection />
+        <CodeSection />
         <FeaturesSection />
-        <PackagesSection />
-        <CodeExamplesSection />
-        <CTASection />
+        <LinksSection />
       </main>
     </Layout>
   );

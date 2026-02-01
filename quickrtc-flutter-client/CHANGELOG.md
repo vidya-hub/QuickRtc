@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-02-01
+
+### Added
+
+- **`QuickRTCConference` widget**: Batteries-included widget that handles socket connection, controller lifecycle, audio renderers, and error handling with retry support.
+- **`QuickRTCController.connect()` factory method**: One-liner setup that creates socket, controller, and joins conference automatically.
+- **`QuickRTCSocket.connect()` helper**: Simplifies socket connection from ~20 lines to a single line.
+- **`toggleScreenShareWithPicker(context)` method**: Platform-aware screen sharing toggle that uses picker on desktop and system capture on mobile/web.
+- **State convenience getters**: Added `isLocalAudioActive`, `isLocalVideoActive`, and `isLocalScreenshareActive` computed properties to `QuickRTCState`.
+- **Android screen share external stop detection**: Automatically detects when screen sharing is stopped via the system notification ("Stop now" button) or when MediaProjection is revoked. Other participants are now properly notified and the screen share tile is removed.
+- **Producer stats-based stall detection**: Monitors RTP stats to detect when screen share stops sending data, providing reliable detection even when `track.onEnded` doesn't fire on Android.
+
+### Changed
+
+- Removed freezed and json_serializable dependencies for simpler package structure.
+- Replaced code-generated models with manual implementations using Equatable.
+- Improved pub.dev compatibility by eliminating build_runner requirement.
+- Controller now tracks socket ownership and auto-disposes socket when created via `connect()`.
+
+### Fixed
+
+- **Android screen share not notifying participants on stop**: Previously, when screen sharing was stopped externally on Android, other participants would see a frozen frame. Now the `closeProducer` event is properly emitted to the server.
+- Fixed pub.dev static analysis errors caused by missing generated files.
+
 ## [1.0.2] - 2024-01-25
 
 ### Changed

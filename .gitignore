@@ -15,3 +15,11 @@ setup-react-client.sh
 .github/instructions/Instructions.instructions.md
 yt-demo/
 quickrtc-demo-presentation/index.html
+quickrtc-flutter-client/android/.gradle/9.2.0/gc.properties
+quickrtc-flutter-client/android/.gradle/9.2.0/checksums/checksums.lock
+quickrtc-flutter-client/android/.gradle/9.2.0/fileChanges/last-build.bin
+quickrtc-flutter-client/android/.gradle/9.2.0/fileHashes/fileHashes.lock
+quickrtc-flutter-client/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock
+quickrtc-flutter-client/android/.gradle/buildOutputCleanup/cache.properties
+quickrtc-flutter-client/android/.gradle/vcs-1/gc.properties
+quickrtc-flutter-client/android/build/reports/problems/problems-report.html

@@ -12,17 +12,17 @@ import 'package:quickrtc_flutter_client/src/mediasoup/common/logger.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/common/index.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/handlers/handler_interface.dart';
 
-enum Protocol { upd, tcp }
+enum Protocol { udp, tcp }
 
 extension ProtocolExtension on Protocol {
   static const Map<String, Protocol> types = {
     'tcp': Protocol.tcp,
-    'udp': Protocol.upd,
+    'udp': Protocol.udp,
   };
 
   static const Map<Protocol, String> values = {
     Protocol.tcp: 'tcp',
-    Protocol.upd: 'udp',
+    Protocol.udp: 'udp',
   };
 
   static Protocol fromString(String type) => types[type]!;
@@ -341,9 +341,11 @@ class DtlsParameters {
 
   DtlsParameters.fromMap(Map data)
       : role = DtlsRoleExtension.fromString(data['role']),
-        fingerprints = List<DtlsFingerprint>.from((data['fingerprints'] ?? [])
-            .map((fingerP) => DtlsFingerprint.fromMap(fingerP))
-            .toList(),);
+        fingerprints = List<DtlsFingerprint>.from(
+          (data['fingerprints'] ?? [])
+              .map((fingerP) => DtlsFingerprint.fromMap(fingerP))
+              .toList(),
+        );
 
   Map<String, dynamic> toMap() {
     return {
@@ -362,7 +364,7 @@ class PlainRtpParameters {
   int get ipVersion => _ipVersion;
 
   set ipVersion(int ip) {
-    if (ip != 4 || ip != 6) {
+    if (ip != 4 && ip != 6) {
       throw 'only 4 or 6';
     }
     _ipVersion = ip;
@@ -373,7 +375,7 @@ class PlainRtpParameters {
     required this.port,
     required int ipVersion,
   })  : _ipVersion = ipVersion,
-        assert(ipVersion != 4 || ipVersion != 6, 'Only 4 or 6');
+        assert(ipVersion == 4 || ipVersion == 6, 'Only 4 or 6');
 }
 
 Logger _logger = Logger('Transport');
@@ -505,8 +507,7 @@ class Transport extends EnhancedEventEmitter {
     _direction = direction;
     _extendedRtpCapabilities = extendedRtpCapabilities;
     _canProduceByKind = canProduceByKind;
-    _maxSctpMessageSize =
-        sctpParameters?.maxMessageSize;
+    _maxSctpMessageSize = sctpParameters?.maxMessageSize;
 
     // Clone and sanitize additionalSettings.
     additionalSettings = Map<String, dynamic>.of(additionalSettings);
@@ -681,12 +682,14 @@ class Transport extends EnhancedEventEmitter {
     }
 
     // Enqueue command.
-    _flexQueue.addTask(FlexTaskAdd(
-      id: '',
-      argument: iceParameters,
-      execFun: _handler.restartIce,
-      message: 'transport.restartIce()',
-    ),);
+    _flexQueue.addTask(
+      FlexTaskAdd(
+        id: '',
+        argument: iceParameters,
+        execFun: _handler.restartIce,
+        message: 'transport.restartIce()',
+      ),
+    );
   }
 
   /// Update ICE servers.
@@ -697,12 +700,14 @@ class Transport extends EnhancedEventEmitter {
       throw ('closed');
     }
 
-    _flexQueue.addTask(FlexTaskAdd(
-      id: '',
-      argument: iceServers,
-      execFun: _handler.updateIceServers,
-      message: 'transport.updateIceServers()',
-    ),);
+    _flexQueue.addTask(
+      FlexTaskAdd(
+        id: '',
+        argument: iceServers,
+        execFun: _handler.updateIceServers,
+        message: 'transport.updateIceServers()',
+      ),
+    );
   }
 
   void _handleProducer(Producer producer) {
@@ -713,58 +718,71 @@ class Transport extends EnhancedEventEmitter {
         return;
       }
 
-      _flexQueue.addTask(FlexTaskRemove(
-        id: producer.id,
-        argument: producer.localId,
-        execFun: _handler.stopSending,
-        message: 'producer @close event',
-        errorCallbackFun: (error) =>
-            _logger.warn('producer.close() failed:${error.toString()}'),
-      ),);
+      _flexQueue.addTask(
+        FlexTaskRemove(
+          id: producer.id,
+          argument: producer.localId,
+          execFun: _handler.stopSending,
+          message: 'producer @close event',
+          errorCallbackFun: (error) =>
+              _logger.warn('producer.close() failed:${error.toString()}'),
+        ),
+      );
     });
 
     producer.on('@replacetrack', (data) {
       final MediaStreamTrack track = data['track'];
       final callback = data['callback'];
       final errback = data['errback'];
-      _flexQueue.addTask(FlexTaskAdd(
-        id: '',
-        argument: ReplaceTrackOptions(localId: producer.localId, track: track),
-        callbackFun: callback,
-        errorCallbackFun: errback,
-        execFun: _handler.replaceTrack,
-        message: 'producer @replacetrack event',
-      ),);
+      _flexQueue.addTask(
+        FlexTaskAdd(
+          id: '',
+          argument:
+              ReplaceTrackOptions(localId: producer.localId, track: track),
+          callbackFun: callback,
+          errorCallbackFun: errback,
+          execFun: _handler.replaceTrack,
+          message: 'producer @replacetrack event',
+        ),
+      );
     });
 
     producer.on('@setmaxspatiallayer', (data) {
       final spatialLayer = data['spatialLayer'];
       final callback = data['callback'];
       final errback = data['errback'];
-      _flexQueue.addTask(FlexTaskAdd(
-        id: '',
-        argument: SetMaxSpatialLayerOptions(
-            localId: producer.localId, spatialLayer: spatialLayer,),
-        callbackFun: callback,
-        errorCallbackFun: errback,
-        execFun: _handler.setMaxSpatialLayer,
-        message: 'producer @setmaxspatiallayer event',
-      ),);
+      _flexQueue.addTask(
+        FlexTaskAdd(
+          id: '',
+          argument: SetMaxSpatialLayerOptions(
+            localId: producer.localId,
+            spatialLayer: spatialLayer,
+          ),
+          callbackFun: callback,
+          errorCallbackFun: errback,
+          execFun: _handler.setMaxSpatialLayer,
+          message: 'producer @setmaxspatiallayer event',
+        ),
+      );
     });
 
     producer.on('@setrtpencodingparameters', (data) {
       final params = data['params'];
       final callback = data['callback'];
       final errback = data['errback'];
-      _flexQueue.addTask(FlexTaskAdd(
-        id: '',
-        argument: SetRtpEncodingParametersOptions(
-            localId: producer.localId, params: params,),
-        execFun: _handler.setRtpEncodingParameters,
-        callbackFun: callback,
-        errorCallbackFun: errback,
-        message: 'producer @setrtpencodingparameters event',
-      ),);
+      _flexQueue.addTask(
+        FlexTaskAdd(
+          id: '',
+          argument: SetRtpEncodingParametersOptions(
+            localId: producer.localId,
+            params: params,
+          ),
+          execFun: _handler.setRtpEncodingParameters,
+          callbackFun: callback,
+          errorCallbackFun: errback,
+          message: 'producer @setrtpencodingparameters event',
+        ),
+      );
     });
 
     producer.on('@getstats', (data) {
@@ -789,12 +807,14 @@ class Transport extends EnhancedEventEmitter {
         return;
       }
 
-      _flexQueue.addTask(FlexTaskRemove(
-        id: consumer.id,
-        argument: consumer.localId,
-        execFun: _handler.stopReceiving,
-        message: 'consumer @close event',
-      ),);
+      _flexQueue.addTask(
+        FlexTaskRemove(
+          id: consumer.id,
+          argument: consumer.localId,
+          execFun: _handler.stopReceiving,
+          message: 'consumer @close event',
+        ),
+      );
     });
 
     consumer.on('@getstats', (data) {
@@ -868,13 +888,15 @@ class Transport extends EnhancedEventEmitter {
         }).toList();
       }
 
-      HandlerSendResult sendResult = await _handler.send(HandlerSendOptions(
-        track: arguments.track,
-        encodings: normalizedEncodings,
-        codecOptions: arguments.codecOptions,
-        codec: arguments.codec,
-        stream: arguments.stream,
-      ),);
+      HandlerSendResult sendResult = await _handler.send(
+        HandlerSendOptions(
+          track: arguments.track,
+          encodings: normalizedEncodings,
+          codecOptions: arguments.codecOptions,
+          codec: arguments.codec,
+          stream: arguments.stream,
+        ),
+      );
 
       try {
         // This will fill rtpParameters's missing fields with default values.
@@ -920,7 +942,7 @@ class Transport extends EnhancedEventEmitter {
       if (arguments.stopTracks) {
         try {
           arguments.track.stop();
-        } catch (_) { /* ignored */ }
+        } catch (_) {/* ignored */}
       }
       rethrow;
     }
@@ -984,12 +1006,13 @@ class Transport extends EnhancedEventEmitter {
       throw ('cannot consume this Producer');
     }
 
-    HandlerReceiveResult receiveResult =
-        await _handler.receive(HandlerReceiveOptions(
-      trackId: arguments.id,
-      kind: arguments.kind,
-      rtpParameters: arguments.rtpParameters,
-    ),);
+    HandlerReceiveResult receiveResult = await _handler.receive(
+      HandlerReceiveOptions(
+        trackId: arguments.id,
+        kind: arguments.kind,
+        rtpParameters: arguments.rtpParameters,
+      ),
+    );
 
     Consumer consumer = Consumer(
       id: arguments.id,
@@ -1015,18 +1038,21 @@ class Transport extends EnhancedEventEmitter {
         RtpParameters probatorRtpParameters =
             Ortc.generateProbatorRtpparameters(consumer.rtpParameters);
 
-        await _handler.receive(HandlerReceiveOptions(
-          trackId: 'probator',
-          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
-          rtpParameters: probatorRtpParameters,
-        ),);
+        await _handler.receive(
+          HandlerReceiveOptions(
+            trackId: 'probator',
+            kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+            rtpParameters: probatorRtpParameters,
+          ),
+        );
 
         _logger.debug('consume() | Consumer for RTP probation created');
 
         _probatorConsumerCreated = true;
       } catch (error) {
         _logger.error(
-            'consume() | failed to create Consumer for RTP probation:${error.toString()}',);
+          'consume() | failed to create Consumer for RTP probation:${error.toString()}',
+        );
       }
     }
 
@@ -1109,7 +1135,8 @@ class Transport extends EnhancedEventEmitter {
     }
 
     // Enqueue command.
-    _flexQueue.addTask(FlexTaskAdd(
+    _flexQueue.addTask(
+      FlexTaskAdd(
         id: '',
         execFun: () async {
           HandlerSendDataChannelResult sendDataResult =
@@ -1126,7 +1153,8 @@ class Transport extends EnhancedEventEmitter {
 
           // This will fill sctpStreamParameters's missing fields with default values.
           Ortc.validateSctpStreamParameters(
-              sendDataResult.sctpStreamParameters,);
+            sendDataResult.sctpStreamParameters,
+          );
 
           String id = await safeEmitAsFuture('producedata', {
             'sctpStreamParameters': sendDataResult.sctpStreamParameters,
@@ -1151,7 +1179,9 @@ class Transport extends EnhancedEventEmitter {
           });
 
           dataProducerCallback?.call(dataProducer);
-        },),);
+        },
+      ),
+    );
   }
 
   // Create a DataConsumer
@@ -1184,36 +1214,40 @@ class Transport extends EnhancedEventEmitter {
     Ortc.validateSctpStreamParameters(sctpStreamParameters);
 
     // Enqueue command.
-    _flexQueue.addTask(FlexTaskAdd(
-      id: id,
-      message: 'transport.consumeData()',
-      execFun: () async {
-        HandlerReceiveDataChannelResult receiveDataChannelResult =
-            await _handler.receiveDataChannel(HandlerReceiveDataChannelOptions(
-          sctpStreamParameters: sctpStreamParameters,
-          label: label,
-          protocol: protocol,
-        ),);
+    _flexQueue.addTask(
+      FlexTaskAdd(
+        id: id,
+        message: 'transport.consumeData()',
+        execFun: () async {
+          HandlerReceiveDataChannelResult receiveDataChannelResult =
+              await _handler.receiveDataChannel(
+            HandlerReceiveDataChannelOptions(
+              sctpStreamParameters: sctpStreamParameters,
+              label: label,
+              protocol: protocol,
+            ),
+          );
 
-        DataConsumer dataConsumer = DataConsumer(
-          id: id,
-          dataProducerId: dataProducerId,
-          dataChannel: receiveDataChannelResult.dataChannel,
-          sctpStreamParameters: sctpStreamParameters,
-          appData: appData,
-          peerId: peerId,
-        );
+          DataConsumer dataConsumer = DataConsumer(
+            id: id,
+            dataProducerId: dataProducerId,
+            dataChannel: receiveDataChannelResult.dataChannel,
+            sctpStreamParameters: sctpStreamParameters,
+            appData: appData,
+            peerId: peerId,
+          );
 
-        _dataConsumers[dataConsumer.id] = dataConsumer;
-        _handleDataConsumer(dataConsumer);
+          _dataConsumers[dataConsumer.id] = dataConsumer;
+          _handleDataConsumer(dataConsumer);
 
-        // Emit observer event.
-        _observer.safeEmit('newdataconsumer', {
-          'dataConsumer': dataConsumer,
-        });
+          // Emit observer event.
+          _observer.safeEmit('newdataconsumer', {
+            'dataConsumer': dataConsumer,
+          });
 
-        dataConsumerCallback?.call(dataConsumer, accept);
-      },
-    ),);
+          dataConsumerCallback?.call(dataConsumer, accept);
+        },
+      ),
+    );
   }
 }

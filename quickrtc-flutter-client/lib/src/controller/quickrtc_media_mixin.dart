@@ -1,3 +1,8 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/widgets.dart' show BuildContext;
+import 'package:flutter_webrtc/flutter_webrtc.dart' show WebRTC;
+import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 import 'package:quickrtc_flutter_client/src/controller/quickrtc_static.dart';
 import 'package:quickrtc_flutter_client/state/quick_rtc_state.dart';
 import 'package:quickrtc_flutter_client/types.dart';
@@ -9,6 +14,9 @@ import 'package:quickrtc_flutter_client/types.dart';
 mixin QuickRTCMediaMixin {
   // Required implementations from the main class
   QuickRTCState get state;
+
+  // Logging (from main class)
+  void log(String message, [dynamic data]);
 
   // Low-level methods (from producer mixin)
   Future<List<LocalStream>> produce(ProduceInput input);
@@ -205,17 +213,24 @@ mixin QuickRTCMediaMixin {
       return state.localScreenshareStream;
     }
 
+    // Set up Android notification stop callback before starting screen share
+    _setupAndroidScreenShareCallback();
+
     final media = await QuickRTCStatic.getLocalMedia(
       MediaConfig.screenShareOnly(config: config),
     );
 
     if (media.screenshareTrack == null) {
+      // Clear the callback if screen share failed
+      _clearAndroidScreenShareCallback();
       throw Exception('Failed to get screenshare track');
     }
 
     final streams = await produce(
-      ProduceInput.fromTrack(media.screenshareTrack!,
-          type: StreamType.screenshare,),
+      ProduceInput.fromTrack(
+        media.screenshareTrack!,
+        type: StreamType.screenshare,
+      ),
     );
 
     return streams.isNotEmpty ? streams.first : null;
@@ -227,6 +242,8 @@ mixin QuickRTCMediaMixin {
     if (screenshareStream != null) {
       await stopStream(screenshareStream.id);
     }
+    // Clear the Android callback when screen share is stopped
+    _clearAndroidScreenShareCallback();
   }
 
   /// Toggle screen share on/off
@@ -237,5 +254,115 @@ mixin QuickRTCMediaMixin {
     } else {
       return await startScreenShare(config: config);
     }
+  }
+
+  /// Toggle screen share with platform-appropriate picker
+  ///
+  /// On desktop platforms (macOS, Windows, Linux): Uses the system picker
+  /// via `getDisplayMedia` which shows a native screen/window selection dialog.
+  ///
+  /// On mobile platforms (iOS, Android): Uses system screen capture which
+  /// typically shows a system permission dialog.
+  ///
+  /// On web: Uses the browser's built-in screen sharing picker.
+  ///
+  /// If screen share is already active, this will stop it.
+  ///
+  /// Example:
+  /// ```dart
+  /// // Simple toggle - platform handled automatically
+  /// await controller.toggleScreenShareWithPicker(context);
+  ///
+  /// // With custom config
+  /// await controller.toggleScreenShareWithPicker(
+  ///   context,
+  ///   config: ScreenShareConfig(frameRate: 30, width: 1920, height: 1080),
+  /// );
+  /// ```
+  Future<LocalStream?> toggleScreenShareWithPicker(
+    BuildContext context, {
+    ScreenShareConfig? config,
+  }) async {
+    // If already sharing, stop it
+    if (state.hasLocalScreenshare) {
+      await stopScreenShare();
+      return null;
+    }
+
+    // Set up Android notification stop callback before starting screen share
+    _setupAndroidScreenShareCallback();
+
+    // Get screen share media based on platform
+    final LocalMedia media;
+    if (WebRTC.platformIsDesktop) {
+      // Desktop: Use picker which shows native screen/window selection
+      media = await QuickRTCStatic.getScreenShareWithPicker(
+        context,
+        config: config,
+      );
+    } else {
+      // Mobile/Web: Use standard getLocalMedia which triggers system picker
+      media = await QuickRTCStatic.getLocalMedia(
+        MediaConfig.screenShareOnly(config: config),
+      );
+    }
+
+    if (media.screenshareTrack == null) {
+      // Clear the callback if screen share failed
+      _clearAndroidScreenShareCallback();
+      throw Exception('Failed to get screenshare track');
+    }
+
+    // Produce the screen share
+    final streams = await produce(
+      ProduceInput.fromTrack(
+        media.screenshareTrack!,
+        type: StreamType.screenshare,
+      ),
+    );
+
+    return streams.isNotEmpty ? streams.first : null;
+  }
+
+  // ============================================================================
+  // PRIVATE: Android Screen Share Notification Callback
+  // ============================================================================
+
+  /// Set up the callback for when Android notification "Stop" button is pressed.
+  ///
+  /// This is called when starting screen share on Android. When the user taps
+  /// "Stop Sharing" on the foreground service notification, this callback
+  /// will trigger stopScreenShare() to clean up properly.
+  void _setupAndroidScreenShareCallback() {
+    if (kIsWeb || !Platform.isAndroid) {
+      return;
+    }
+
+    log('Setting up Android screen share notification callback');
+    QuickRTCPlatform.setScreenShareStoppedCallback(() {
+      log('Android notification stop callback triggered');
+      // Use Future.microtask to avoid blocking the native callback
+      Future.microtask(() async {
+        try {
+          // Stop the screen share through the normal flow
+          await stopScreenShare();
+          log('Screen share stopped via Android notification');
+        } catch (e) {
+          log('Error stopping screen share from notification callback', e);
+        }
+      });
+    });
+  }
+
+  /// Clear the Android notification stop callback.
+  ///
+  /// Called when screen share is stopped to prevent stale callbacks.
+  void _clearAndroidScreenShareCallback() {
+    if (kIsWeb || !Platform.isAndroid) {
+      return;
+    }
+
+    log('Clearing Android screen share notification callback');
+    QuickRTCPlatform.setScreenShareStoppedCallback(null);
   }
 }

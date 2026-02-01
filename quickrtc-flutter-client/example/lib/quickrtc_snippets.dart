@@ -4,16 +4,17 @@
 /// Each snippet is a standalone example showing a specific feature.
 ///
 /// Snippets included:
-/// 1. Socket Connection Setup
-/// 2. Controller Initialization
-/// 3. Joining a Meeting
-/// 4. Getting Local Media (Camera/Mic)
-/// 5. Producing Media (Publishing to Meeting)
-/// 6. Toggling Audio/Video
-/// 7. Screen Sharing
-/// 8. Rendering Video
-/// 9. Handling Remote Participants
-/// 10. Leaving a Meeting
+/// 1. Quick Start (Simplest Way)
+/// 2. Socket Connection Setup
+/// 3. Controller Initialization (Manual)
+/// 4. Joining a Meeting
+/// 5. Getting Local Media (Camera/Mic)
+/// 6. Producing Media (Publishing to Meeting)
+/// 7. Toggling Audio/Video
+/// 8. Screen Sharing
+/// 9. Rendering Video
+/// 10. Handling Remote Participants
+/// 11. Leaving a Meeting
 library;
 
 import 'dart:async';
@@ -22,10 +23,106 @@ import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 // =============================================================================
-// 1. SOCKET CONNECTION SETUP
+// 1. QUICK START (SIMPLEST WAY) - NEW!
+// =============================================================================
+
+/// The easiest way to add conferencing - use the QuickRTCConference widget.
+/// Handles socket connection, controller lifecycle, and audio rendering.
+Widget quickStartExample() {
+  return QuickRTCConference(
+    serverUrl: 'https://your-server.com',
+    conferenceId: 'room-123',
+    participantName: 'Alice',
+    onJoined: (controller) {
+      // Enable camera and microphone when joined
+      controller.enableMedia();
+    },
+    builder: (context, state, controller) {
+      return Column(
+        children: [
+          // Your video grid UI
+          Expanded(
+            child: GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+              ),
+              itemCount: state.participantList.length + 1, // +1 for local
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  // Local video
+                  return QuickRTCMediaRenderer(
+                    stream: state.localVideoStream?.stream,
+                    mirror: true,
+                    isLocal: true,
+                  );
+                }
+                final participant = state.participantList[index - 1];
+                return QuickRTCMediaRenderer(
+                  remoteStream: participant.videoStream,
+                  participantName: participant.name,
+                );
+              },
+            ),
+          ),
+          // Controls
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Use new convenience getters for UI state
+              IconButton(
+                icon:
+                    Icon(state.isLocalAudioActive ? Icons.mic : Icons.mic_off),
+                onPressed: () => controller.toggleMicrophoneMute(),
+              ),
+              IconButton(
+                icon: Icon(
+                  state.isLocalVideoActive
+                      ? Icons.videocam
+                      : Icons.videocam_off,
+                ),
+                onPressed: () => controller.toggleCameraPause(),
+              ),
+              IconButton(
+                icon: Icon(
+                  state.isLocalScreenshareActive
+                      ? Icons.stop_screen_share
+                      : Icons.screen_share,
+                ),
+                // Use toggleScreenShareWithPicker for platform-appropriate picker
+                onPressed: () =>
+                    controller.toggleScreenShareWithPicker(context),
+              ),
+            ],
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Alternative quick start using QuickRTCController.connect() factory.
+Future<void> quickStartWithController() async {
+  // Connect and join in one step
+  final controller = await QuickRTCController.connect(
+    serverUrl: 'https://your-server.com',
+    conferenceId: 'room-123',
+    participantName: 'Alice',
+  );
+
+  // Enable camera and microphone
+  await controller.enableMedia();
+
+  // Later: leave and cleanup
+  await controller.leaveMeeting();
+  controller.dispose(); // Socket is automatically disconnected
+}
+
+// =============================================================================
+// 2. SOCKET CONNECTION SETUP (Manual approach)
 // =============================================================================
 
 /// Creates and connects a Socket.IO client to the signaling server.
+/// NOTE: For simpler usage, prefer QuickRTCSocket.connect() instead.
 io.Socket createSocket(String serverUrl) {
   return io.io(
     serverUrl,
@@ -38,6 +135,7 @@ io.Socket createSocket(String serverUrl) {
 }
 
 /// Connects socket with timeout, returns true on success.
+/// NOTE: For simpler usage, prefer QuickRTCSocket.connect() instead.
 Future<bool> connectSocket(io.Socket socket, {int timeoutSeconds = 10}) async {
   final completer = Completer<bool>();
 
@@ -57,8 +155,13 @@ Future<bool> connectSocket(io.Socket socket, {int timeoutSeconds = 10}) async {
   );
 }
 
+/// NEW: Simplified socket connection with QuickRTCSocket helper.
+Future<io.Socket> connectSocketSimplified(String serverUrl) async {
+  return await QuickRTCSocket.connect(serverUrl);
+}
+
 // =============================================================================
-// 2. CONTROLLER INITIALIZATION
+// 3. CONTROLLER INITIALIZATION (Manual approach)
 // =============================================================================
 
 /// Creates the QuickRTC controller with the connected socket.
@@ -149,6 +252,14 @@ Future<void> toggleCamera(QuickRTCController controller) async {
 // =============================================================================
 
 /// Starts screen sharing (mobile).
+///
+/// On Android, when screen sharing is stopped externally (via system notification
+/// "Stop now" button or MediaProjection revocation), the SDK automatically:
+/// 1. Detects the stop via producer stats monitoring
+/// 2. Calls stopStream() to emit closeProducer to the server
+/// 3. Other participants are notified and remove the screen share tile
+///
+/// This is handled automatically - no additional code is required.
 Future<void> startScreenShareMobile(QuickRTCController controller) async {
   final media = await QuickRTCStatic.getLocalMedia(
     MediaConfig.screenShareOnly(),

@@ -134,6 +134,30 @@ class QuickRTCState extends Equatable {
   bool get isLocalScreensharePaused => localScreenshareStream?.paused ?? true;
 
   // ============================================================================
+  // COMPUTED ACTIVE STATES (for UI convenience)
+  // ============================================================================
+
+  /// Whether local audio is active (has audio AND not paused)
+  ///
+  /// Use this in UI to determine audio button state:
+  /// ```dart
+  /// Icon(state.isLocalAudioActive ? Icons.mic : Icons.mic_off)
+  /// ```
+  bool get isLocalAudioActive => hasLocalAudio && !isLocalAudioPaused;
+
+  /// Whether local video is active (has video AND not paused)
+  ///
+  /// Use this in UI to determine video button state:
+  /// ```dart
+  /// Icon(state.isLocalVideoActive ? Icons.videocam : Icons.videocam_off)
+  /// ```
+  bool get isLocalVideoActive => hasLocalVideo && !isLocalVideoPaused;
+
+  /// Whether local screenshare is active (has screenshare AND not paused)
+  bool get isLocalScreenshareActive =>
+      hasLocalScreenshare && !isLocalScreensharePaused;
+
+  // ============================================================================
   // COPY WITH
   // ============================================================================
 
