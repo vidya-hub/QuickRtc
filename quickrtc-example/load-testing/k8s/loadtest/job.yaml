@@ -1,0 +1,116 @@
+# Load Test Job using webrtcperf
+# Runs load test with configurable parameters
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: quickrtc-loadtest
+  namespace: quickrtc-loadtest
+  labels:
+    app: loadtest
+    app.kubernetes.io/name: loadtest
+    app.kubernetes.io/component: job
+spec:
+  # Run multiple pods in parallel for high load tests
+  parallelism: 1
+  completions: 1
+  backoffLimit: 2
+  activeDeadlineSeconds: 900  # 15 minute timeout
+  ttlSecondsAfterFinished: 3600  # Cleanup after 1 hour
+  template:
+    metadata:
+      labels:
+        app: loadtest
+    spec:
+      restartPolicy: Never
+      
+      containers:
+      - name: webrtcperf
+        image: ghcr.io/vpalmisano/webrtcperf:devel
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        env:
+        - name: SESSIONS
+          value: "100"
+        - name: DURATION
+          value: "120"
+        - name: SERVER_URL
+          value: "http://quickrtc-server:3000"
+        args:
+        - "--url=$(SERVER_URL)"
+        - "--sessions=$(SESSIONS)"
+        - "--tabs-per-session=1"
+        - "--script-path=/scripts/quickrtc-load-test.js"
+        - "--run-duration=$(DURATION)"
+        - "--spawn-rate=5"
+        - "--show-page-log"
+        - "--use-fake-device-for-media-stream"
+        - "--use-fake-ui-for-media-stream"
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+        - name: results
+          mountPath: /results
+        # Shared memory for Chrome
+        - name: dshm
+          mountPath: /dev/shm
+      
+      volumes:
+      - name: scripts
+        configMap:
+          name: loadtest-scripts
+      - name: results
+        emptyDir: {}
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2Gi"
+---
+# CronJob for scheduled load tests
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: quickrtc-loadtest-scheduled
+  namespace: quickrtc-loadtest
+  labels:
+    app: loadtest
+    app.kubernetes.io/name: loadtest
+    app.kubernetes.io/component: cronjob
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  suspend: true  # Start suspended, enable when ready
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: webrtcperf
+            image: ghcr.io/vpalmisano/webrtcperf:devel
+            args:
+            - "--url=http://quickrtc-server:3000"
+            - "--sessions=50"
+            - "--script-path=/scripts/quickrtc-load-test.js"
+            - "--run-duration=60"
+            - "--use-fake-device-for-media-stream"
+            volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: dshm
+              mountPath: /dev/shm
+          volumes:
+          - name: scripts
+            configMap:
+              name: loadtest-scripts
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: "1Gi"

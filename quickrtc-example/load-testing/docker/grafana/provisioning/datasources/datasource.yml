@@ -1,0 +1,16 @@
+# Grafana Datasource Provisioning
+# Auto-configures Prometheus as the default datasource
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: PBFA97CFB590B2093
+    access: proxy
+    url: http://host.docker.internal:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "5s"
+      httpMethod: "POST"

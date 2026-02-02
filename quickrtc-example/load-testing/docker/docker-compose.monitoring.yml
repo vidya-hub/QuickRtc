@@ -1,0 +1,59 @@
+# QuickRTC Load Testing - Monitoring Stack
+# 
+# Usage:
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.monitoring.yml up
+#
+# Access:
+#   - Prometheus: http://localhost:9090
+#   - Grafana: http://localhost:3001 (admin/admin)
+
+services:
+  # ===========================================================================
+  # Prometheus - Metrics Collection
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: quickrtc-loadtest-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.listen-address=:9090'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/k8s-certs:/etc/prometheus/k8s-certs:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Grafana - Visualization
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: quickrtc-loadtest-grafana
+    ports:
+      - "3001:3001"
+    environment:
+      - GF_SERVER_HTTP_PORT=3001
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_INSTALL_PLUGINS=grafana-clock-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

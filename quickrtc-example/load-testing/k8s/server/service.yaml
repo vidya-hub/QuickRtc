@@ -1,0 +1,40 @@
+# QuickRTC Server Service
+# Note: For WebRTC, clients typically connect directly to hostNetwork
+# This service is mainly for internal cluster access and metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickrtc-server
+  namespace: quickrtc-loadtest
+  labels:
+    app: quickrtc-server
+    app.kubernetes.io/name: quickrtc-server
+    app.kubernetes.io/component: service
+spec:
+  type: NodePort
+  selector:
+    app: quickrtc-server
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    nodePort: 30300
+    protocol: TCP
+---
+# Headless service for direct pod access
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickrtc-server-headless
+  namespace: quickrtc-loadtest
+  labels:
+    app: quickrtc-server
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: quickrtc-server
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000

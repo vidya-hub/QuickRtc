@@ -1,0 +1,65 @@
+# Prometheus ServiceMonitor for QuickRTC
+# Scrapes metrics from all QuickRTC pods
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: quickrtc-monitor
+  namespace: quickrtc
+  labels:
+    app: quickrtc
+spec:
+  selector:
+    matchLabels:
+      app: quickrtc
+      component: server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - quickrtc
+
+---
+# PrometheusRule for QuickRTC alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: quickrtc-alerts
+  namespace: quickrtc
+  labels:
+    app: quickrtc
+spec:
+  groups:
+    - name: quickrtc.rules
+      rules:
+        # Alert when participant count is high
+        - alert: QuickRTCHighParticipants
+          expr: quickrtc_participants_total > 2000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High participant count"
+            description: "QuickRTC has {{ $value }} participants"
+        
+        # Alert when error rate is high
+        - alert: QuickRTCHighErrorRate
+          expr: rate(quickrtc_participant_leaves_total[5m]) / rate(quickrtc_participant_joins_total[5m]) > 0.5
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High participant drop rate"
+            description: "More than 50% of participants are leaving"
+        
+        # Alert when server is down
+        - alert: QuickRTCServerDown
+          expr: up{job="quickrtc-server"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "QuickRTC server is down"
+            description: "QuickRTC server {{ $labels.instance }} is not responding"

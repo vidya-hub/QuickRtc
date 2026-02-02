@@ -1,0 +1,11 @@
+{
+  "url": "http://localhost:3000/loadtest",
+  "sessions": 500,
+  "tabsPerSession": 1,
+  "runDuration": 300,
+  "spawnRate": 10,
+  "scriptPath": "/app/scripts/quickrtc-load-test.js",
+  "showPageLog": false,
+  "statsInterval": 15,
+  "useFakeMedia": true
+}

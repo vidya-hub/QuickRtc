@@ -1,0 +1,49 @@
+# QuickRTC Load Test Scenario: Medium Load
+# Purpose: Baseline performance metrics with moderate load
+
+name: "Medium Load Test"
+description: "100 users across 10 rooms, 2 minutes duration"
+
+# Test Parameters
+test:
+  duration: 120             # seconds
+  rampUpTime: 30            # seconds to reach full load
+  coolDownTime: 10          # seconds after test before collecting results
+
+# User Configuration  
+users:
+  total: 100                # Total simulated users
+  sessionsPerPod: 50        # For K8s: users per load generator pod
+  tabsPerSession: 1         # Browser tabs per session
+
+# Room Strategy
+rooms:
+  strategy: "distributed"   # Fixed users per room
+  distributed:
+    usersPerRoom: 10        # 100 users / 10 = 10 rooms
+    roomPrefix: "room-"     # room-0, room-1, ..., room-9
+
+# Media Configuration
+media:
+  produceAudio: true
+  produceVideo: true
+  consumeAll: true          # Consume all other participants' streams
+  videoBitrate: 500000      # 500 kbps
+  audioBitrate: 32000       # 32 kbps
+  videoResolution:
+    width: 640
+    height: 480
+    frameRate: 24
+
+# Behavior
+behavior:
+  joinDelay: 200            # ms between user joins
+  reconnectOnFailure: true
+  maxReconnectAttempts: 3
+  logLevel: "info"
+
+# Metrics Collection
+metrics:
+  collectInterval: 5        # seconds
+  exportFormat: "json"
+  exportPath: "/results"

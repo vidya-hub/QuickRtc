@@ -27,4 +27,12 @@ export default defineConfig({
     https: getHttpsConfig(),
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        loadtest: path.resolve(__dirname, 'loadtest.html'),
+      },
+    },
+  },
 });

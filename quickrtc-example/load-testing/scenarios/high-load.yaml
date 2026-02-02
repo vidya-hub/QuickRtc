@@ -1,0 +1,49 @@
+# QuickRTC Load Test Scenario: High Load
+# Purpose: Test performance limits with significant load
+
+name: "High Load Test"
+description: "500 users across 50 rooms, 5 minutes duration"
+
+# Test Parameters
+test:
+  duration: 300             # seconds (5 minutes)
+  rampUpTime: 60            # seconds to reach full load
+  coolDownTime: 15          # seconds after test before collecting results
+
+# User Configuration  
+users:
+  total: 500                # Total simulated users
+  sessionsPerPod: 100       # For K8s: users per load generator pod (5 pods)
+  tabsPerSession: 1         # Browser tabs per session
+
+# Room Strategy
+rooms:
+  strategy: "distributed"   # Fixed users per room
+  distributed:
+    usersPerRoom: 10        # 500 users / 10 = 50 rooms
+    roomPrefix: "room-"     # room-0, room-1, ..., room-49
+
+# Media Configuration
+media:
+  produceAudio: true
+  produceVideo: true
+  consumeAll: true          # Consume all other participants' streams
+  videoBitrate: 300000      # 300 kbps (reduced for high load)
+  audioBitrate: 32000       # 32 kbps
+  videoResolution:
+    width: 480
+    height: 360
+    frameRate: 20
+
+# Behavior
+behavior:
+  joinDelay: 100            # ms between user joins
+  reconnectOnFailure: true
+  maxReconnectAttempts: 3
+  logLevel: "warn"          # Reduce logging for performance
+
+# Metrics Collection
+metrics:
+  collectInterval: 10       # seconds (less frequent for high load)
+  exportFormat: "json"
+  exportPath: "/results"

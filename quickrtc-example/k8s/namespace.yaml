@@ -1,0 +1,8 @@
+# QuickRTC Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quickrtc
+  labels:
+    app: quickrtc
+    environment: production

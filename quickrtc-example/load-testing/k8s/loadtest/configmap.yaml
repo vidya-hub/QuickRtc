@@ -1,0 +1,110 @@
+# ConfigMap containing load test scripts and scenarios
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loadtest-scripts
+  namespace: quickrtc-loadtest
+  labels:
+    app: loadtest
+    app.kubernetes.io/name: loadtest
+    app.kubernetes.io/component: scripts
+data:
+  quickrtc-load-test.js: |
+    /**
+     * QuickRTC Load Test Script for webrtcperf (K8s version)
+     */
+    
+    function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+    
+    function getRoomId(scenario, sessionIndex) {
+      const rooms = scenario.rooms || { strategy: 'distributed', distributed: { usersPerRoom: 10, roomPrefix: 'room-' } };
+      const strategy = rooms.strategy || 'distributed';
+      
+      switch (strategy) {
+        case 'single':
+          return rooms.single?.roomId || 'load-test-room';
+        case 'distributed':
+          const usersPerRoom = rooms.distributed?.usersPerRoom || 10;
+          const roomIndex = Math.floor(sessionIndex / usersPerRoom);
+          return `${rooms.distributed?.roomPrefix || 'room-'}${roomIndex}`;
+        default:
+          return `room-${Math.floor(sessionIndex / 10)}`;
+      }
+    }
+    
+    const defaultScenario = {
+      rooms: { strategy: 'distributed', distributed: { usersPerRoom: 10, roomPrefix: 'room-' } },
+      behavior: { joinDelay: 100 },
+      test: { duration: 60 }
+    };
+    
+    module.exports = async function(page, context) {
+      const { sessionIndex, tabIndex, params } = context;
+      const scenario = params.scenario ? JSON.parse(params.scenario) : defaultScenario;
+      
+      const conferenceId = getRoomId(scenario, sessionIndex);
+      const participantId = `k8s-${sessionIndex}-${tabIndex}-${uuidv4().slice(0, 8)}`;
+      const participantName = `K8sUser-${sessionIndex}`;
+      const serverUrl = params.url || 'http://quickrtc-server:3000';
+      const testDuration = (scenario.test?.duration || 60) * 1000;
+      
+      console.log(`[Session ${sessionIndex}] Joining room: ${conferenceId}`);
+      
+      await page.addScriptTag({ url: 'https://cdn.socket.io/4.6.0/socket.io.min.js' });
+      await page.waitForTimeout(sessionIndex * 100 % 5000);
+      
+      const result = await page.evaluate(async (config) => {
+        const { conferenceId, participantId, participantName, serverUrl, testDuration } = config;
+        
+        return new Promise((resolve) => {
+          const stats = { joined: false, joinLatencyMs: 0, errors: [], startTime: Date.now() };
+          const socket = io(serverUrl, { transports: ['websocket'] });
+          
+          socket.on('connect', () => {
+            const joinStart = Date.now();
+            socket.emit('joinConference', {
+              data: { conferenceId, participantId, participantName }
+            }, (response) => {
+              if (response.status === 'ok') {
+                stats.joined = true;
+                stats.joinLatencyMs = Date.now() - joinStart;
+                
+                // Create transports
+                socket.emit('createTransport', { conferenceId, participantId, direction: 'producer' }, () => {});
+                socket.emit('createTransport', { conferenceId, participantId, direction: 'consumer' }, () => {});
+              } else {
+                stats.errors.push(response.error);
+              }
+            });
+          });
+          
+          setTimeout(() => {
+            socket.emit('leaveConference', { conferenceId, participantId });
+            socket.disconnect();
+            resolve(stats);
+          }, testDuration);
+        });
+      }, { conferenceId, participantId, participantName, serverUrl, testDuration });
+      
+      return result;
+    };
+
+  medium-load.yaml: |
+    name: "Medium Load Test"
+    test:
+      duration: 120
+    users:
+      total: 100
+    rooms:
+      strategy: "distributed"
+      distributed:
+        usersPerRoom: 10
+        roomPrefix: "room-"
+    behavior:
+      joinDelay: 200

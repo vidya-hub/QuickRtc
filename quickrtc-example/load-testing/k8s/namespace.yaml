@@ -1,0 +1,8 @@
+# Namespace for QuickRTC Load Testing
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quickrtc-loadtest
+  labels:
+    app.kubernetes.io/name: quickrtc-loadtest
+    app.kubernetes.io/component: namespace

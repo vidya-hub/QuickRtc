@@ -1,0 +1,53 @@
+# QuickRTC Load Test Scenario: Stress Test
+# Purpose: Find breaking point with maximum load
+
+name: "Stress Test"
+description: "1000 users across 100 rooms, 10 minutes duration"
+
+# Test Parameters
+test:
+  duration: 600             # seconds (10 minutes)
+  rampUpTime: 120           # seconds to reach full load (2 minutes)
+  coolDownTime: 30          # seconds after test before collecting results
+
+# User Configuration  
+users:
+  total: 1000               # Total simulated users
+  sessionsPerPod: 100       # For K8s: users per load generator pod (10 pods)
+  tabsPerSession: 1         # Browser tabs per session
+
+# Room Strategy
+rooms:
+  strategy: "distributed"   # Fixed users per room
+  distributed:
+    usersPerRoom: 10        # 1000 users / 10 = 100 rooms
+    roomPrefix: "room-"     # room-0, room-1, ..., room-99
+
+# Media Configuration
+media:
+  produceAudio: true
+  produceVideo: true
+  consumeAll: true          # Consume all other participants' streams
+  videoBitrate: 200000      # 200 kbps (reduced for stress test)
+  audioBitrate: 24000       # 24 kbps
+  videoResolution:
+    width: 320
+    height: 240
+    frameRate: 15
+
+# Behavior
+behavior:
+  joinDelay: 50             # ms between user joins (fast ramp)
+  reconnectOnFailure: true
+  maxReconnectAttempts: 2   # Less retries for stress test
+  logLevel: "error"         # Minimal logging for performance
+
+# Metrics Collection
+metrics:
+  collectInterval: 15       # seconds (less frequent for stress test)
+  exportFormat: "json"
+  exportPath: "/results"
+
+# Mac M4 Pro Specific Settings
+# Note: For 1000 users, ensure you run tune-macos.sh first
+# to increase file descriptor limits and TCP buffer sizes

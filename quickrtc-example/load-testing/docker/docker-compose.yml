@@ -1,0 +1,100 @@
+# QuickRTC Load Testing - Docker Compose
+# 
+# Usage:
+#   Smoke test:     docker compose -f docker/docker-compose.yml up
+#   With scenario:  SCENARIO=medium-load docker compose -f docker/docker-compose.yml up
+#   With monitoring: docker compose -f docker/docker-compose.yml -f docker/docker-compose.monitoring.yml up
+#
+# Mac M4 Pro optimized for up to 1000 concurrent users
+
+services:
+  # ===========================================================================
+  # QuickRTC Server - MediaSoup SFU (with client for load testing)
+  # ===========================================================================
+  quickrtc-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: quickrtc-loadtest-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "40000-40100:40000-40100/udp"
+      - "40000-40100:40000-40100/tcp"
+    volumes:
+      # Mount pre-built client (build locally with: cd client && npm run build)
+      - ../../client/dist:/app/client/dist:ro
+      # Mount SSL certs for HTTPS
+      - ../../certs:/app/certs:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - USE_SSL=true
+      - ANNOUNCED_IP=${ANNOUNCED_IP:-192.168.29.46}
+      - RTC_MIN_PORT=40000
+      - RTC_MAX_PORT=40100
+    # Mac M4 Pro optimizations
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('https').get('https://localhost:3000/health', {rejectUnauthorized: false}, (res) => { if (res.statusCode !== 200) process.exit(1); res.on('end', () => process.exit(0)); res.resume(); }).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ===========================================================================
+  # webrtcperf Load Generator
+  # ===========================================================================
+  webrtcperf:
+    image: ghcr.io/vpalmisano/webrtcperf:devel
+    platform: linux/amd64  # Required for Apple Silicon (M1/M2/M4)
+    container_name: quickrtc-loadtest-runner
+    network_mode: host
+    depends_on:
+      quickrtc-server:
+        condition: service_healthy
+    volumes:
+      - ../scripts:/app/scripts:ro
+      - ../configs:/app/configs:ro
+      - ../results:/app/results
+      - /dev/shm:/dev/shm
+    environment:
+      - DISPLAY=:99
+      # Chrome flags for ARM emulation stability
+      - PUPPETEER_ARGS=--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --single-process
+    # Mac M4 Pro optimizations
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    shm_size: '4gb'  # Increased shared memory for Chrome instances
+    # Security options for Chrome
+    security_opt:
+      - seccomp:unconfined
+    # Use config file as first argument (webrtcperf expects this)
+    command: /app/configs/${SCENARIO:-smoke-test}.json
+
+  # ===========================================================================
+  # Alternative: Standalone webrtcperf for manual testing
+  # ===========================================================================
+  webrtcperf-shell:
+    image: ghcr.io/vpalmisano/webrtcperf:devel
+    platform: linux/amd64  # Required for Apple Silicon
+    container_name: quickrtc-loadtest-shell
+    network_mode: host
+    profiles:
+      - shell
+    volumes:
+      - ../scripts:/app/scripts:ro
+      - ../configs:/app/configs:ro
+      - ../results:/app/results
+      - /dev/shm:/dev/shm
+    shm_size: '4gb'
+    security_opt:
+      - seccomp:unconfined
+    entrypoint: /bin/bash
+    stdin_open: true
+    tty: true

@@ -23,3 +23,14 @@ quickrtc-flutter-client/android/.gradle/buildOutputCleanup/buildOutputCleanup.lo
 quickrtc-flutter-client/android/.gradle/buildOutputCleanup/cache.properties
 quickrtc-flutter-client/android/.gradle/vcs-1/gc.properties
 quickrtc-flutter-client/android/build/reports/problems/problems-report.html
+quickrtc-example/load-testing/test-media/y4m/test-4k.y4m
+quickrtc-example/load-testing/test-media/y4m/test-720p.y4m
+quickrtc-example/load-testing/test-media/y4m/test-1080p.y4m
+quickrtc-example/load-testing/test-media/videos/test-4k-30fps.mp4
+quickrtc-example/load-testing/test-media/videos/test-720p-30fps.mp4
+quickrtc-example/load-testing/test-media/videos/test-720p-60fps.mp4
+quickrtc-example/load-testing/test-media/videos/test-1080p-30fps.mp4
+quickrtc-example/load-testing/test-media/videos/test-1080p-60fps.mp4
+quickrtc-example/load-testing/test-media/audio/test-audio.wav
+quickrtc-example/load-testing/test-media/audio/tone-440hz.wav
+quickrtc-example/load-testing/test-media/audio/tone-880hz.wav

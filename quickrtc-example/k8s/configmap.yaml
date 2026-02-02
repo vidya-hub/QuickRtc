@@ -1,0 +1,14 @@
+# QuickRTC ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quickrtc-config
+  namespace: quickrtc
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  USE_SSL: "false"
+  RTC_MIN_PORT: "40000"
+  RTC_MAX_PORT: "40500"
+  # Will be overridden by pod IP in deployment
+  ANNOUNCED_IP: ""

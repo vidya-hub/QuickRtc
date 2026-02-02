@@ -1,0 +1,48 @@
+# QuickRTC Load Test Scenario: Smoke Test
+# Purpose: Verify setup works correctly with minimal load
+
+name: "Smoke Test"
+description: "10 users in a single room, 60 seconds duration"
+
+# Test Parameters
+test:
+  duration: 60              # seconds
+  rampUpTime: 10            # seconds to reach full load
+  coolDownTime: 5           # seconds after test before collecting results
+
+# User Configuration  
+users:
+  total: 10                 # Total simulated users
+  sessionsPerPod: 10        # For K8s: users per load generator pod
+  tabsPerSession: 1         # Browser tabs per session
+
+# Room Strategy
+rooms:
+  strategy: "single"        # All users join one room
+  single:
+    roomId: "smoke-test-room"
+
+# Media Configuration
+media:
+  produceAudio: true
+  produceVideo: true
+  consumeAll: true          # Consume all other participants' streams
+  videoBitrate: 500000      # 500 kbps
+  audioBitrate: 32000       # 32 kbps
+  videoResolution:
+    width: 640
+    height: 480
+    frameRate: 24
+
+# Behavior
+behavior:
+  joinDelay: 500            # ms between user joins (slower for smoke test)
+  reconnectOnFailure: true
+  maxReconnectAttempts: 3
+  logLevel: "info"
+
+# Metrics Collection
+metrics:
+  collectInterval: 5        # seconds
+  exportFormat: "json"
+  exportPath: "/results"

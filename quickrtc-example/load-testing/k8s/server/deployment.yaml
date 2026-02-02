@@ -1,0 +1,92 @@
+# QuickRTC Server Deployment
+# Note: Uses hostNetwork for WebRTC UDP media traffic
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quickrtc-server
+  namespace: quickrtc-loadtest
+  labels:
+    app: quickrtc-server
+    app.kubernetes.io/name: quickrtc-server
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quickrtc-server
+  template:
+    metadata:
+      labels:
+        app: quickrtc-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Required for WebRTC UDP traffic
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      
+      containers:
+      - name: server
+        image: quickrtc-server:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        - name: rtc-udp-start
+          containerPort: 40000
+          protocol: UDP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: USE_SSL
+          value: "false"
+        - name: RTC_MIN_PORT
+          value: "40000"
+        - name: RTC_MAX_PORT
+          value: "40500"
+        # Get host IP for ANNOUNCED_IP
+        - name: ANNOUNCED_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "4000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+      
+      # Spread across nodes for better resource distribution
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: quickrtc-server

@@ -1,0 +1,55 @@
+# =============================================================================
+# .dockerignore for QuickRTC Example
+# =============================================================================
+
+# Ignore node_modules (will be installed in container)
+**/node_modules
+
+# Ignore test media files (huge Y4M files - 3GB+)
+**/test-media
+**/y4m
+**/videos
+**/audio
+**/*.y4m
+**/*.mp4
+**/*.wav
+
+# Ignore load testing results and docker configs
+**/results
+load-testing/docker
+
+# Ignore git
+.git
+.gitignore
+
+# Ignore IDE
+.vscode
+.idea
+**/*.swp
+
+# Ignore build artifacts that will be rebuilt
+server/dist
+client/dist
+**/dist
+
+# Ignore certs
+certs
+
+# Ignore logs
+**/*.log
+**/npm-debug.log*
+
+# Ignore test files
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+
+# Ignore documentation
+**/*.md
+!README.md
+
+# Ignore Flutter client (not needed for server Docker build)
+flutter-client
+
+# Ignore vanilla example
+vanilla

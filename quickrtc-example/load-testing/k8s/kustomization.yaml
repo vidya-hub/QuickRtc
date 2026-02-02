@@ -1,0 +1,17 @@
+# Kustomize base configuration for QuickRTC Load Testing
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: quickrtc-loadtest
+
+resources:
+  - namespace.yaml
+  - server/deployment.yaml
+  - server/service.yaml
+  - server/hpa.yaml
+  - loadtest/configmap.yaml
+  - loadtest/job.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: quickrtc-loadtest
+  app.kubernetes.io/managed-by: kustomize

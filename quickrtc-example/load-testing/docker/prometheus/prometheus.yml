@@ -1,0 +1,85 @@
+# Prometheus Configuration for QuickRTC Load Testing
+# Scrapes metrics from QuickRTC server and Kubernetes cluster
+
+global:
+  scrape_interval: 5s        # How often to scrape targets
+  evaluation_interval: 5s    # How often to evaluate rules
+  external_labels:
+    monitor: 'quickrtc-loadtest'
+
+# Scrape configurations
+scrape_configs:
+  # ===========================================================================
+  # QuickRTC Server Metrics (Docker container on port 3000)
+  # ===========================================================================
+  - job_name: 'quickrtc-server'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # ===========================================================================
+  # QuickRTC on Kubernetes (NodePort 30000)
+  # ===========================================================================
+  - job_name: 'quickrtc-k8s'
+    static_configs:
+      - targets: ['host.docker.internal:30000']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # ===========================================================================
+  # Kubernetes API Server Metrics
+  # ===========================================================================
+  - job_name: 'kubernetes-apiservers'
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/k8s-certs/ca.crt
+      insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k8s-certs/token
+    static_configs:
+      - targets: ['host.docker.internal:62582']
+
+  # ===========================================================================
+  # Kubernetes Nodes (kubelet metrics)
+  # ===========================================================================
+  - job_name: 'kubernetes-nodes'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k8s-certs/token
+    static_configs:
+      - targets: ['host.docker.internal:10250']
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: node
+        replacement: 'colima'
+
+  # ===========================================================================
+  # Kubernetes cAdvisor (container metrics)
+  # ===========================================================================
+  - job_name: 'kubernetes-cadvisor'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    bearer_token_file: /etc/prometheus/k8s-certs/token
+    static_configs:
+      - targets: ['host.docker.internal:10250']
+    metrics_path: /metrics/cadvisor
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: node
+        replacement: 'colima'
+
+  # ===========================================================================
+  # Prometheus self-monitoring
+  # ===========================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Recording rules for commonly used queries
+rule_files:
+  # - "recording_rules.yml"

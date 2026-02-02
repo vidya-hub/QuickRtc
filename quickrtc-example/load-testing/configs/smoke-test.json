@@ -1,0 +1,25 @@
+{
+  "url": "http://localhost:3000/loadtest",
+  "sessions": 10,
+  "tabsPerSession": 1,
+  "runDuration": 60,
+  "spawnRate": 1,
+  "scriptPath": "/app/scripts/quickrtc-load-test.js",
+  "showPageLog": true,
+  "statsInterval": 5,
+  "useFakeMedia": true,
+  "chromiumPath": "/usr/bin/chromium",
+  "extraChromiumArgs": [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-software-rasterizer",
+    "--disable-background-networking",
+    "--disable-extensions",
+    "--disable-sync",
+    "--disable-translate",
+    "--no-first-run",
+    "--single-process"
+  ]
+}

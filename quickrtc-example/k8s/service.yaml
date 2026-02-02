@@ -1,0 +1,63 @@
+# QuickRTC Service
+# Exposes the QuickRTC server within the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickrtc-server
+  namespace: quickrtc
+  labels:
+    app: quickrtc
+    component: server
+spec:
+  type: ClusterIP
+  selector:
+    app: quickrtc
+    component: server
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+
+---
+# QuickRTC NodePort Service (for external access without ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickrtc-server-external
+  namespace: quickrtc
+  labels:
+    app: quickrtc
+    component: server
+spec:
+  type: NodePort
+  selector:
+    app: quickrtc
+    component: server
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30000
+      protocol: TCP
+
+---
+# Headless service for direct pod access (sticky sessions)
+apiVersion: v1
+kind: Service
+metadata:
+  name: quickrtc-server-headless
+  namespace: quickrtc
+  labels:
+    app: quickrtc
+    component: server
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: quickrtc
+    component: server
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
