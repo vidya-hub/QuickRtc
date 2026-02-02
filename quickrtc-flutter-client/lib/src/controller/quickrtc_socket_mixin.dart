@@ -52,12 +52,14 @@ mixin QuickRTCSocketMixin {
         streams: const [],
       );
 
-      updateState(state.copyWith(
-        participants: {
-          ...state.participants,
-          joinedData.participantId: remoteParticipant,
-        },
-      ),);
+      updateState(
+        state.copyWith(
+          participants: {
+            ...state.participants,
+            joinedData.participantId: remoteParticipant,
+          },
+        ),
+      );
     });
 
     // Participant left
@@ -85,9 +87,11 @@ mixin QuickRTCSocketMixin {
           Map<String, RemoteParticipant>.from(state.participants);
       updatedParticipants.remove(leftData.participantId);
 
-      updateState(state.copyWith(
-        participants: updatedParticipants,
-      ),);
+      updateState(
+        state.copyWith(
+          participants: updatedParticipants,
+        ),
+      );
     });
 
     // New producer - auto-consume the specific producer
@@ -131,12 +135,14 @@ mixin QuickRTCSocketMixin {
                 streams: [stream],
               );
 
-        updateState(state.copyWith(
-          participants: {
-            ...state.participants,
-            producerData.participantId: updatedParticipant,
-          },
-        ),);
+        updateState(
+          state.copyWith(
+            participants: {
+              ...state.participants,
+              producerData.participantId: updatedParticipant,
+            },
+          ),
+        );
       } else {
         log('Failed to consume stream from ${producerData.participantName}: ${producerData.kind}');
       }
@@ -150,6 +156,14 @@ mixin QuickRTCSocketMixin {
         data as Map<String, dynamic>,
       );
 
+      log('Socket: producerClosed - looking for consumer', {
+        'producerId': closedData.producerId,
+        'participantId': closedData.participantId,
+        'consumersCount': consumers.length,
+        'consumerProducerIds':
+            consumers.values.map((c) => c.producerId).toList(),
+      });
+
       // Remove from consumed tracking
       consumedProducerIds.remove(closedData.producerId);
 
@@ -162,6 +176,10 @@ mixin QuickRTCSocketMixin {
 
       if (consumerEntry != null) {
         final info = consumerEntry.value;
+        log('Socket: producerClosed - found consumer, closing', {
+          'consumerId': info.id,
+          'type': info.type.value,
+        });
         await info.consumer.close();
         consumers.remove(consumerEntry.key);
 
@@ -171,13 +189,22 @@ mixin QuickRTCSocketMixin {
         if (existingParticipant != null) {
           final updatedParticipant = existingParticipant.removeStream(info.id);
 
+          log('Socket: producerClosed - updating participant state', {
+            'participantId': closedData.participantId,
+            'streamsBeforeRemoval': existingParticipant.streams.length,
+            'streamsAfterRemoval': updatedParticipant.streams.length,
+          });
+
           updateState(state.copyWith(
             participants: {
               ...state.participants,
               closedData.participantId: updatedParticipant,
             },
-          ),);
+          ));
         }
+      } else {
+        log('Socket: producerClosed - no consumer found for producerId',
+            closedData.producerId);
       }
     });
 
@@ -239,9 +266,11 @@ mixin QuickRTCSocketMixin {
     // Socket error
     socket.on('error', (error) {
       log('Socket: error', error);
-      updateState(state.copyWith(
-        error: error.toString(),
-      ),);
+      updateState(
+        state.copyWith(
+          error: error.toString(),
+        ),
+      );
     });
   }
 
@@ -278,12 +307,14 @@ mixin QuickRTCSocketMixin {
       return s;
     }).toList();
 
-    updateState(state.copyWith(
-      participants: {
-        ...state.participants,
-        participantId: participant.copyWith(streams: updatedStreams),
-      },
-    ),);
+    updateState(
+      state.copyWith(
+        participants: {
+          ...state.participants,
+          participantId: participant.copyWith(streams: updatedStreams),
+        },
+      ),
+    );
 
     log('Updated $type stream paused=$paused for participant $participantId');
   }

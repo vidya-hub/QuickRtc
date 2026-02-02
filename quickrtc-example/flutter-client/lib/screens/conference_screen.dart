@@ -222,9 +222,9 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
     // Use the stream from state - it gets updated when track is replaced on resume
     final localVideoStream = state.localVideoStream?.stream ?? _localStream;
 
-    // Determine audio/video status from controller state
-    final isAudioEnabled = state.hasLocalAudio && !state.isLocalAudioPaused;
-    final isVideoEnabled = state.hasLocalVideo && !state.isLocalVideoPaused;
+    // Use new convenience getters for audio/video active state
+    final isAudioEnabled = state.isLocalAudioActive;
+    final isVideoEnabled = state.isLocalVideoActive;
 
     final tiles = <Widget>[
       // Local video
@@ -286,9 +286,9 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
   }
 
   Widget _buildControls(QuickRTCState state) {
-    // Determine audio/video active state from controller state
-    final isAudioActive = state.hasLocalAudio && !state.isLocalAudioPaused;
-    final isVideoActive = state.hasLocalVideo && !state.isLocalVideoPaused;
+    // Use new convenience getters for audio/video active state
+    final isAudioActive = state.isLocalAudioActive;
+    final isVideoActive = state.isLocalVideoActive;
 
     return Container(
       color: const Color(0xFF1A1A1A),
@@ -391,19 +391,8 @@ class _ConferenceScreenState extends State<ConferenceScreen> {
 
   Future<void> _toggleScreenShare(QuickRTCState state) async {
     try {
-      if (state.hasLocalScreenshare) {
-        await state.localScreenshareStream?.stop();
-      } else {
-        final media = WebRTC.platformIsDesktop
-            ? await QuickRTCStatic.getScreenShareWithPicker(context)
-            : await QuickRTCStatic.getLocalMedia(MediaConfig.screenShareOnly());
-
-        if (media.screenshareTrack != null) {
-          await _controller!.produce(ProduceInput.fromTrack(
-              media.screenshareTrack!,
-              type: StreamType.screenshare));
-        }
-      }
+      // Use the new toggleScreenShareWithPicker which handles platform detection
+      await _controller?.toggleScreenShareWithPicker(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

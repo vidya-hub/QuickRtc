@@ -80,8 +80,8 @@ class QuickRTCBuilder extends StatefulWidget {
 }
 
 class _QuickRTCBuilderState extends State<QuickRTCBuilder> {
-  late QuickRTCController _controller;
-  late QuickRTCState _previousState;
+  QuickRTCController? _controller;
+  QuickRTCState? _previousState;
 
   @override
   void initState() {
@@ -91,21 +91,33 @@ class _QuickRTCBuilderState extends State<QuickRTCBuilder> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _controller = QuickRTCProvider.of(context);
-    _previousState = _controller.state;
-    _controller.addListener(_onStateChange);
+    final newController = QuickRTCProvider.of(context);
+
+    // Only subscribe if controller changed (or first time)
+    if (_controller != newController) {
+      // Remove listener from old controller if exists
+      _controller?.removeListener(_onStateChange);
+
+      _controller = newController;
+      _previousState = newController.state;
+      newController.addListener(_onStateChange);
+    }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onStateChange);
+    _controller?.removeListener(_onStateChange);
     super.dispose();
   }
 
   void _onStateChange() {
-    final currentState = _controller.state;
+    final controller = _controller;
+    final previousState = _previousState;
+    if (controller == null || previousState == null) return;
+
+    final currentState = controller.state;
     final shouldRebuild =
-        widget.buildWhen?.call(_previousState, currentState) ?? true;
+        widget.buildWhen?.call(previousState, currentState) ?? true;
 
     if (shouldRebuild) {
       setState(() {});
@@ -116,7 +128,13 @@ class _QuickRTCBuilderState extends State<QuickRTCBuilder> {
 
   @override
   Widget build(BuildContext context) {
-    final state = _controller.state;
+    final controller = _controller;
+    if (controller == null) {
+      // Should not happen, but handle gracefully
+      return const SizedBox.shrink();
+    }
+
+    final state = controller.state;
 
     // If error AND onError provided, show error widget
     if (state.hasError && widget.onError != null) {

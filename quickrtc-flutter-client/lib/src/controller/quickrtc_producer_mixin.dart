@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:quickrtc_flutter_client/src/mediasoup/mediasoup.dart';
 import 'package:quickrtc_flutter_client/state/quick_rtc_state.dart';
 import 'package:quickrtc_flutter_client/types.dart';
+import 'package:quickrtc_flutter_client/src/exceptions.dart';
+import 'package:quickrtc_flutter_client/platform/quickrtc_platform.dart';
 
 /// Mixin providing producer functionality (producing local media)
 mixin QuickRTCProducerMixin {
@@ -14,10 +18,17 @@ mixin QuickRTCProducerMixin {
   String? get participantId;
   Map<String, ProducerInfo> get producers;
   Map<String, Completer<Producer>> get pendingProducers;
+  Duration get operationTimeout;
+
+  /// Timer for monitoring Android screen share track state
+  Timer? _androidScreenShareMonitor;
 
   void log(String message, [dynamic data]);
   Future<Map<String, dynamic>> emitWithAck(
-      String event, Map<String, dynamic> data,);
+    String event,
+    Map<String, dynamic> data, {
+    Duration? timeout,
+  });
 
   /// Produce media tracks
   ///
@@ -29,7 +40,7 @@ mixin QuickRTCProducerMixin {
   /// Returns array of LocalStream handles with pause/resume/stop methods
   Future<List<LocalStream>> produce(ProduceInput input) async {
     if (!state.isConnected) {
-      throw Exception('Not connected to a conference');
+      throw QuickRTCNotConnectedException('produce');
     }
 
     final tracksWithTypes = input.toTrackList();
@@ -75,8 +86,27 @@ mixin QuickRTCProducerMixin {
             streamType == StreamType.screenshare ? 'screenshare' : track.kind!,
       );
 
-      // Wait for the producer via callback
-      final producer = await completer.future;
+      // Wait for the producer via callback with timeout
+      final Producer producer;
+      try {
+        producer = await completer.future.timeout(
+          operationTimeout,
+          onTimeout: () {
+            pendingProducers.remove(produceKey);
+            throw QuickRTCTimeoutException(
+              operation: 'Producer creation for ${track.kind}',
+              timeout: operationTimeout,
+            );
+          },
+        );
+      } catch (e) {
+        pendingProducers.remove(produceKey);
+        if (e is QuickRTCException) rethrow;
+        throw QuickRTCProducerException(
+          'Failed to create producer for ${track.kind}',
+          cause: e,
+        );
+      }
       pendingProducers.remove(produceKey);
 
       // Store producer info
@@ -104,13 +134,24 @@ mixin QuickRTCProducerMixin {
         }
       };
 
+      // For Android screen share, start monitoring the track state
+      // This is needed because track.onEnded doesn't fire reliably on Android
+      // when MediaProjection is stopped via the system notification
+      if (!kIsWeb &&
+          Platform.isAndroid &&
+          streamType == StreamType.screenshare) {
+        _startAndroidScreenShareMonitor(producer.id, track);
+      }
+
       results.add(localStream);
     }
 
     // Update state with new local streams
-    updateState(state.copyWith(
-      localStreams: [...state.localStreams, ...results],
-    ),);
+    updateState(
+      state.copyWith(
+        localStreams: [...state.localStreams, ...results],
+      ),
+    );
 
     return results;
   }
@@ -125,7 +166,7 @@ mixin QuickRTCProducerMixin {
     final producerInfo = producers[streamId];
     if (producerInfo == null) {
       log('pauseStream: Producer not found', streamId);
-      throw Exception('Producer not found: $streamId');
+      throw QuickRTCNotFoundException('Producer', streamId);
     }
 
     log('pauseStream: Pausing producer', {
@@ -183,10 +224,12 @@ mixin QuickRTCProducerMixin {
     // This can happen when audio and video tracks come from the same getUserMedia stream.
     final sharedStreamId = streamToDispose.id;
     final otherProducersUsingSameStream = producers.values
-        .where((p) =>
-            p.id != producerInfo.id &&
-            p.stream.id == sharedStreamId &&
-            !p.paused,)
+        .where(
+          (p) =>
+              p.id != producerInfo.id &&
+              p.stream.id == sharedStreamId &&
+              !p.paused,
+        )
         .toList();
 
     if (otherProducersUsingSameStream.isEmpty) {
@@ -252,7 +295,7 @@ mixin QuickRTCProducerMixin {
     final producerInfo = producers[streamId];
     if (producerInfo == null) {
       log('resumeStream: Producer not found', streamId);
-      throw Exception('Producer not found: $streamId');
+      throw QuickRTCNotFoundException('Producer', streamId);
     }
 
     log('resumeStream: Resuming producer', {
@@ -318,10 +361,14 @@ mixin QuickRTCProducerMixin {
 
         log('resumeStream: Track replaced successfully');
       } catch (e) {
-        log('resumeStream: Failed to re-acquire ${isVideo ? "camera" : "microphone"}',
-            e,);
-        throw Exception(
-            'Failed to re-acquire ${isVideo ? "camera" : "microphone"}: $e',);
+        log(
+          'resumeStream: Failed to re-acquire ${isVideo ? "camera" : "microphone"}',
+          e,
+        );
+        throw QuickRTCMediaException(
+          'Failed to re-acquire ${isVideo ? "camera" : "microphone"}',
+          e,
+        );
       }
     } else {
       // Track wasn't fully stopped, just re-enable it
@@ -353,13 +400,27 @@ mixin QuickRTCProducerMixin {
 
     final producerInfo = producers.remove(streamId);
     if (producerInfo == null) {
+      log('stopStream: Producer not found, already stopped?', streamId);
       return;
     }
 
-    // Clear onEnded to prevent callbacks during cleanup
+    log('stopStream: Found producer', {
+      'id': producerInfo.id,
+      'type': producerInfo.type.value,
+      'trackId': producerInfo.track.id,
+    });
+
+    // Clear callbacks to prevent callbacks during cleanup
     producerInfo.track.onEnded = null;
+    producerInfo.track.onMute = null;
+
+    // Stop Android screen share monitor if this was a screenshare
+    if (producerInfo.type == StreamType.screenshare) {
+      _stopAndroidScreenShareMonitor();
+    }
 
     producerInfo.producer.close();
+    log('stopStream: Producer closed locally');
 
     // CAMERA RELEASE: Use stream.dispose() for reliable camera release on macOS.
     // See pauseStream() for detailed explanation.
@@ -375,6 +436,20 @@ mixin QuickRTCProducerMixin {
       }
     }
 
+    // Stop Android foreground service if this was a screenshare
+    if (producerInfo.type == StreamType.screenshare) {
+      if (!kIsWeb && Platform.isAndroid) {
+        log('stopStream: Stopping Android screen capture service');
+        await QuickRTCPlatform.stopScreenCaptureService();
+      }
+    }
+
+    log('stopStream: Emitting closeProducer to server', {
+      'conferenceId': conferenceId,
+      'participantId': participantId,
+      'producerId': streamId,
+    });
+
     await emitWithAck('closeProducer', {
       'conferenceId': conferenceId,
       'participantId': participantId,
@@ -383,14 +458,27 @@ mixin QuickRTCProducerMixin {
       },
     });
 
+    log('stopStream: Server acknowledged closeProducer');
+
     // Update state - remove the local stream
-    updateState(state.copyWith(
-      localStreams: state.localStreams.where((s) => s.id != streamId).toList(),
-    ),);
+    final previousCount = state.localStreams.length;
+    updateState(
+      state.copyWith(
+        localStreams:
+            state.localStreams.where((s) => s.id != streamId).toList(),
+      ),
+    );
+    log('stopStream: Updated local state', {
+      'previousStreamCount': previousCount,
+      'newStreamCount': state.localStreams.length,
+    });
   }
 
   /// Close all producers (defensive - ignores errors during cleanup)
   Future<void> closeAllProducers() async {
+    // Stop Android screen share monitor
+    _stopAndroidScreenShareMonitor();
+
     for (final producer in producers.values) {
       try {
         producer.producer.close();
@@ -423,8 +511,10 @@ mixin QuickRTCProducerMixin {
 
   /// Update the paused state of a local stream in state
   void _updateLocalStreamPausedState(String streamId, bool paused) {
-    log('_updateLocalStreamPausedState',
-        {'streamId': streamId, 'paused': paused},);
+    log(
+      '_updateLocalStreamPausedState',
+      {'streamId': streamId, 'paused': paused},
+    );
 
     // Get current producer info to get latest track reference
     final producerInfo = producers[streamId];
@@ -455,5 +545,155 @@ mixin QuickRTCProducerMixin {
 
     log('_updateLocalStreamPausedState: Updating state with ${updatedStreams.length} streams');
     updateState(state.copyWith(localStreams: updatedStreams));
+  }
+
+  // ============================================================================
+  // ANDROID SCREEN SHARE MONITORING
+  // ============================================================================
+
+  /// Last bytes sent count for the screen share producer (used for stall detection)
+  int? _lastBytesSent;
+
+  /// Count of consecutive checks with no new bytes sent
+  int _stallCount = 0;
+
+  /// Number of consecutive stalls before considering the stream stopped
+  /// At 500ms intervals, 4 stalls = 2 seconds of no data
+  static const int _maxStallCount = 4;
+
+  /// Start monitoring Android screen share track for external stop.
+  ///
+  /// On Android, when MediaProjection is stopped via the system notification
+  /// ("Stop now" button), track.onEnded doesn't fire reliably. We use multiple
+  /// detection strategies:
+  ///
+  /// 1. **track.onMute callback** - May fire when MediaProjection stops
+  /// 2. **track.muted property** - Checked periodically
+  /// 3. **Producer stats monitoring** - If no new bytes are sent for a period,
+  ///    the stream is likely stopped. This is the most reliable method.
+  void _startAndroidScreenShareMonitor(
+    String producerId,
+    MediaStreamTrack track,
+  ) {
+    // Cancel any existing monitor
+    _stopAndroidScreenShareMonitor();
+
+    log('Starting Android screen share monitor for producer: $producerId');
+
+    // Reset stall detection state
+    _lastBytesSent = null;
+    _stallCount = 0;
+
+    // Set up onMute callback - this may fire when MediaProjection is stopped
+    track.onMute = () {
+      log('Android screen share: Track muted event received');
+      _handleAndroidScreenShareStopped(producerId, 'onMute');
+    };
+
+    // Monitor via timer - check every 500ms
+    _androidScreenShareMonitor =
+        Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      // Check if we still have this producer
+      final producerInfo = producers[producerId];
+      if (producerInfo == null) {
+        log('Android screen share monitor: Producer no longer exists, stopping monitor');
+        _stopAndroidScreenShareMonitor();
+        return;
+      }
+
+      // Skip if we're paused
+      if (producerInfo.paused) {
+        return;
+      }
+
+      // Strategy 1: Check track.muted
+      if (track.muted == true) {
+        log('Android screen share monitor: Track muted externally');
+        _handleAndroidScreenShareStopped(producerId, 'muted state');
+        return;
+      }
+
+      // Strategy 2: Check producer stats for stalled stream
+      // When MediaProjection is stopped, the producer stops sending bytes
+      try {
+        final stats = await producerInfo.producer.getStats();
+
+        // Find the outbound-rtp stat for video
+        int? currentBytesSent;
+        for (final stat in stats) {
+          final type = stat.type;
+          if (type == 'outbound-rtp') {
+            final values = stat.values;
+            if (values.containsKey('bytesSent')) {
+              currentBytesSent = values['bytesSent'] as int?;
+              break;
+            }
+          }
+        }
+
+        if (currentBytesSent != null) {
+          if (_lastBytesSent != null) {
+            if (currentBytesSent == _lastBytesSent) {
+              // No new bytes sent - increment stall counter
+              _stallCount++;
+              log('Android screen share monitor: No new bytes sent (stall count: $_stallCount/$_maxStallCount)');
+
+              if (_stallCount >= _maxStallCount) {
+                log('Android screen share monitor: Stream stalled for too long, treating as stopped');
+                _handleAndroidScreenShareStopped(
+                    producerId, 'stalled stream (no bytes sent)');
+                return;
+              }
+            } else {
+              // Bytes are being sent, reset stall counter
+              if (_stallCount > 0) {
+                log('Android screen share monitor: Stream recovered, resetting stall count');
+              }
+              _stallCount = 0;
+            }
+          }
+          _lastBytesSent = currentBytesSent;
+        }
+      } catch (e) {
+        // Stats retrieval failed, which might indicate the producer is closed
+        log('Android screen share monitor: Failed to get stats', e);
+        _stallCount++;
+        if (_stallCount >= _maxStallCount) {
+          log('Android screen share monitor: Stats failed too many times, treating as stopped');
+          _handleAndroidScreenShareStopped(producerId, 'stats unavailable');
+        }
+      }
+    });
+  }
+
+  /// Handle Android screen share stopped externally.
+  void _handleAndroidScreenShareStopped(String producerId, String source) {
+    log('Android screen share stopped externally via $source');
+    _stopAndroidScreenShareMonitor();
+
+    // Trigger stop if we still have the producer
+    if (producers.containsKey(producerId)) {
+      // Use microtask to avoid blocking the callback
+      Future.microtask(() async {
+        try {
+          await stopStream(producerId);
+          log('Android screen share: Screen share stopped successfully');
+        } catch (e) {
+          log('Android screen share: Error stopping screen share', e);
+        }
+      });
+    }
+  }
+
+  /// Stop the Android screen share monitor.
+  void _stopAndroidScreenShareMonitor() {
+    if (_androidScreenShareMonitor != null) {
+      log('Stopping Android screen share monitor');
+      _androidScreenShareMonitor?.cancel();
+      _androidScreenShareMonitor = null;
+    }
+    // Reset state
+    _lastBytesSent = null;
+    _stallCount = 0;
   }
 }

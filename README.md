@@ -4,13 +4,13 @@ Simple WebRTC video conferencing built on MediaSoup.
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| `quickrtc-server` | MediaSoup server with auto conference management |
-| `quickrtc-client` | Vanilla JavaScript browser client |
-| `quickrtc-react-client` | React hooks with Redux state management |
-| `quickrtc-flutter-client` | Flutter client with Provider state management |
-| `quickrtc-types` | Shared TypeScript types |
+| Package                   | Description                                      |
+| ------------------------- | ------------------------------------------------ |
+| `quickrtc-server`         | MediaSoup server with auto conference management |
+| `quickrtc-client`         | Vanilla JavaScript browser client                |
+| `quickrtc-react-client`   | React hooks with Redux state management          |
+| `quickrtc-flutter-client` | Flutter client with Provider state management    |
+| `quickrtc-types`          | Shared TypeScript types                          |
 
 ## Quick Start
 
@@ -77,18 +77,31 @@ function App() {
     <div>
       <button onClick={toggleAudio}>{hasAudio ? "Mute" : "Unmute"}</button>
       <button onClick={toggleVideo}>{hasVideo ? "Stop" : "Start"} Video</button>
-      <button onClick={toggleScreenShare}>{hasScreenShare ? "Stop" : "Share"}</button>
+      <button onClick={toggleScreenShare}>
+        {hasScreenShare ? "Stop" : "Share"}
+      </button>
       <button onClick={leave}>Leave</button>
-      
-      {localStreams.map(s => (
-        <video key={s.id} ref={el => el && (el.srcObject = s.stream)} autoPlay muted playsInline />
+
+      {localStreams.map((s) => (
+        <video
+          key={s.id}
+          ref={(el) => el && (el.srcObject = s.stream)}
+          autoPlay
+          muted
+          playsInline
+        />
       ))}
-      
-      {remoteParticipants.map(p => (
+
+      {remoteParticipants.map((p) => (
         <div key={p.participantId}>
           <p>{p.participantName}</p>
-          {p.streams?.map(s => (
-            <video key={s.id} ref={el => el && (el.srcObject = s.stream)} autoPlay playsInline />
+          {p.streams?.map((s) => (
+            <video
+              key={s.id}
+              ref={(el) => el && (el.srcObject = s.stream)}
+              autoPlay
+              playsInline
+            />
           ))}
         </div>
       ))}
@@ -99,7 +112,7 @@ function App() {
 // Wrap with provider
 <QuickRTCProvider>
   <App />
-</QuickRTCProvider>
+</QuickRTCProvider>;
 ```
 
 ## Vanilla JavaScript Client
@@ -118,8 +131,14 @@ const client = new ConferenceClient({
 
 await client.joinMeeting();
 
-const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-await client.produceMedia(stream.getAudioTracks()[0], stream.getVideoTracks()[0]);
+const stream = await navigator.mediaDevices.getUserMedia({
+  video: true,
+  audio: true,
+});
+await client.produceMedia(
+  stream.getAudioTracks()[0],
+  stream.getVideoTracks()[0],
+);
 await client.consumeExistingStreams();
 
 // Screen sharing
@@ -129,7 +148,15 @@ await client.produceMedia(undefined, screen.getVideoTracks()[0], "screenshare");
 
 ## Flutter Client
 
-```dart
+### Installation
+
+```yaml
+dependencies:
+  quickrtc_flutter_client: 
+```
+
+### Usage
+
 import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
 
 // Wrap app with provider
@@ -139,17 +166,18 @@ QuickRTCProviderWidget(child: MyApp())
 final provider = Provider.of<ConferenceProvider>(context);
 
 await provider.joinConference(ConferenceConfig(
-  conferenceId: 'room-1',
-  participantId: 'user-1',
-  participantName: 'John',
-  socket: socket,
+conferenceId: 'room-1',
+participantId: 'user-1',
+participantName: 'John',
+socket: socket,
 ));
 
 await provider.produceMedia(
-  audioTrack: tracks.getAudioTracks().first,
-  videoTrack: tracks.getVideoTracks().first,
+audioTrack: tracks.getAudioTracks().first,
+videoTrack: tracks.getVideoTracks().first,
 );
-```
+
+````
 
 ## Features
 
@@ -173,8 +201,9 @@ await provider.produceMedia(
        },
      },
    });
-   ```
-3. **Open Ports**: 
+````
+
+3. **Open Ports**:
    - `443/tcp` - HTTPS/WebSocket
    - `40000-49999/udp` - WebRTC media
 

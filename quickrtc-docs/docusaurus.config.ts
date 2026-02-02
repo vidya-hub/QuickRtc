@@ -11,7 +11,7 @@ const config: Config = {
     v4: true,
   },
 
-  url: "https://quickrtc.dev",
+  url: "https://quickrtc-docs.vercel.app",
   baseUrl: "/",
 
   organizationName: "quickrtc",
@@ -96,8 +96,8 @@ const config: Config = {
               to: "/docs/server/overview",
             },
             {
-              label: "Deployment",
-              to: "/docs/deployment/overview",
+              label: "Flutter SDK",
+              to: "/docs/flutter/getting-started",
             },
           ],
         },

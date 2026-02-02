@@ -2,6 +2,9 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+/// Callback type for when screen share is stopped from the Android notification.
+typedef ScreenShareStoppedCallback = void Function();
+
 /// Platform-specific screen capture service handler.
 ///
 /// On Android, this starts/stops a foreground service required for
@@ -19,6 +22,54 @@ class QuickRTCPlatform {
 
   /// Cached Android SDK version
   static int? _androidSdkVersion;
+
+  /// Callback for when screen share is stopped from the Android notification
+  static ScreenShareStoppedCallback? _onScreenShareStopped;
+
+  /// Whether the method call handler has been set up
+  static bool _handlerInitialized = false;
+
+  /// Initialize the platform method call handler.
+  /// This sets up listening for callbacks from native code.
+  static void _ensureHandlerInitialized() {
+    if (_handlerInitialized) return;
+    _handlerInitialized = true;
+
+    _channel.setMethodCallHandler((call) async {
+      debugPrint('QuickRTC: Received method call from native: ${call.method}');
+      switch (call.method) {
+        case 'onScreenShareStopped':
+          debugPrint(
+            'QuickRTC: Screen share stopped from notification, invoking callback',
+          );
+          _isServiceRunning = false;
+          _onScreenShareStopped?.call();
+          return null;
+        default:
+          throw PlatformException(
+            code: 'UNIMPLEMENTED',
+            message: 'Method ${call.method} not implemented',
+          );
+      }
+    });
+    debugPrint('QuickRTC: Platform method call handler initialized');
+  }
+
+  /// Set the callback for when screen share is stopped from the Android notification.
+  ///
+  /// On Android, when the user taps "Stop Sharing" on the foreground service
+  /// notification, this callback will be invoked so the app can clean up
+  /// the screen share producer.
+  ///
+  /// Call this before starting screen share to ensure the callback is ready.
+  static void setScreenShareStoppedCallback(
+      ScreenShareStoppedCallback? callback) {
+    _ensureHandlerInitialized();
+    _onScreenShareStopped = callback;
+    debugPrint(
+      'QuickRTC: Screen share stopped callback ${callback != null ? "set" : "cleared"}',
+    );
+  }
 
   /// Check if the screen capture service is running
   static bool get isScreenCaptureServiceRunning => _isServiceRunning;
@@ -139,7 +190,8 @@ class QuickRTCPlatform {
 
       if (isRunning) {
         debugPrint(
-            'QuickRTC: Screen capture service ready after ${stopwatch.elapsedMilliseconds}ms',);
+          'QuickRTC: Screen capture service ready after ${stopwatch.elapsedMilliseconds}ms',
+        );
         return true;
       }
 
@@ -147,7 +199,8 @@ class QuickRTCPlatform {
     }
 
     debugPrint(
-        'QuickRTC: Timeout waiting for screen capture service to be ready',);
+      'QuickRTC: Timeout waiting for screen capture service to be ready',
+    );
     return false;
   }
 

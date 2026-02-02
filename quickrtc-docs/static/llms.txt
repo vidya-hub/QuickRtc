@@ -162,7 +162,7 @@ interface RemoteStream {
 
 ## Links
 
-- Website: https://quickrtc.dev
+- Website: https://quickrtc-docs.vercel.app
 - GitHub: https://github.com/vidya-hub/QuickRtc
 - npm (client): https://www.npmjs.com/package/quickrtc-client
 - npm (server): https://www.npmjs.com/package/quickrtc-server

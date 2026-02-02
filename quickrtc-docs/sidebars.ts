@@ -45,18 +45,18 @@ const sidebars: SidebarsConfig = {
         "flutter/state-management",
       ],
     },
-    {
-      type: "category",
-      label: "Deployment",
-      collapsed: false,
-      items: [
-        "deployment/overview",
-        "deployment/docker",
-        "deployment/gcp",
-        "deployment/aws",
-        "deployment/manual",
-      ],
-    },
+    // {
+    //   type: "category",
+    //   label: "Deployment",
+    //   collapsed: false,
+    //   items: [
+    //     "deployment/overview",
+    //     "deployment/docker",
+    //     "deployment/gcp",
+    //     "deployment/aws",
+    //     "deployment/manual",
+    //   ],
+    // },
   ],
 };
 

@@ -47,7 +47,8 @@ class UnifiedPlan extends HandlerInterface {
     required DtlsRole localDtlsRole,
     SdpObject? localSdpObject,
   }) async {
-    localSdpObject ??= SdpObject.fromMap(parse((await _pc!.getLocalDescription())!.sdp!));
+    localSdpObject ??=
+        SdpObject.fromMap(parse((await _pc!.getLocalDescription())!.sdp!));
 
     // Get our local DTLS parameters.
     DtlsParameters dtlsParameters =
@@ -89,7 +90,7 @@ class UnifiedPlan extends HandlerInterface {
     if (_pc != null) {
       try {
         await _pc!.close();
-      } catch (_) { /* ignored */ }
+      } catch (_) {/* ignored */}
     }
   }
 
@@ -113,7 +114,12 @@ class UnifiedPlan extends HandlerInterface {
       await pc.addTransceiver(kind: RTCRtpMediaType.RTCRtpMediaTypeAudio);
       await pc.addTransceiver(kind: RTCRtpMediaType.RTCRtpMediaTypeVideo);
 
-      RTCSessionDescription offer = await pc.createOffer();
+      RTCSessionDescription offer;
+      if (kIsWeb) {
+        offer = await pc.createOffer();
+      } else {
+        offer = await pc.createOffer({});
+      }
       final parsedOffer = parse(offer.sdp!);
       SdpObject sdpObject = SdpObject.fromMap(parsedOffer);
 
@@ -124,7 +130,7 @@ class UnifiedPlan extends HandlerInterface {
     } catch (error) {
       try {
         await pc.close();
-      } catch (_) { /* ignored */ }
+      } catch (_) {/* ignored */}
 
       rethrow;
     }
@@ -135,10 +141,11 @@ class UnifiedPlan extends HandlerInterface {
     _logger.debug('getNativeSctpCapabilities()');
 
     return SctpCapabilities(
-        numStreams: NumSctpStreams(
-      mis: SctpNumStreams.mis,
-      os: SctpNumStreams.os,
-    ),);
+      numStreams: NumSctpStreams(
+        mis: SctpNumStreams.mis,
+        os: SctpNumStreams.os,
+      ),
+    );
   }
 
   @override
@@ -180,7 +187,8 @@ class UnifiedPlan extends HandlerInterface {
     _assertRecvDirection();
 
     _logger.debug(
-        'receive() [trackId:${options.trackId}, kind:${RTCRtpMediaTypeExtension.value(options.kind)}]',);
+      'receive() [trackId:${options.trackId}, kind:${RTCRtpMediaTypeExtension.value(options.kind)}]',
+    );
 
     String localId =
         options.rtpParameters.mid ?? _mapMidTransceiver.length.toString();
@@ -199,11 +207,17 @@ class UnifiedPlan extends HandlerInterface {
     );
 
     _logger.debug(
-        'receive() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',);
+      'receive() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',
+    );
 
     await _pc!.setRemoteDescription(offer);
 
-    RTCSessionDescription answer = await _pc!.createAnswer();
+    RTCSessionDescription answer;
+    if (kIsWeb) {
+      answer = await _pc!.createAnswer();
+    } else {
+      answer = await _pc!.createAnswer({});
+    }
 
     SdpObject localSdpObject = SdpObject.fromMap(parse(answer.sdp!));
 
@@ -228,7 +242,8 @@ class UnifiedPlan extends HandlerInterface {
     }
 
     _logger.debug(
-        'receive() | calling pc.setLocalDescription() [answer:${answer.toMap()}]',);
+      'receive() | calling pc.setLocalDescription() [answer:${answer.toMap()}]',
+    );
 
     await _pc!.setLocalDescription(answer);
 
@@ -255,11 +270,13 @@ class UnifiedPlan extends HandlerInterface {
     // This is a workaround for Android WebRTC timing issues with existing streams.
     if (stream == null) {
       _logger.debug(
-          'receive() | Stream not found in getRemoteStreams(), creating fallback stream',);
+        'receive() | Stream not found in getRemoteStreams(), creating fallback stream',
+      );
 
       // Create a fallback stream with the track
       stream = await createLocalMediaStream(
-          'fallback_${options.trackId}_${DateTime.now().millisecondsSinceEpoch}',);
+        'fallback_${options.trackId}_${DateTime.now().millisecondsSinceEpoch}',
+      );
       stream.addTrack(transceiver.receiver.track!);
     }
 
@@ -273,7 +290,8 @@ class UnifiedPlan extends HandlerInterface {
 
   @override
   Future<HandlerReceiveDataChannelResult> receiveDataChannel(
-      HandlerReceiveDataChannelOptions options,) async {
+    HandlerReceiveDataChannelOptions options,
+  ) async {
     _assertRecvDirection();
 
     RTCDataChannelInit initOptions = RTCDataChannelInit();
@@ -302,11 +320,17 @@ class UnifiedPlan extends HandlerInterface {
           RTCSessionDescription(_remoteSdp.getSdp(), 'offer');
 
       _logger.debug(
-          'receiveDataChannel() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',);
+        'receiveDataChannel() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',
+      );
 
       await _pc!.setRemoteDescription(offer);
 
-      RTCSessionDescription answer = await _pc!.createAnswer();
+      RTCSessionDescription answer;
+      if (kIsWeb) {
+        answer = await _pc!.createAnswer();
+      } else {
+        answer = await _pc!.createAnswer({});
+      }
 
       if (!_transportReady) {
         SdpObject localSdpObject = SdpObject.fromMap(parse(answer.sdp!));
@@ -318,7 +342,8 @@ class UnifiedPlan extends HandlerInterface {
       }
 
       _logger.debug(
-          'receiveDataChannel() | calling pc.setRemoteDescription() [answer: ${answer.toMap()}',);
+        'receiveDataChannel() | calling pc.setRemoteDescription() [answer: ${answer.toMap()}',
+      );
 
       await _pc!.setLocalDescription(answer);
 
@@ -334,7 +359,8 @@ class UnifiedPlan extends HandlerInterface {
 
     if (options.track != null) {
       _logger.debug(
-          'replaceTrack() [localId:${options.localId}, track.id:${options.track!.id}]',);
+        'replaceTrack() [localId:${options.localId}, track.id:${options.track!.id}]',
+      );
     } else {
       _logger.debug('replaceTrack() [localId:${options.localId}, no track]');
     }
@@ -367,15 +393,25 @@ class UnifiedPlan extends HandlerInterface {
           await _pc!.createOffer({'iceRestart': true});
 
       _logger.debug(
-          'restartIce() | calling pc.setLocalDescription() [offer:${offer.toMap()}]',);
+        'restartIce() | calling pc.setLocalDescription() [offer:${offer.toMap()}]',
+      );
 
       await _pc!.setLocalDescription(offer);
+
+      // Sync RemoteSdp order with the offer's m-line order before generating answer.
+      SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
+      final List<String> offerMids = localSdpObject.media
+          .where((m) => m.mid != null)
+          .map((m) => m.mid!)
+          .toList();
+      _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
 
       RTCSessionDescription answer =
           RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
 
       _logger.debug(
-          'restartIce() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',);
+        'restartIce() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',
+      );
 
       await _pc!.setRemoteDescription(answer);
     } else {
@@ -383,14 +419,21 @@ class UnifiedPlan extends HandlerInterface {
           RTCSessionDescription(_remoteSdp.getSdp(), 'offer');
 
       _logger.debug(
-          'restartIce() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',);
+        'restartIce() | calling pc.setRemoteDescription() [offer:${offer.toMap()}]',
+      );
 
       await _pc!.setRemoteDescription(offer);
 
-      RTCSessionDescription answer = await _pc!.createAnswer();
+      RTCSessionDescription? answer;
+      if (kIsWeb) {
+        answer = await _pc!.createAnswer();
+      } else {
+        answer = await _pc!.createAnswer({});
+      }
 
       _logger.debug(
-          'restartIce() | calling pc.setLocalDescription() [answer:${answer.toMap()}]',);
+        'restartIce() | calling pc.setLocalDescription() [answer:${answer.toMap()}]',
+      );
 
       await _pc!.setLocalDescription(answer);
     }
@@ -505,7 +548,8 @@ class UnifiedPlan extends HandlerInterface {
     _assertSendRirection();
 
     _logger.debug(
-        'send() [kind:${options.track.kind}, track.id:${options.track.id}',);
+      'send() [kind:${options.track.kind}, track.id:${options.track.id}',
+    );
 
     if (options.encodings.length > 1) {
       int idx = 0;
@@ -515,16 +559,18 @@ class UnifiedPlan extends HandlerInterface {
     }
 
     RtpParameters sendingRtpParameters = RtpParameters.copy(
-        _sendingRtpParametersByKind[
-            RTCRtpMediaTypeExtension.fromString(options.track.kind!)]!,);
+      _sendingRtpParametersByKind[
+          RTCRtpMediaTypeExtension.fromString(options.track.kind!)]!,
+    );
 
     // This may throw.
     sendingRtpParameters.codecs =
         Ortc.reduceCodecs(sendingRtpParameters.codecs, options.codec);
 
     RtpParameters sendingRemoteRtpParameters = RtpParameters.copy(
-        _sendingRemoteRtpParametersByKind[
-            RTCRtpMediaTypeExtension.fromString(options.track.kind!)]!,);
+      _sendingRemoteRtpParametersByKind[
+          RTCRtpMediaTypeExtension.fromString(options.track.kind!)]!,
+    );
 
     // This may throw.
     sendingRemoteRtpParameters.codecs =
@@ -532,8 +578,13 @@ class UnifiedPlan extends HandlerInterface {
 
     MediaSectionIdx mediaSectionIdx = _remoteSdp.getNextMediaSectionIdx();
 
+    _logger.debug(
+      'send() | mediaSectionIdx [idx:${mediaSectionIdx.idx}, reuseMid:${mediaSectionIdx.reuseMid}]',
+    );
+
     RTCRtpTransceiver transceiver = await _pc!.addTransceiver(
       track: options.track,
+      kind: RTCRtpMediaTypeExtension.fromString(options.track.kind!),
       init: RTCRtpTransceiverInit(
         direction: TransceiverDirection.SendOnly,
         streams: [options.stream],
@@ -541,7 +592,12 @@ class UnifiedPlan extends HandlerInterface {
       ),
     );
 
-    RTCSessionDescription offer = await _pc!.createOffer();
+    RTCSessionDescription offer;
+    if (kIsWeb) {
+      offer = await _pc!.createOffer();
+    } else {
+      offer = await _pc!.createOffer({});
+    }
     SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
     MediaObject offerMediaObject;
 
@@ -555,11 +611,13 @@ class UnifiedPlan extends HandlerInterface {
     // Speacial case for VP9 with SVC.
     bool hackVp9Svc = false;
 
-    ScalabilityMode layers = ScalabilityMode.parse((options.encodings.isNotEmpty
-            ? options.encodings
-            : [RtpEncodingParameters(scalabilityMode: '')])
-        .first
-        .scalabilityMode!,);
+    ScalabilityMode layers = ScalabilityMode.parse(
+      (options.encodings.isNotEmpty
+              ? options.encodings
+              : [RtpEncodingParameters(scalabilityMode: '')])
+          .first
+          .scalabilityMode!,
+    );
 
     if (options.encodings.length == 1 &&
         layers.spatialLayers > 1 &&
@@ -581,7 +639,8 @@ class UnifiedPlan extends HandlerInterface {
     }
 
     _logger.debug(
-        'send() | calling pc.setLocalDescription() [offer:${offer.toMap()}',);
+      'send() | calling pc.setLocalDescription() [offer:${offer.toMap()}',
+    );
 
     await _pc!.setLocalDescription(offer);
 
@@ -597,13 +656,137 @@ class UnifiedPlan extends HandlerInterface {
 
     // We can now get the transceiver.mid.
     String localId = transceiver.mid;
+    if (localId.isEmpty) {
+      // Re-fetch transceiver to be sure.
+      final transceivers = await _pc!.getTransceivers();
+      transceiver = transceivers.firstWhere(
+        (t) => t.sender.track?.id == options.track.id,
+        orElse: () => transceiver,
+      );
+      localId = transceiver.mid;
+    }
+
+    if (localId.isEmpty) {
+      throw 'Transceiver mid not found after setLocalDescription';
+    }
 
     // Set MID.
     sendingRtpParameters.mid = localId;
 
     localSdpObject =
         SdpObject.fromMap(parse((await _pc!.getLocalDescription())!.sdp!));
-    offerMediaObject = localSdpObject.media[mediaSectionIdx.idx];
+    offerMediaObject = localSdpObject.media.firstWhere(
+      (m) => m.mid == localId,
+      orElse: () => throw 'Media section with mid $localId not found in offer',
+    );
+
+    // Update payload types in sendingRtpParameters and sendingRemoteRtpParameters
+    // based on the actual offer.
+
+    // Pass 1: Primary codecs
+    for (RtpCodecParameters codec in sendingRtpParameters.codecs) {
+      if (Ortc.isRtxCodec(codec)) continue;
+      final String codecName = getCodecName(codec);
+      final Rtp? matchingRtp = offerMediaObject.rtp?.firstWhereOrNull(
+        (Rtp r) =>
+            r.codec.toLowerCase() == codecName.toLowerCase() &&
+            r.rate == codec.clockRate &&
+            r.encoding == codec.channels,
+      );
+
+      if (matchingRtp != null) {
+        codec.payloadType = matchingRtp.payload;
+      }
+    }
+
+    for (RtpCodecParameters codec in sendingRemoteRtpParameters.codecs) {
+      if (Ortc.isRtxCodec(codec)) continue;
+      final String codecName = getCodecName(codec);
+      final Rtp? matchingRtp = offerMediaObject.rtp?.firstWhereOrNull(
+        (Rtp r) =>
+            r.codec.toLowerCase() == codecName.toLowerCase() &&
+            r.rate == codec.clockRate &&
+            r.encoding == codec.channels,
+      );
+
+      if (matchingRtp != null) {
+        codec.payloadType = matchingRtp.payload;
+      }
+    }
+
+    // Pass 2: RTX codecs (using updated primary PTs)
+    for (RtpCodecParameters codec in sendingRtpParameters.codecs) {
+      if (!Ortc.isRtxCodec(codec)) continue;
+
+      final int? apt = codec.parameters['apt'];
+      if (apt == null) continue;
+
+      // Find the corresponding RTX PT in the offer by looking for 'apt=X' where X is a PT in the offer
+      // that matches one of our primary codecs.
+      for (Rtp offerRtp in offerMediaObject.rtp ?? []) {
+        // Check if this offer PT is an RTX PT for some primary PT
+        final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
+          (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
+        );
+
+        if (fmtp != null) {
+          final int offerApt =
+              int.parse(parseParams(fmtp.config)['apt'].toString());
+          // Does this offerApt match any of our updated primary PTs?
+          final bool matchesPrimary = sendingRtpParameters.codecs
+              .any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
+          if (matchesPrimary) {
+            codec.payloadType = fmtp.payload;
+            codec.parameters['apt'] = offerApt;
+            break;
+          }
+        }
+      }
+    }
+
+    for (RtpCodecParameters codec in sendingRemoteRtpParameters.codecs) {
+      if (!Ortc.isRtxCodec(codec)) continue;
+
+      final int? apt = codec.parameters['apt'];
+      if (apt == null) continue;
+
+      for (Rtp offerRtp in offerMediaObject.rtp ?? []) {
+        final Fmtp? fmtp = offerMediaObject.fmtp?.firstWhereOrNull(
+          (f) => f.payload == offerRtp.payload && f.config.contains('apt='),
+        );
+
+        if (fmtp != null) {
+          final int offerApt =
+              int.parse(parseParams(fmtp.config)['apt'].toString());
+          final bool matchesPrimary = sendingRemoteRtpParameters.codecs
+              .any((c) => !Ortc.isRtxCodec(c) && c.payloadType == offerApt);
+          if (matchesPrimary) {
+            codec.payloadType = fmtp.payload;
+            codec.parameters['apt'] = offerApt;
+            break;
+          }
+        }
+      }
+    }
+
+    // Pass 3: Header Extensions
+    for (RtpHeaderExtensionParameters ext
+        in sendingRtpParameters.headerExtensions) {
+      final Ext? matchingExt =
+          offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
+      if (matchingExt != null) {
+        ext.id = matchingExt.value!;
+      }
+    }
+
+    for (RtpHeaderExtensionParameters ext
+        in sendingRemoteRtpParameters.headerExtensions) {
+      final Ext? matchingExt =
+          offerMediaObject.ext?.firstWhereOrNull((e) => e.uri == ext.uri);
+      if (matchingExt != null) {
+        ext.id = matchingExt.value!;
+      }
+    }
 
     // Set RTCP CNAME.
     sendingRtpParameters.rtcp!.cname = CommonUtils.getCname(offerMediaObject);
@@ -645,20 +828,41 @@ class UnifiedPlan extends HandlerInterface {
       }
     }
 
+    // Only pass reuseMid if the transceiver actually reused the old mid.
+    // WebRTC may assign a new mid even when we expected to reuse a closed section.
+    // If localId != reuseMid, we should add a new section, not replace the old one.
+    final String? effectiveReuseMid = (mediaSectionIdx.reuseMid != null &&
+            mediaSectionIdx.reuseMid == localId)
+        ? mediaSectionIdx.reuseMid
+        : null;
+
+    _logger.debug(
+      'send() | calling _remoteSdp.send() [localId:$localId, reuseMid:${mediaSectionIdx.reuseMid}, effectiveReuseMid:$effectiveReuseMid]',
+    );
+
     _remoteSdp.send(
       offerMediaObject: offerMediaObject,
-      reuseMid: mediaSectionIdx.reuseMid,
+      reuseMid: effectiveReuseMid,
       offerRtpParameters: sendingRtpParameters,
       answerRtpParameters: sendingRemoteRtpParameters,
       codecOptions: options.codecOptions,
       extmapAllowMixed: true,
     );
 
+    // Sync the RemoteSdp media section order to match the offer's m-line order.
+    // This is critical to avoid "order of m-lines in answer doesn't match offer" errors.
+    final List<String> offerMids = localSdpObject.media
+        .where((m) => m.mid != null)
+        .map((m) => m.mid!)
+        .toList();
+    _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
+
     RTCSessionDescription answer =
         RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
 
     _logger.debug(
-        'send() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',);
+      'send() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',
+    );
 
     await _pc!.setRemoteDescription(answer);
 
@@ -674,7 +878,8 @@ class UnifiedPlan extends HandlerInterface {
 
   @override
   Future<HandlerSendDataChannelResult> sendDataChannel(
-      SendDataChannelArguments options,) async {
+    SendDataChannelArguments options,
+  ) async {
     _assertSendRirection();
 
     RTCDataChannelInit initOptions = RTCDataChannelInit();
@@ -699,7 +904,12 @@ class UnifiedPlan extends HandlerInterface {
     // If this is the first DataChannel we need to create the SDP answer with
     // m=application section.
     if (!_hasDataChannelMediaSection) {
-      RTCSessionDescription offer = await _pc!.createOffer();
+      RTCSessionDescription offer;
+      if (kIsWeb) {
+        offer = await _pc!.createOffer();
+      } else {
+        offer = await _pc!.createOffer({});
+      }
       SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
       MediaObject? offerMediaObject = localSdpObject.media.firstWhereOrNull(
         (MediaObject m) => m.type == 'application',
@@ -713,7 +923,8 @@ class UnifiedPlan extends HandlerInterface {
       }
 
       _logger.debug(
-          'sendDataChannel() | calling pc.setLocalDescription() [offer:${offer.toMap()}',);
+        'sendDataChannel() | calling pc.setLocalDescription() [offer:${offer.toMap()}',
+      );
 
       await _pc!.setLocalDescription(offer);
 
@@ -723,7 +934,8 @@ class UnifiedPlan extends HandlerInterface {
           RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
 
       _logger.debug(
-          'sendDataChannel() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',);
+        'sendDataChannel() | calling pc.setRemoteDescription() [answer:${answer.toMap()}]',
+      );
 
       await _pc!.setRemoteDescription(answer);
 
@@ -748,7 +960,8 @@ class UnifiedPlan extends HandlerInterface {
     _assertSendRirection();
 
     _logger.debug(
-        'setMaxSpatialLayer() [localId:${options.localId}, spatialLayer:${options.spatialLayer}',);
+      'setMaxSpatialLayer() [localId:${options.localId}, spatialLayer:${options.spatialLayer}',
+    );
 
     RTCRtpTransceiver? transceiver = _mapMidTransceiver[options.localId];
 
@@ -773,11 +986,13 @@ class UnifiedPlan extends HandlerInterface {
 
   @override
   Future<void> setRtpEncodingParameters(
-      SetRtpEncodingParametersOptions options,) async {
+    SetRtpEncodingParametersOptions options,
+  ) async {
     _assertSendRirection();
 
     _logger.debug(
-        'setRtpEncodingParameters() [localId:${options.localId}, params:${options.params}]',);
+      'setRtpEncodingParameters() [localId:${options.localId}, params:${options.params}]',
+    );
 
     RTCRtpTransceiver? transceiver = _mapMidTransceiver[options.localId];
 
@@ -825,14 +1040,21 @@ class UnifiedPlan extends HandlerInterface {
         RTCSessionDescription(_remoteSdp.getSdp(), 'offer');
 
     _logger.debug(
-        'stopReceiving() | calling pc.setRemoteDescription() [offer:${offer.toMap()}',);
+      'stopReceiving() | calling pc.setRemoteDescription() [offer:${offer.toMap()}',
+    );
 
     await _pc!.setRemoteDescription(offer);
 
-    RTCSessionDescription answer = await _pc!.createAnswer();
+    RTCSessionDescription answer;
+    if (kIsWeb) {
+      answer = await _pc!.createAnswer();
+    } else {
+      answer = await _pc!.createAnswer({});
+    }
 
     _logger.debug(
-        'stopReceiving() | calling pc.setLocalDescription() [answer:${answer.toMap()}',);
+      'stopReceiving() | calling pc.setLocalDescription() [answer:${answer.toMap()}',
+    );
 
     await _pc!.setLocalDescription(answer);
     _mapMidTransceiver.remove(localId);
@@ -854,18 +1076,33 @@ class UnifiedPlan extends HandlerInterface {
     await _pc!.removeTrack(transceiver.sender);
     _remoteSdp.closeMediaSection(transceiver.mid);
 
-    RTCSessionDescription offer = await _pc!.createOffer();
+    RTCSessionDescription offer;
+    if (kIsWeb) {
+      offer = await _pc!.createOffer();
+    } else {
+      offer = await _pc!.createOffer({});
+    }
 
     _logger.debug(
-        'stopSending() | calling pc.setLocalDescription() [offer:${offer.toMap()}',);
+      'stopSending() | calling pc.setLocalDescription() [offer:${offer.toMap()}',
+    );
 
     await _pc!.setLocalDescription(offer);
+
+    // Sync RemoteSdp order with the offer's m-line order before generating answer.
+    SdpObject localSdpObject = SdpObject.fromMap(parse(offer.sdp!));
+    final List<String> offerMids = localSdpObject.media
+        .where((m) => m.mid != null)
+        .map((m) => m.mid!)
+        .toList();
+    _remoteSdp.syncMediaSectionOrderWithOffer(offerMids);
 
     RTCSessionDescription answer =
         RTCSessionDescription(_remoteSdp.getSdp(), 'answer');
 
     _logger.debug(
-        'stopSending() | calling pc.setRemoteDescription() [answer:${answer.toMap()}',);
+      'stopSending() | calling pc.setRemoteDescription() [answer:${answer.toMap()}',
+    );
 
     await _pc!.setRemoteDescription(answer);
     _mapMidTransceiver.remove(localId);
@@ -883,5 +1120,3 @@ class UnifiedPlan extends HandlerInterface {
     await _pc!.setConfiguration(configuration);
   }
 }
-
-

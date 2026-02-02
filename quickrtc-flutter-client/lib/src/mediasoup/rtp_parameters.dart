@@ -337,7 +337,7 @@ class RtpHeaderExtensionParameters {
   final String? uri;
 
   /// The numeric identifier that goes in the RTP packet. Must be unique.
-  final int? id;
+  int? id;
 
   /// If true, the value in the header is encrypted as per RFC 6904. Default false.
   bool? encrypt;
@@ -721,14 +721,17 @@ class RtpParameters {
     RtcpParameters? rtcp,
   }) {
     return RtpParameters(
-      codecs:
-          codecs ?? List<RtpCodecParameters>.from(old.codecs),
+      codecs: codecs ??
+          old.codecs
+              .map((c) => RtpCodecParameters.fromMap(c.toMap()))
+              .toList(),
       encodings: encodings ?? List<RtpEncodingParameters>.from(old.encodings),
-      headerExtensions: headerExtensions ?? List<RtpHeaderExtensionParameters>.from(old.headerExtensions),
+      headerExtensions: headerExtensions ??
+          old.headerExtensions
+              .map((e) => RtpHeaderExtensionParameters.fromMap(e.toMap()))
+              .toList(),
       mid: mid ?? old.mid,
-      rtcp: rtcp ?? (old.rtcp != null
-              ? RtcpParameters.copy(old.rtcp!)
-              : null),
+      rtcp: rtcp ?? (old.rtcp != null ? RtcpParameters.copy(old.rtcp!) : null),
     );
   }
 

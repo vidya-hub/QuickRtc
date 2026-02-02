@@ -10,25 +10,106 @@ Set up your first video call with the QuickRTC Flutter SDK.
 
 ```yaml
 dependencies:
-  quickrtc_flutter_client:
-    git:
-      url: https://github.com/vidya-hub/QuickRTC.git
-      path: quickrtc-flutter-client
+  quickrtc_flutter_client: ^1.1.0
 ```
 
 ```bash
 flutter pub get
 ```
 
-## Basic Usage
+## Quick Start (Simplest Way)
 
-### 1. Connect & Join Meeting
+Use the `QuickRTCConference` widget for a batteries-included experience:
 
 ```dart
 import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
-import 'package:socket_io_client/socket_io_client.dart' as io;
 
-// Create socket connection
+QuickRTCConference(
+  serverUrl: 'https://your-server.com:3000',
+  conferenceId: 'my-room',
+  participantName: 'John',
+  onJoined: (controller) {
+    // Enable camera and microphone when joined
+    controller.enableMedia();
+  },
+  builder: (context, state, controller) {
+    return Column(
+      children: [
+        // Video grid
+        Expanded(child: buildVideoGrid(state)),
+        // Controls
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: Icon(state.isLocalAudioActive ? Icons.mic : Icons.mic_off),
+              onPressed: () => controller.toggleMicrophoneMute(),
+            ),
+            IconButton(
+              icon: Icon(state.isLocalVideoActive ? Icons.videocam : Icons.videocam_off),
+              onPressed: () => controller.toggleCameraPause(),
+            ),
+            IconButton(
+              icon: Icon(Icons.call_end),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  },
+)
+```
+
+This widget handles:
+- Socket connection and lifecycle
+- Controller creation and disposal
+- Audio playback for remote participants
+- Error handling with retry capability
+
+## Quick Start (Controller API)
+
+For more control, use `QuickRTCController.connect()`:
+
+```dart
+import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
+
+// Connect and join in one step
+final controller = await QuickRTCController.connect(
+  serverUrl: 'https://your-server.com:3000',
+  conferenceId: 'my-room',
+  participantName: 'John',
+);
+
+// Enable camera and microphone
+await controller.enableMedia();
+
+// Use in your UI
+ListenableBuilder(
+  listenable: controller,
+  builder: (context, _) {
+    final state = controller.state;
+    return Text('${state.participantCount} participants');
+  },
+)
+
+// Leave and cleanup (socket auto-disconnects)
+await controller.leaveMeeting();
+controller.dispose();
+```
+
+## Manual Setup (Full Control)
+
+For maximum control over socket and controller:
+
+```dart
+import 'package:quickrtc_flutter_client/quickrtc_flutter_client.dart';
+
+// Option 1: Use QuickRTCSocket helper
+final socket = await QuickRTCSocket.connect('https://your-server.com:3000');
+
+// Option 2: Manual socket setup
+import 'package:socket_io_client/socket_io_client.dart' as io;
 final socket = io.io(
   'https://your-server.com:3000',
   io.OptionBuilder()
@@ -48,21 +129,22 @@ await controller.joinMeeting(
 );
 ```
 
-### 2. Start Camera & Microphone
+## Start Camera & Microphone
 
 ```dart
-// Get local media (camera + mic)
+// High-level API (recommended)
+await controller.enableMedia();
+
+// Or use low-level API for more control
 final media = await QuickRTCStatic.getLocalMedia(
   MediaConfig.audioVideo(),
 );
-
-// Publish to meeting
 await controller.produce(
   ProduceInput.fromTracksWithTypes(media.tracksWithTypes),
 );
 ```
 
-### 3. Control Media
+## Control Media
 
 ```dart
 // Toggle microphone mute/unmute
@@ -70,14 +152,17 @@ await controller.toggleMicrophoneMute();
 
 // Toggle camera pause/resume
 await controller.toggleCameraPause();
+
+// Screen share with platform-appropriate picker
+await controller.toggleScreenShareWithPicker(context);
 ```
 
-### 4. Render Video
+## Render Video
 
 ```dart
 // Local video
 QuickRTCMediaRenderer(
-  stream: media.stream,
+  stream: state.localVideoStream?.stream,
   mirror: true,
   isLocal: true,
   participantName: 'You',
@@ -93,10 +178,11 @@ QuickRTCMediaRenderer(
 )
 
 // Remote audio (invisible - handles playback)
+// Note: QuickRTCConference includes this automatically
 QuickRTCAudioRenderers(participants: state.participantList)
 ```
 
-### 5. Listen to State Changes
+## Listen to State Changes
 
 ```dart
 // Using ListenableBuilder (Flutter built-in)
@@ -108,25 +194,31 @@ ListenableBuilder(
     return Column(
       children: [
         Text('Participants: ${state.participantCount}'),
-        Text('Camera: ${state.hasLocalVideo ? "On" : "Off"}'),
-        Text('Mic: ${state.hasLocalAudio ? "On" : "Off"}'),
+        // Use convenience getters for cleaner code
+        Text('Camera: ${state.isLocalVideoActive ? "On" : "Off"}'),
+        Text('Mic: ${state.isLocalAudioActive ? "On" : "Off"}'),
       ],
     );
   },
 )
 ```
 
-### 6. Leave Meeting
+## Leave Meeting
 
 ```dart
 await controller.leaveMeeting();
 controller.dispose();
+// If using manual socket setup:
 socket.disconnect();
 ```
 
 ## Screen Sharing
 
 ```dart
+// Simplest: handles platform detection automatically
+await controller.toggleScreenShareWithPicker(context);
+
+// Or manually:
 // Mobile
 final media = await QuickRTCStatic.getLocalMedia(
   MediaConfig.screenShareOnly(),
@@ -148,17 +240,22 @@ if (media.screenshareTrack != null) {
 
 ## State Properties
 
-| Property             | Type                      | Description            |
-| -------------------- | ------------------------- | ---------------------- |
-| `isConnected`        | `bool`                    | Connected to meeting   |
-| `participantList`    | `List<RemoteParticipant>` | Remote participants    |
-| `participantCount`   | `int`                     | Number of participants |
-| `hasLocalVideo`      | `bool`                    | Camera is active       |
-| `hasLocalAudio`      | `bool`                    | Microphone is active   |
-| `isLocalVideoPaused` | `bool`                    | Camera is paused       |
-| `isLocalAudioPaused` | `bool`                    | Microphone is muted    |
-| `localVideoStream`   | `LocalStream?`            | Local video stream     |
-| `localAudioStream`   | `LocalStream?`            | Local audio stream     |
+| Property                   | Type                      | Description                           |
+| -------------------------- | ------------------------- | ------------------------------------- |
+| `isConnected`              | `bool`                    | Connected to meeting                  |
+| `participantList`          | `List<RemoteParticipant>` | Remote participants                   |
+| `participantCount`         | `int`                     | Number of participants                |
+| `hasLocalVideo`            | `bool`                    | Camera is active                      |
+| `hasLocalAudio`            | `bool`                    | Microphone is active                  |
+| `hasLocalScreenshare`      | `bool`                    | Screen share is active                |
+| `isLocalVideoPaused`       | `bool`                    | Camera is paused                      |
+| `isLocalAudioPaused`       | `bool`                    | Microphone is muted                   |
+| `isLocalScreensharePaused` | `bool`                    | Screen share is paused                |
+| **`isLocalVideoActive`**   | `bool`                    | Video enabled AND not paused *(new)*  |
+| **`isLocalAudioActive`**   | `bool`                    | Audio enabled AND not paused *(new)*  |
+| **`isLocalScreenshareActive`** | `bool`                | Screenshare enabled AND not paused *(new)* |
+| `localVideoStream`         | `LocalStream?`            | Local video stream                    |
+| `localAudioStream`         | `LocalStream?`            | Local audio stream                    |
 
 ## RemoteParticipant
 
@@ -176,6 +273,6 @@ if (media.screenshareTrack != null) {
 ## What's Next?
 
 - [Controller API](/docs/flutter/controller) - All controller methods
-- [Widgets](/docs/flutter/widgets) - QuickRTCMediaRenderer options
+- [Widgets](/docs/flutter/widgets) - QuickRTCMediaRenderer, QuickRTCConference
 - [Platform Setup](/docs/flutter/platform-setup) - Permissions setup
 - [Screen Sharing](/docs/flutter/screen-sharing) - Platform-specific details

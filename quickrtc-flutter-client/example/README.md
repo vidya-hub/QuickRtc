@@ -66,6 +66,19 @@ await controller.produce(
 );
 ```
 
+#### Android External Stop Detection
+
+On Android, when screen sharing is stopped via the system notification ("Stop now" button) or when MediaProjection is revoked, the SDK automatically:
+
+1. Detects the stop via producer stats monitoring (checks if bytes are still being sent)
+2. Calls `stopStream()` which emits `closeProducer` to the server
+3. Other participants are notified and remove the screen share tile
+
+This is handled automatically - no additional code is required. The SDK uses multiple detection strategies:
+- Track `onMute` callback
+- Track `muted` property monitoring  
+- Producer RTP stats monitoring (most reliable - detects when no new bytes are being sent for ~2 seconds)
+
 ### 6. Render Video
 
 ```dart
@@ -87,15 +100,79 @@ QuickRTCMediaRenderer(
 QuickRTCAudioRenderers(participants: state.participantList)
 ```
 
-### 7. Listen to State Changes
+### 6. Media Rendering
+
+#### QuickRTCMediaRenderer
+
+Display local/remote video with built-in indicators.
 
 ```dart
-ListenableBuilder(
-  listenable: controller,
-  builder: (context, _) {
-    final state = controller.state;
-    return Text('Participants: ${state.participantCount}');
+// Local
+QuickRTCMediaRenderer(
+  stream: localStream,
+  mirror: true,
+  isLocal: true,
+  participantName: 'You',
+)
+
+// Remote
+QuickRTCMediaRenderer(
+  remoteStream: participant.videoStream,
+  participantName: participant.name,
+)
+```
+
+#### QuickRTCAudioRenderers
+
+Invisible widget to handle all remote participant audio.
+
+```dart
+QuickRTCAudioRenderers(participants: state.participantList)
+```
+
+### 7. State Management Patterns
+
+The SDK provides specialized widgets for efficient state management:
+
+#### QuickRTCBuilder
+
+Rebuilds a specific part of your UI when state changes.
+
+```dart
+QuickRTCBuilder(
+  buildWhen: (prev, curr) => prev.participantCount != curr.participantCount,
+  builder: (context, state) {
+    return Text('Count: ${state.participantCount}');
   },
+)
+```
+
+#### QuickRTCConsumer
+
+Access the controller and state directly in your builder.
+
+```dart
+QuickRTCConsumer(
+  builder: (context, controller, state, child) {
+    return ControlButton(
+      isActive: state.hasLocalVideo,
+      onPressed: () => controller.toggleCameraPause(),
+    );
+  },
+)
+```
+
+#### QuickRTCListener
+
+Perform side-effects (like showing snackbars) based on state changes.
+
+```dart
+QuickRTCListener(
+  listenWhen: (prev, curr) => prev.error != curr.error && curr.error != null,
+  listener: (context, state) {
+    showError(state.error!);
+  },
+  child: YourContent(),
 )
 ```
 
@@ -111,11 +188,20 @@ socket.disconnect();
 
 - **lib/quickrtc_snippets.dart** - All code snippets in one file
 
+## Dependency Management
+
+This project uses modern dependency constraints. If you encounter issues with generated files:
+
+1. Run `flutter pub get`
+2. Run `flutter pub run build_runner build --delete-conflicting-outputs`
+
+The library is verified to pass static analysis with zero warnings on all platforms.
+
 ## Full Example
 
 For a complete working app, see [quickrtc-example/flutter-client](https://github.com/vidya-hub/QuickRTC/tree/main/quickrtc-example/flutter-client).
 
 ## Learn More
 
-- [QuickRTC Documentation](https://quickrtc.dev/docs/flutter/overview)
-- [Platform Setup Guide](https://quickrtc.dev/docs/flutter/platform-setup)
+- [QuickRTC Documentation](https://quickrtc-docs.vercel.app/docs/flutter/getting-started)
+- [Platform Setup Guide](https://quickrtc-docs.vercel.app/docs/flutter/platform-setup)
