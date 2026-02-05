@@ -1,0 +1,26 @@
+# Ignore EVERYTHING by default
+*
+
+# Only include what we need for the server build:
+
+# quickrtc-types (just dist, no node_modules)
+!quickrtc_types/package.json
+!quickrtc_types/package-lock.json
+!quickrtc_types/dist
+!quickrtc_types/dist/**
+
+# quickrtc-server (just dist, no node_modules)
+!quickrtc_server/package.json
+!quickrtc_server/package-lock.json
+!quickrtc_server/dist
+!quickrtc_server/dist/**
+
+# quickrtc-example server source
+!quickrtc-example/server/package.json
+!quickrtc-example/server/package-lock.json
+!quickrtc-example/server/src
+!quickrtc-example/server/src/**
+!quickrtc-example/server/tsconfig.json
+
+# Dockerfile
+!quickrtc-example/Dockerfile

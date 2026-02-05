@@ -128,6 +128,8 @@ export interface Conference {
     kind: "audio" | "video";
     streamType?: string;
   } | null;
+  getProducerCount(): number;
+  getConsumerCount(): number;
 }
 
 export interface Participant {
@@ -173,6 +175,7 @@ export interface Participant {
   getAllProducers(): Producer[];
   getAllConsumers(): Consumer[];
   getProducerIds(): string[];
+  getConsumerIds(): string[];
 }
 
 /**

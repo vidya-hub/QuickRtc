@@ -390,12 +390,28 @@ export class QuickRTCServer extends EventTarget {
     uptime: number;
     conferenceCount: number;
     participantCount: number;
+    producerCount: number;
+    consumerCount: number;
     totalConnections: number;
   } {
+    // Calculate producer and consumer counts across all conferences
+    let producerCount = 0;
+    let consumerCount = 0;
+    
+    if (this.mediasoupController) {
+      const conferences = this.mediasoupController.getConferences();
+      for (const [, conference] of conferences) {
+        producerCount += conference.getProducerCount();
+        consumerCount += conference.getConsumerCount();
+      }
+    }
+    
     return {
       uptime: process.uptime(),
       conferenceCount: this.conferences.size,
       participantCount: this.participants.size,
+      producerCount,
+      consumerCount,
       totalConnections: this.io?.sockets.sockets.size || 0,
     };
   }

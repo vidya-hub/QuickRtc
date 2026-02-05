@@ -205,6 +205,8 @@ app.get("/metrics", async (_, res) => {
     const stats = quickrtc.getStats();
     conferenceGauge.set(stats.conferenceCount);
     participantGauge.set(stats.participantCount);
+    producersGauge.set(stats.producerCount);
+    consumersGauge.set(stats.consumerCount);
     socketConnectionsGauge.set(stats.totalConnections);
     serverUptimeGauge.set(stats.uptime);
 

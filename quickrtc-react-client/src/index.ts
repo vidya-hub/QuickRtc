@@ -62,7 +62,7 @@
 // ============================================================================
 
 export { useQuickRTC } from "./useQuickRTC";
-export type { UseQuickRTCOptions, UseQuickRTCReturn } from "./useQuickRTC";
+export type { UseQuickRTCOptions, UseQuickRTCReturn, ProduceStreamOptions } from "./useQuickRTC";
 
 // ============================================================================
 // VIDEO COMPONENT - Optimized for WebRTC streams

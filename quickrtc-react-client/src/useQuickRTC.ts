@@ -5,6 +5,7 @@ import {
   type JoinConfig,
   type LocalStream,
   type ProduceInput,
+  type StreamType,
 } from "quickrtc-client";
 
 // ============================================================================
@@ -21,6 +22,20 @@ export interface UseQuickRTCOptions {
   maxParticipants?: number;
   /** Enable debug logging */
   debug?: boolean;
+}
+
+/**
+ * Options for producing a custom MediaStream
+ */
+export interface ProduceStreamOptions {
+  /** The MediaStream to produce (from canvas, video element, or any source) */
+  stream: MediaStream;
+  /** Stream type hint (default: inferred from track kind) */
+  type?: StreamType;
+  /** Only produce audio tracks */
+  audioOnly?: boolean;
+  /** Only produce video tracks */
+  videoOnly?: boolean;
 }
 
 /**
@@ -68,6 +83,34 @@ export interface UseQuickRTCReturn {
    * ```
    */
   produce: (input: ProduceInput) => Promise<LocalStream[]>;
+
+  /**
+   * Produce a custom MediaStream (from canvas, video element, or any source).
+   * This is a convenience method that extracts tracks from the stream and produces them.
+   * 
+   * @example
+   * ```tsx
+   * // From canvas (for animations, games, etc.)
+   * const canvas = document.getElementById('myCanvas') as HTMLCanvasElement;
+   * const canvasStream = canvas.captureStream(30); // 30 FPS
+   * const [videoStream] = await produceStream({ stream: canvasStream, type: 'video' });
+   * 
+   * // From video element (for pre-recorded video)
+   * const video = document.getElementById('myVideo') as HTMLVideoElement;
+   * const videoStream = (video as any).captureStream();
+   * const streams = await produceStream({ stream: videoStream });
+   * 
+   * // From WebAudio (for custom audio processing)
+   * const audioCtx = new AudioContext();
+   * const dest = audioCtx.createMediaStreamDestination();
+   * oscillator.connect(dest);
+   * const [audioStream] = await produceStream({ stream: dest.stream, type: 'audio' });
+   * 
+   * // Video only from a stream that has both audio and video
+   * const streams = await produceStream({ stream: myStream, videoOnly: true });
+   * ```
+   */
+  produceStream: (options: ProduceStreamOptions) => Promise<LocalStream[]>;
   
   /** Pause a local stream by ID */
   pause: (streamId: string) => Promise<void>;
@@ -228,6 +271,38 @@ export function useQuickRTC(options: UseQuickRTCOptions): UseQuickRTCReturn {
     return await rtcRef.current.produce(input);
   }, []);
 
+  const produceStream = useCallback(async (options: ProduceStreamOptions): Promise<LocalStream[]> => {
+    if (!rtcRef.current) {
+      throw new Error("QuickRTC not initialized. Call join() first.");
+    }
+
+    const { stream, type, audioOnly, videoOnly } = options;
+    
+    // Get tracks based on options
+    let tracks: MediaStreamTrack[] = [];
+    
+    if (audioOnly) {
+      tracks = stream.getAudioTracks();
+    } else if (videoOnly) {
+      tracks = stream.getVideoTracks();
+    } else {
+      tracks = stream.getTracks();
+    }
+
+    if (tracks.length === 0) {
+      throw new Error("No tracks found in the provided MediaStream");
+    }
+
+    // If type is specified, produce with type hint
+    if (type) {
+      const tracksWithType = tracks.map(track => ({ track, type }));
+      return await rtcRef.current.produce(tracksWithType);
+    }
+
+    // Otherwise, produce tracks directly (type will be inferred)
+    return await rtcRef.current.produce(tracks);
+  }, []);
+
   const pause = useCallback(async (streamId: string): Promise<void> => {
     if (!rtcRef.current) return;
     await rtcRef.current.pause(streamId);
@@ -252,6 +327,7 @@ export function useQuickRTC(options: UseQuickRTCOptions): UseQuickRTCReturn {
     join,
     leave,
     produce,
+    produceStream,
     pause,
     resume,
     stop,
@@ -263,6 +339,7 @@ export function useQuickRTC(options: UseQuickRTCOptions): UseQuickRTCReturn {
     join,
     leave,
     produce,
+    produceStream,
     pause,
     resume,
     stop,

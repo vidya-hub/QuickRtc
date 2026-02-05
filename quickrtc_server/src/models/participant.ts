@@ -407,6 +407,14 @@ class MediasoupParticipant implements Participant {
     }
     return [];
   }
+
+  public getConsumerIds(): string[] {
+    const userConsumers = this.consumers.get(this.id);
+    if (userConsumers) {
+      return Object.keys(userConsumers);
+    }
+    return [];
+  }
 }
 
 export default MediasoupParticipant;

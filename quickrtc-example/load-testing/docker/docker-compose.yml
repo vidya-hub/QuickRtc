@@ -13,8 +13,8 @@ services:
   # ===========================================================================
   quickrtc-server:
     build:
-      context: ../..
-      dockerfile: Dockerfile
+      context: ../../..
+      dockerfile: quickrtc-example/Dockerfile
     container_name: quickrtc-loadtest-server
     restart: unless-stopped
     ports:
@@ -23,9 +23,9 @@ services:
       - "40000-40100:40000-40100/tcp"
     volumes:
       # Mount pre-built client (build locally with: cd client && npm run build)
-      - ../../client/dist:/app/client/dist:ro
+      - ../../../quickrtc-example/client/dist:/app/client/dist:ro
       # Mount SSL certs for HTTPS
-      - ../../certs:/app/certs:ro
+      - ../../../quickrtc-example/certs:/app/certs:ro
     environment:
       - NODE_ENV=production
       - PORT=3000

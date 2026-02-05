@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useQuickRTC, QuickRTCVideo } from "quickrtc-react-client";
 import type {
   LocalStream,
@@ -52,10 +52,14 @@ export default function App() {
   // QUICKRTC HOOK
   // ============================================================================
 
-  const { rtc, isConnected, join, leave, produce } = useQuickRTC({
+  const { rtc, isConnected, join, leave, produce, produceStream } = useQuickRTC({
     socket,
     debug: true,
   });
+
+  // Canvas ref for custom stream
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationRef = useRef<number | null>(null);
 
   // ============================================================================
   // EVENT SUBSCRIPTIONS
@@ -205,10 +209,12 @@ export default function App() {
   const hasAudio = localStreams.some((s) => s.type === "audio");
   const hasVideo = localStreams.some((s) => s.type === "video");
   const hasScreenShare = localStreams.some((s) => s.type === "screenshare");
+  const hasCustomStream = localStreams.some((s) => s.id.startsWith("custom-"));
 
-  const localVideo = localStreams.find((s) => s.type === "video");
+  const localVideo = localStreams.find((s) => s.type === "video" && !s.id.startsWith("custom-"));
   const localScreen = localStreams.find((s) => s.type === "screenshare");
   const localAudio = localStreams.find((s) => s.type === "audio");
+  const localCustom = localStreams.find((s) => s.id.startsWith("custom-"));
 
   // ============================================================================
   // ACTIONS
@@ -345,6 +351,80 @@ export default function App() {
     }
   }, [hasScreenShare, localStreams, produce]);
 
+  /**
+   * Toggle custom stream (canvas-based test pattern)
+   * Demonstrates produceStream() with a custom MediaStream source
+   */
+  const toggleCustomStream = useCallback(async () => {
+    if (hasCustomStream) {
+      // Stop custom stream
+      const stream = localStreams.find((s) => s.id.startsWith("custom-"));
+      if (stream) {
+        console.log("[Action] Stopping custom stream...");
+        await stream.stop();
+        setLocalStreams((prev) => prev.filter((s) => s.id !== stream.id));
+        
+        // Stop animation
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+        }
+      }
+    } else {
+      console.log("[Action] Starting custom stream from canvas...");
+      
+      // Create canvas if not exists
+      if (!canvasRef.current) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 480;
+        canvasRef.current = canvas;
+      }
+      
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+      
+      // Animate test pattern
+      let hue = 0;
+      const animate = () => {
+        // Draw animated gradient background
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, `hsl(${hue}, 70%, 50%)`);
+        gradient.addColorStop(1, `hsl(${(hue + 180) % 360}, 70%, 50%)`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw text
+        ctx.fillStyle = "white";
+        ctx.font = "bold 32px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Custom Stream", canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = "20px Arial";
+        ctx.fillText(`Frame: ${Math.floor(hue)}`, canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText(new Date().toLocaleTimeString(), canvas.width / 2, canvas.height / 2 + 50);
+        
+        hue = (hue + 1) % 360;
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      animate();
+      
+      // Capture stream from canvas at 30 FPS
+      const canvasStream = canvas.captureStream(30);
+      
+      // Use produceStream to send the canvas stream
+      const [customStream] = await produceStream({
+        stream: canvasStream,
+        type: "video",
+      });
+      
+      if (customStream) {
+        // Mark it as custom by prefixing the id (for UI purposes)
+        const markedStream = { ...customStream, id: `custom-${customStream.id}` };
+        setLocalStreams((prev) => [...prev, markedStream]);
+      }
+    }
+  }, [hasCustomStream, localStreams, produceStream]);
+
   // ============================================================================
   // RENDER - Join Form
   // ============================================================================
@@ -431,6 +511,17 @@ export default function App() {
         </button>
 
         <button
+          className={`px-4 py-2 rounded-lg text-white font-medium transition-colors ${
+            hasCustomStream
+              ? "bg-purple-500 hover:bg-purple-600"
+              : "bg-purple-700 hover:bg-purple-600"
+          }`}
+          onClick={toggleCustomStream}
+        >
+          {hasCustomStream ? "Stop Custom" : "Custom Stream"}
+        </button>
+
+        <button
           className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
           onClick={handleLeave}
         >
@@ -472,6 +563,20 @@ export default function App() {
             </span>
             <QuickRTCVideo
               stream={localScreen.stream}
+              muted
+              className="w-full h-full object-contain"
+            />
+          </div>
+        )}
+
+        {/* Local custom stream (separate tile) */}
+        {localCustom && (
+          <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video border-2 border-purple-500">
+            <span className="absolute top-2 left-2 bg-purple-600/80 text-white text-sm px-2 py-1 rounded z-10">
+              You (Custom Stream)
+            </span>
+            <QuickRTCVideo
+              stream={localCustom.stream}
               muted
               className="w-full h-full object-contain"
             />

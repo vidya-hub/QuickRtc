@@ -393,6 +393,30 @@ class MediasoupConference implements Conference {
       this.router.close();
     }
   }
+
+  /**
+   * Get total producer count across all participants in this conference
+   */
+  getProducerCount(): number {
+    let count = 0;
+    for (const [, participant] of this.participants) {
+      const mediasoupParticipant = participant as MediasoupParticipant;
+      count += mediasoupParticipant.getProducerIds().length;
+    }
+    return count;
+  }
+
+  /**
+   * Get total consumer count across all participants in this conference
+   */
+  getConsumerCount(): number {
+    let count = 0;
+    for (const [, participant] of this.participants) {
+      const mediasoupParticipant = participant as MediasoupParticipant;
+      count += mediasoupParticipant.getConsumerIds().length;
+    }
+    return count;
+  }
 }
 
 export default MediasoupConference;

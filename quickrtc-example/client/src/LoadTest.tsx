@@ -2,7 +2,7 @@
  * QuickRTC Load Test Client
  * 
  * Auto-joins a conference based on URL parameters and produces media.
- * Used by Puppeteer-based load testing with fake media streams.
+ * Uses canvas-based synthetic video for reliable headless browser testing.
  * 
  * URL Parameters:
  *   - participantId: Unique ID for this participant
@@ -11,6 +11,7 @@
  *   - video: true/false to produce video
  *   - audio: true/false to produce audio
  *   - serverUrl: Override server URL
+ *   - synthetic: true/false to use canvas-based synthetic media (default: true)
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -26,6 +27,7 @@ const CONFERENCE_ID = params.get('conferenceId') || 'loadtest-room-0';
 const PRODUCE_VIDEO = params.get('video') !== 'false';
 const PRODUCE_AUDIO = params.get('audio') !== 'false';
 const SERVER_URL = params.get('serverUrl') || window.location.origin;
+const USE_SYNTHETIC = params.get('synthetic') !== 'false'; // Default to synthetic
 
 // Expose state to Puppeteer
 declare global {
@@ -42,6 +44,108 @@ declare global {
   }
 }
 
+/**
+ * Create a synthetic video stream using canvas
+ * This works reliably in headless browsers unlike getUserMedia
+ */
+function createSyntheticVideoStream(width = 640, height = 480, fps = 30): { stream: MediaStream; stop: () => void } {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d')!;
+  
+  let frameCount = 0;
+  let animationId: number | null = null;
+  let isRunning = true;
+  
+  // Generate a unique color based on participant ID
+  const hueBase = Math.abs(PARTICIPANT_ID.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 360;
+  
+  const drawFrame = () => {
+    if (!isRunning) return;
+    
+    // Animated gradient background
+    const hue = (hueBase + frameCount) % 360;
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, `hsl(${hue}, 60%, 40%)`);
+    gradient.addColorStop(1, `hsl(${(hue + 120) % 360}, 60%, 30%)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // Bouncing ball for visual motion
+    const ballX = width / 2 + Math.sin(frameCount * 0.05) * (width / 3);
+    const ballY = height / 2 + Math.cos(frameCount * 0.03) * (height / 3);
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, 30, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${(hue + 180) % 360}, 80%, 60%)`;
+    ctx.fill();
+    
+    // Text overlay
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Load Test', width / 2, 40);
+    
+    ctx.font = '16px Arial';
+    ctx.fillText(PARTICIPANT_NAME, width / 2, height / 2);
+    ctx.fillText(`Frame: ${frameCount}`, width / 2, height / 2 + 25);
+    ctx.fillText(new Date().toLocaleTimeString(), width / 2, height - 20);
+    
+    frameCount++;
+    animationId = requestAnimationFrame(drawFrame);
+  };
+  
+  // Start animation
+  drawFrame();
+  
+  // Capture stream from canvas
+  const stream = canvas.captureStream(fps);
+  
+  const stop = () => {
+    isRunning = false;
+    if (animationId !== null) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+    // Stop all tracks
+    stream.getTracks().forEach(track => track.stop());
+  };
+  
+  return { stream, stop };
+}
+
+/**
+ * Create a synthetic audio stream using WebAudio oscillator
+ * This works reliably in headless browsers
+ */
+function createSyntheticAudioStream(): { stream: MediaStream; stop: () => void } {
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  
+  // Create oscillator for a gentle tone
+  const oscillator = audioContext.createOscillator();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+  
+  // Create gain node to control volume (very quiet)
+  const gainNode = audioContext.createGain();
+  gainNode.gain.setValueAtTime(0.01, audioContext.currentTime); // Very low volume
+  
+  // Connect oscillator -> gain -> destination
+  const destination = audioContext.createMediaStreamDestination();
+  oscillator.connect(gainNode);
+  gainNode.connect(destination);
+  
+  // Start oscillator
+  oscillator.start();
+  
+  const stop = () => {
+    oscillator.stop();
+    audioContext.close();
+  };
+  
+  return { stream: destination.stream, stop };
+}
+
 export default function LoadTest() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [status, setStatus] = useState<string>("Initializing...");
@@ -51,15 +155,16 @@ export default function LoadTest() {
   
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasStartedRef = useRef(false);
+  const syntheticStopRefs = useRef<Array<() => void>>([]);
 
-  const { rtc, isConnected, join, produce } = useQuickRTC({
+  const { rtc, isConnected, join, produce, produceStream } = useQuickRTC({
     socket,
     debug: false,
   });
 
   // Update status and expose to Puppeteer
   const updateStatus = useCallback((msg: string, isError = false) => {
-    console.log(msg);
+    console.log(`[LoadTest] ${msg}`);
     setStatus(msg);
     if (isError) {
       setError(msg);
@@ -83,11 +188,9 @@ export default function LoadTest() {
       try {
         const track = stream.stream.getTracks()[0];
         if (track) {
-          // Note: In a real implementation, we'd get stats from the RTCPeerConnection
-          // For now, estimate based on stream state
           stats.producerStats.push({
             kind: stream.type === 'video' ? 'video' : 'audio',
-            bytesSent: Date.now() - (window as any).loadTestStartTime || 0, // Placeholder
+            bytesSent: Date.now() - ((window as any).loadTestStartTime || Date.now()),
             packetsSent: 0,
           });
         }
@@ -112,6 +215,14 @@ export default function LoadTest() {
       }
     };
   }, [isConnected, collectStats]);
+
+  // Cleanup synthetic streams on unmount
+  useEffect(() => {
+    return () => {
+      syntheticStopRefs.current.forEach(stop => stop());
+      syntheticStopRefs.current = [];
+    };
+  }, []);
 
   // Auto-join and produce media
   useEffect(() => {
@@ -178,24 +289,65 @@ export default function LoadTest() {
 
     const produceMedia = async () => {
       try {
-        // Get media (fake in headless Chrome)
-        const constraints: MediaStreamConstraints = {
-          video: PRODUCE_VIDEO ? { width: 640, height: 480, frameRate: 15 } : false,
-          audio: PRODUCE_AUDIO,
-        };
-
-        updateStatus('Getting user media...');
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        updateStatus('Producing tracks...');
-        const tracks = mediaStream.getTracks();
         const producedStreams: LocalStream[] = [];
 
-        for (const track of tracks) {
-          const [stream] = await produce(track);
-          if (stream) {
-            producedStreams.push(stream);
-            updateStatus(`Producing ${track.kind}...`);
+        if (USE_SYNTHETIC) {
+          // Use synthetic canvas/audio streams (works in headless browsers)
+          updateStatus('Creating synthetic media streams...');
+
+          if (PRODUCE_VIDEO) {
+            updateStatus('Creating synthetic video...');
+            const { stream: videoStream, stop: stopVideo } = createSyntheticVideoStream(640, 480, 30);
+            syntheticStopRefs.current.push(stopVideo);
+            
+            const [produced] = await produceStream({
+              stream: videoStream,
+              type: 'video',
+              videoOnly: true,
+            });
+            
+            if (produced) {
+              producedStreams.push(produced);
+              updateStatus('Synthetic video producing!');
+            }
+          }
+
+          if (PRODUCE_AUDIO) {
+            updateStatus('Creating synthetic audio...');
+            const { stream: audioStream, stop: stopAudio } = createSyntheticAudioStream();
+            syntheticStopRefs.current.push(stopAudio);
+            
+            const [produced] = await produceStream({
+              stream: audioStream,
+              type: 'audio',
+              audioOnly: true,
+            });
+            
+            if (produced) {
+              producedStreams.push(produced);
+              updateStatus('Synthetic audio producing!');
+            }
+          }
+
+        } else {
+          // Use getUserMedia (may require Chrome fake media flags)
+          const constraints: MediaStreamConstraints = {
+            video: PRODUCE_VIDEO ? { width: 640, height: 480, frameRate: 15 } : false,
+            audio: PRODUCE_AUDIO,
+          };
+
+          updateStatus('Getting user media...');
+          const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+          updateStatus('Producing tracks...');
+          const tracks = mediaStream.getTracks();
+
+          for (const track of tracks) {
+            const [stream] = await produce(track);
+            if (stream) {
+              producedStreams.push(stream);
+              updateStatus(`Producing ${track.kind}...`);
+            }
           }
         }
 
@@ -210,12 +362,14 @@ export default function LoadTest() {
         window.loadTestError = null;
 
       } catch (err) {
-        updateStatus(`Media failed: ${err instanceof Error ? err.message : 'Unknown error'}`, true);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error('[LoadTest] Media production error:', err);
+        updateStatus(`Media failed: ${errorMsg}`, true);
       }
     };
 
     produceMedia();
-  }, [isConnected, localStreams.length, produce, updateStatus]);
+  }, [isConnected, localStreams.length, produce, produceStream, updateStatus]);
 
   // Listen for remote streams
   useEffect(() => {
@@ -269,6 +423,7 @@ export default function LoadTest() {
         <div>Participant: {PARTICIPANT_NAME} ({PARTICIPANT_ID})</div>
         <div>Conference: {CONFERENCE_ID}</div>
         <div>Server: {SERVER_URL}</div>
+        <div>Media Mode: {USE_SYNTHETIC ? 'Synthetic (Canvas/WebAudio)' : 'getUserMedia'}</div>
         <div>Producers: {localStreams.length}</div>
         <div>Consumers: {remoteStreams.length}</div>
         <div>Connected: {isConnected ? 'Yes' : 'No'}</div>

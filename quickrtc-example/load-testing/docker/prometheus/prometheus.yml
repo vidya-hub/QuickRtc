@@ -13,6 +13,9 @@ scrape_configs:
   # QuickRTC Server Metrics (Docker container on port 3000)
   # ===========================================================================
   - job_name: 'quickrtc-server'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
     static_configs:
       - targets: ['host.docker.internal:3000']
     metrics_path: /metrics
@@ -23,6 +26,9 @@ scrape_configs:
   # QuickRTC on Kubernetes (NodePort 30000)
   # ===========================================================================
   - job_name: 'quickrtc-k8s'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
     static_configs:
       - targets: ['host.docker.internal:30000']
     metrics_path: /metrics

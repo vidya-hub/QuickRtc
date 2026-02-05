@@ -1,6 +1,7 @@
 # QuickRTC Server Dockerfile
 # Server-only build - client is mounted via volume (pre-built locally)
 # Using Debian-based image for mediasoup C++ compilation compatibility
+# Build context should be the repo root (simple_mediasoup/)
 
 FROM node:20-bookworm AS builder
 
@@ -12,28 +13,56 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================
+# Copy and install local quickrtc packages (using local builds, not npm)
+# ============================================================================
+WORKDIR /app
+
+# Copy quickrtc-types package and install its deps
+COPY quickrtc_types/package*.json ./quickrtc_types/
+COPY quickrtc_types/dist ./quickrtc_types/dist
+WORKDIR /app/quickrtc_types
+RUN npm install --production
+
+# Copy quickrtc-server package and install its deps  
+WORKDIR /app
+COPY quickrtc_server/package*.json ./quickrtc_server/
+COPY quickrtc_server/dist ./quickrtc_server/dist
+WORKDIR /app/quickrtc_server
+RUN npm install --production
+
+# ============================================================================
 # Build Server
 # ============================================================================
 WORKDIR /app/server
 
-COPY server/package*.json ./
+COPY quickrtc-example/server/package*.json ./
+
+# Update package.json to use local packages instead of npm registry
+RUN npm pkg set dependencies.quickrtc-server=file:../quickrtc_server
+RUN npm pkg set dependencies.quickrtc-types=file:../quickrtc_types
+
 RUN npm install
 
-COPY server/src ./src
-COPY server/tsconfig.json ./
+COPY quickrtc-example/server/src ./src
+COPY quickrtc-example/server/tsconfig.json ./
 RUN npm run build
 
 # ============================================================================
-# Production image (smaller)
+# Production image
 # ============================================================================
-FROM node:20-slim
+FROM node:20-bookworm-slim
+
+# Install minimal runtime dependencies for mediasoup
+RUN apt-get update && apt-get install -y \
+    libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy built server
-COPY --from=builder /app/server/dist ./dist
-COPY --from=builder /app/server/node_modules ./node_modules
-COPY --from=builder /app/server/package*.json ./
+# Copy the entire builder app directory to preserve symlinks and node_modules
+COPY --from=builder /app /app
+
+WORKDIR /app/server
 
 # Client will be mounted at /app/client/dist via docker-compose volume
 # Create the directory so server doesn't fail if mount is missing

@@ -1,33 +1,20 @@
 /**
- * WebRTC Load Test Engine (with real media streams)
+ * Playwright Load Test Engine (with real media streams)
  * 
- * Uses Puppeteer to launch headless Chrome instances that produce
- * real WebRTC video/audio streams.
+ * Uses Playwright to launch browsers that produce real WebRTC video/audio streams.
+ * Benefits over Puppeteer:
+ * - Multi-browser support (Chromium, Firefox, WebKit)
+ * - Better context isolation per user
+ * - Auto-wait features
+ * - Faster execution with parallel contexts
  */
 
 const EventEmitter = require('events');
-const puppeteer = require('puppeteer');
-const path = require('path');
-const fs = require('fs');
+const { chromium, firefox, webkit } = require('playwright');
 
-// Media file paths
-const MEDIA_DIR = path.join(__dirname, '..', '..', 'test-media');
-const MEDIA_FILES = {
-  '720p': {
-    video: path.join(MEDIA_DIR, 'y4m', 'test-720p.y4m'),
-    audio: path.join(MEDIA_DIR, 'audio', 'test-audio.wav'),
-  },
-  '1080p': {
-    video: path.join(MEDIA_DIR, 'y4m', 'test-1080p.y4m'),
-    audio: path.join(MEDIA_DIR, 'audio', 'test-audio.wav'),
-  },
-  '4k': {
-    video: path.join(MEDIA_DIR, 'y4m', 'test-4k.y4m'),
-    audio: path.join(MEDIA_DIR, 'audio', 'test-audio.wav'),
-  },
-};
+const BROWSER_TYPES = { chromium, firefox, webkit };
 
-class WebRTCLoadTestEngine extends EventEmitter {
+class PlaywrightLoadTestEngine extends EventEmitter {
   constructor(config) {
     super();
     this.config = {
@@ -38,17 +25,19 @@ class WebRTCLoadTestEngine extends EventEmitter {
       usersPerRoom: config.usersPerRoom || 5,
       headless: config.headless !== false,
       produceVideo: config.produceVideo !== false,
-      produceAudio: config.produceAudio !== false,
+      produceAudio: false, // Audio disabled - video only
       resolution: config.resolution || '720p',
-      realMedia: config.realMedia || false,
+      browserType: config.browserType || 'chromium',
+      trace: config.trace || false,
     };
     
-    // Validate resolution
-    if (!MEDIA_FILES[this.config.resolution]) {
-      throw new Error(`Invalid resolution: ${this.config.resolution}. Use 720p, 1080p, or 4k`);
+    // Validate browser type
+    if (!BROWSER_TYPES[this.config.browserType]) {
+      throw new Error(`Invalid browser: ${this.config.browserType}. Use chromium, firefox, or webkit`);
     }
     
-    this.browsers = [];
+    this.browser = null;
+    this.contexts = [];
     this.stats = {
       launched: 0,
       connected: 0,
@@ -70,26 +59,12 @@ class WebRTCLoadTestEngine extends EventEmitter {
     this.durationTimer = null;
   }
   
-  // Check if real media files exist
-  checkMediaFiles() {
-    if (!this.config.realMedia) return true;
-    
-    const mediaFiles = MEDIA_FILES[this.config.resolution];
-    if (!fs.existsSync(mediaFiles.video)) {
-      return { error: `Media file not found: ${mediaFiles.video}. Run: cd test-media && ./download-test-media.sh all` };
-    }
-    if (!fs.existsSync(mediaFiles.audio)) {
-      return { error: `Audio file not found: ${mediaFiles.audio}. Run: cd test-media && ./download-test-media.sh all` };
-    }
-    return true;
-  }
-  
-  getMediaInfo() {
+  getEngineInfo() {
     return {
+      engine: 'playwright',
+      browserType: this.config.browserType,
       resolution: this.config.resolution,
-      realMedia: this.config.realMedia,
-      videoFile: this.config.realMedia ? MEDIA_FILES[this.config.resolution].video : null,
-      audioFile: this.config.realMedia ? MEDIA_FILES[this.config.resolution].audio : null,
+      trace: this.config.trace,
     };
   }
   
@@ -109,6 +84,36 @@ class WebRTCLoadTestEngine extends EventEmitter {
         bytesReceived: 0,
       },
     };
+    
+    // Launch browser
+    const browserType = BROWSER_TYPES[this.config.browserType];
+    const launchOptions = {
+      headless: this.config.headless,
+    };
+    
+    // Add Chrome-specific args
+    if (this.config.browserType === 'chromium') {
+      launchOptions.args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--autoplay-policy=no-user-gesture-required',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list',
+        '--enable-webrtc-hide-local-ips-with-mdns=false',
+      ];
+    }
+    
+    try {
+      this.browser = await browserType.launch(launchOptions);
+      this.emit('browserLaunched', { browserType: this.config.browserType });
+    } catch (error) {
+      this.emit('error', { message: `Failed to launch browser: ${error.message}` });
+      return;
+    }
     
     let userIndex = 0;
     const spawnInterval = 1000 / this.config.spawnRate;
@@ -144,14 +149,22 @@ class WebRTCLoadTestEngine extends EventEmitter {
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.durationTimer) clearTimeout(this.durationTimer);
     
-    // Close all browsers
-    for (const { browser } of this.browsers) {
+    // Close all contexts
+    for (const { context } of this.contexts) {
       try {
-        await browser.close();
+        await context.close();
       } catch (e) {}
     }
     
-    this.browsers = [];
+    this.contexts = [];
+    
+    // Close browser
+    if (this.browser) {
+      try {
+        await this.browser.close();
+      } catch (e) {}
+      this.browser = null;
+    }
     
     const avgLatency = this.stats.latencies.length > 0
       ? this.stats.latencies.reduce((a, b) => a + b, 0) / this.stats.latencies.length
@@ -172,60 +185,37 @@ class WebRTCLoadTestEngine extends EventEmitter {
     const participantName = `LoadUser-${userIndex}`;
     const roomId = this.getRoomId(userIndex);
     
-    let browser;
+    let context, page;
     
     try {
-      // Build Chrome args
-      const chromeArgs = [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-web-security',
-        // Fake media - these flags make Chrome use synthetic or file-based audio/video
-        '--use-fake-ui-for-media-stream',
-        '--use-fake-device-for-media-stream',
-        '--allow-file-access-from-files',
-        '--autoplay-policy=no-user-gesture-required',
-        '--disable-background-networking',
-        '--disable-extensions',
-        '--disable-sync',
-        '--mute-audio',
-        '--no-first-run',
-        // WebRTC specific
-        '--enable-webrtc-hide-local-ips-with-mdns=false',
-        // SSL - ignore self-signed cert errors
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
-      ];
-      
-      // Add real media file paths if enabled
-      if (this.config.realMedia) {
-        const mediaFiles = MEDIA_FILES[this.config.resolution];
-        chromeArgs.push(`--use-file-for-fake-video-capture=${mediaFiles.video}`);
-        chromeArgs.push(`--use-file-for-fake-audio-capture=${mediaFiles.audio}`);
-      }
-      
-      browser = await puppeteer.launch({
-        headless: this.config.headless ? 'new' : false,
-        args: chromeArgs,
+      // Create isolated browser context for this user
+      context = await this.browser.newContext({
+        ignoreHTTPSErrors: true,
+        permissions: ['camera', 'microphone'],
+        viewport: { width: 640, height: 480 },
+        userAgent: `QuickRTC-LoadTest/${userIndex}`,
       });
       
-      this.browsers.push({ browser, userIndex, participantId, roomId });
+      // Enable trace recording if requested
+      if (this.config.trace) {
+        await context.tracing.start({ screenshots: true, snapshots: true });
+      }
+      
+      page = await context.newPage();
+      
+      this.contexts.push({ context, page, userIndex, participantId, roomId });
       this.stats.launched++;
       this.emit('launched', { total: this.stats.launched, userIndex });
-      
-      const page = await browser.newPage();
-      await page.setViewport({ width: 640, height: 480 });
       
       // Build URL
       const url = new URL('/loadtest', this.config.serverUrl);
       url.searchParams.set('participantId', participantId);
       url.searchParams.set('participantName', participantName);
       url.searchParams.set('conferenceId', roomId);
-      url.searchParams.set('video', this.config.produceVideo);
-      url.searchParams.set('audio', this.config.produceAudio);
+      url.searchParams.set('video', this.config.produceVideo.toString());
+      url.searchParams.set('audio', this.config.produceAudio.toString());
       
-      await page.goto(url.toString(), { waitUntil: 'networkidle2', timeout: 30000 });
+      await page.goto(url.toString(), { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForFunction('window.loadTestReady === true', { timeout: 30000 });
       
       const success = await page.evaluate(() => window.loadTestSuccess);
@@ -258,9 +248,9 @@ class WebRTCLoadTestEngine extends EventEmitter {
       this.stats.failed++;
       this.emit('failed', { userIndex, error: error.message });
       
-      if (browser) {
-        try { await browser.close(); } catch (e) {}
-        this.browsers = this.browsers.filter(b => b.browser !== browser);
+      if (context) {
+        try { await context.close(); } catch (e) {}
+        this.contexts = this.contexts.filter(c => c.context !== context);
       }
     }
   }
@@ -271,23 +261,20 @@ class WebRTCLoadTestEngine extends EventEmitter {
     let bytesSent = 0;
     let bytesReceived = 0;
     
-    for (const { browser } of this.browsers) {
+    for (const { page, context } of this.contexts) {
       try {
-        const pages = await browser.pages();
-        for (const page of pages) {
-          try {
-            const webrtcStats = await page.evaluate(() => window.webrtcStats);
-            if (webrtcStats) {
-              producers += webrtcStats.producers || 0;
-              consumers += webrtcStats.consumers || 0;
-              for (const ps of webrtcStats.producerStats || []) {
-                bytesSent += ps.bytesSent || 0;
-              }
-              for (const cs of webrtcStats.consumerStats || []) {
-                bytesReceived += cs.bytesReceived || 0;
-              }
+        if (context && !context._closed) {
+          const webrtcStats = await page.evaluate(() => window.webrtcStats).catch(() => null);
+          if (webrtcStats) {
+            producers += webrtcStats.producers || 0;
+            consumers += webrtcStats.consumers || 0;
+            for (const ps of webrtcStats.producerStats || []) {
+              bytesSent += ps.bytesSent || 0;
             }
-          } catch (e) {}
+            for (const cs of webrtcStats.consumerStats || []) {
+              bytesReceived += cs.bytesReceived || 0;
+            }
+          }
         }
       } catch (e) {}
     }
@@ -297,8 +284,9 @@ class WebRTCLoadTestEngine extends EventEmitter {
   
   getRoomId(userIndex) {
     const roomIndex = Math.floor(userIndex / this.config.usersPerRoom);
-    return `loadtest-room-${roomIndex}`;
+    const prefix = this.config.roomPrefix || 'loadtest';
+    return `${prefix}-room-${roomIndex}`;
   }
 }
 
-module.exports = { WebRTCLoadTestEngine };
+module.exports = { PlaywrightLoadTestEngine };

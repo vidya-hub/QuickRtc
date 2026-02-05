@@ -2,33 +2,13 @@
   "name": "quickrtc-load-testing",
   "version": "1.0.0",
   "description": "Load testing TUI for QuickRTC with real WebRTC streams",
-  "main": "tui/index.js",
-  "bin": {
-    "quickrtc-loadtest": "./tui/index.js"
-  },
+  "main": "tui/load-test-tui.js",
   "scripts": {
     "tui": "node tui/load-test-tui.js",
-    "loadtest": "node tui/load-test-tui.js",
-    "monitor": "node tui/monitor.js",
-    "start": "node tui/load-test-tui.js",
-    "test:smoke": "node scripts/native-load-test.js --users=10 --duration=60",
-    "test:medium": "node scripts/native-load-test.js --users=100 --duration=120",
-    "test:high": "node scripts/native-load-test.js --users=500 --duration=300",
-    "test:stress": "node scripts/native-load-test.js --users=1000 --duration=600",
-    "test:webrtc": "node scripts/webrtc-load-test.js",
-    "test:webrtc:smoke": "node scripts/webrtc-load-test.js --users=5 --duration=60",
-    "test:webrtc:medium": "node scripts/webrtc-load-test.js --users=20 --duration=120",
-    "test:multi": "node scripts/multi-quality-load-test.js",
-    "test:multi:dry": "node scripts/multi-quality-load-test.js --dry-run",
-    "test:3000": "node scripts/multi-quality-load-test.js --high=500 --medium=1000 --low=1500 --duration=300"
+    "start": "node tui/load-test-tui.js"
   },
   "dependencies": {
-    "blessed": "^0.1.81",
-    "blessed-contrib": "^4.11.0",
-    "chalk": "^4.1.2",
-    "socket.io-client": "^4.7.0",
-    "figlet": "^1.7.0",
-    "puppeteer": "^22.0.0",
-    "mediasoup-client": "^3.7.0"
+    "playwright": "^1.58.1",
+    "socket.io-client": "^4.7.0"
   }
 }
